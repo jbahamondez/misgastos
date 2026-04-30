@@ -182,56 +182,71 @@
 
 <!-- DASHBOARD -->
 <div class="page active" id="page-dashboard">
-  <div class="page-header"><h1>👋 Hola, Javier</h1><p id="dash-fecha"></p></div>
+  <div class="page-header"><h1>馃憢 Hola, Javier</h1><p id="dash-fecha"></p></div>
   <div class="cards-scroll" id="cards-scroll"></div>
   <div class="salud-box" id="salud-box"></div>
   <div class="summary-box">
-    <h3>Resumen Crédito del Ciclo</h3>
-    <div class="summary-row"><span class="label">Total gastado crédito</span><span class="val red" id="sum-gastado">$0</span></div>
+    <h3>Resumen Cr茅dito del Ciclo</h3>
+    <div class="summary-row"><span class="label">Total gastado cr茅dito</span><span class="val red" id="sum-gastado">$0</span></div>
     <div class="summary-row"><span class="label">Disponible combinado</span><span class="val green" id="sum-disponible">$0</span></div>
-    <div class="summary-row"><span class="label">Transacciones crédito</span><span class="val" id="sum-txs">0</span></div>
-    <div class="summary-row"><span class="label">Total débito este mes</span><span class="val blue" id="sum-debito">$0</span></div>
+    <div class="summary-row"><span class="label">Transacciones cr茅dito</span><span class="val" id="sum-txs">0</span></div>
+    <div class="summary-row"><span class="label">Total d茅bito este mes</span><span class="val blue" id="sum-debito">$0</span></div>
   </div>
   <div class="proyeccion-box">
-    <h3>Proyección al 19 (Facturación)</h3>
+    <h3>Proyecci贸n al 19 (Facturaci贸n)</h3>
     <div class="days" id="proy-days"></div>
     <div id="proy-list"></div>
   </div>
-  <div class="section-header"><h3>Últimos gastos</h3><button onclick="showPage('historial')">Ver todos</button></div>
+  <div class="section-header"><h3>脷ltimos gastos</h3><button onclick="showPage('historial')">Ver todos</button></div>
   <div class="tx-list pb14" id="recent-list"></div>
 </div>
 
 <!-- TARJETAS -->
 <div class="page" id="page-tarjetas">
-  <div class="page-header"><h1>Mis Tarjetas</h1><p>Detalle por tarjeta de crédito</p></div>
+  <div class="page-header"><h1>Mis Tarjetas</h1><p>Detalle por tarjeta de cr茅dito</p></div>
   <div style="padding-top:14px" id="tarjetas-detail-list"></div>
 </div>
 
 <!-- DEBITO -->
 <div class="page" id="page-debito">
-  <div class="page-header"><h1>💳 Débito</h1><p>Gastos de cuenta corriente</p></div>
+  <div class="page-header"><h1>馃挸 D茅bito</h1><p>Gastos de cuenta corriente</p></div>
   <div class="debit-summary" id="debit-summary"></div>
-  <div style="margin:14px 20px 0"><p style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:500;text-transform:uppercase;letter-spacing:.5px">IMPORTAR CARTOLA</p></div>
+
+  <!-- Importar cartola (cr茅dito y d茅bito) -->
+  <div style="margin:14px 20px 0">
+    <p style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:500;text-transform:uppercase;letter-spacing:.5px">IMPORTAR CARTOLA</p>
+  </div>
+
+  <!-- Tipo: cr茅dito o d茅bito -->
   <div class="bank-select-row">
+    <button class="bank-chip active" id="chip-type-debito"  onclick="selectImportType('debito')">馃彟 D茅bito</button>
+    <button class="bank-chip"        id="chip-type-credito" onclick="selectImportType('credito')">馃挸 Cr茅dito</button>
+  </div>
+
+  <!-- Banco -->
+  <div class="bank-select-row" style="margin-top:8px">
     <button class="bank-chip active" id="chip-bci"    onclick="selectImportBank('bci')">BCI</button>
     <button class="bank-chip"        id="chip-bchile" onclick="selectImportBank('bchile')">Banco Chile</button>
     <button class="bank-chip"        id="chip-scotia" onclick="selectImportBank('scotia')">Scotia</button>
   </div>
+
   <div class="import-box" onclick="document.getElementById('file-input').click()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
     <h4>Subir cartola</h4>
-    <p>Toca para seleccionar CSV o Excel (.xlsx)</p>
+    <p id="import-hint">Toca para seleccionar CSV o Excel (.xls / .xlsx)</p>
     <input type="file" id="file-input" accept=".csv,.xlsx,.xls" onchange="handleFileUpload(event)" />
   </div>
+
   <div class="preview-box" id="preview-box">
-    <div class="preview-header"><h4>Vista previa</h4><span id="preview-count"></span></div>
+    <div class="preview-header"><h4 id="preview-title">Vista previa</h4><span id="preview-count"></span></div>
     <div class="preview-scroll"><table class="preview-table" id="preview-table"></table></div>
     <div class="preview-actions">
       <button class="btn-discard" onclick="discardPreview()">Descartar</button>
       <button class="btn-import"  onclick="confirmImport()">Importar todo</button>
     </div>
   </div>
-  <div class="section-header" style="margin-top:14px"><h3>Movimientos débito</h3><span id="debit-count" style="font-size:12px;color:var(--text2)"></span></div>
+
+  <div class="section-header" style="margin-top:14px"><h3>Movimientos d茅bito</h3><span id="debit-count" style="font-size:12px;color:var(--text2)"></span></div>
   <div class="tx-list pb14" id="debit-list"></div>
 </div>
 
@@ -244,27 +259,27 @@
 
 <!-- AJUSTES -->
 <div class="page" id="page-ajustes">
-  <div class="page-header"><h1>Ajustes</h1><p>Configuración y automatización</p></div>
-  <div class="settings-section"><h3>Tarjetas de Crédito</h3><div class="settings-list" id="settings-cards-list"></div></div>
+  <div class="page-header"><h1>Ajustes</h1><p>Configuraci贸n y automatizaci贸n</p></div>
+  <div class="settings-section"><h3>Tarjetas de Cr茅dito</h3><div class="settings-list" id="settings-cards-list"></div></div>
   <div class="settings-section"><h3>API para Shortcuts iOS</h3></div>
   <div class="api-box" style="margin-bottom:14px">
-    <h4>📲 Registrar gasto desde Shortcut</h4>
+    <h4>馃摬 Registrar gasto desde Shortcut</h4>
     <div class="api-url">window.addExpenseFromShortcut(cardId, monto, desc, cuotas, moneda)</div>
-    <button class="copy-btn" onclick="copyApiInfo()">Copiar código del Shortcut</button>
+    <button class="copy-btn" onclick="copyApiInfo()">Copiar c贸digo del Shortcut</button>
   </div>
   <div class="settings-section"><h3>Configurar Shortcut paso a paso</h3></div>
   <div style="padding:0 20px 14px">
-    <div class="shortcut-step"><span class="step-num">1</span><span>Abre <strong>Atajos</strong> en iPhone &rarr; toca <strong>"+"</strong> &rarr; nómbralo <strong>"Gasto BCI"</strong></span></div>
+    <div class="shortcut-step"><span class="step-num">1</span><span>Abre <strong>Atajos</strong> en iPhone &rarr; toca <strong>"+"</strong> &rarr; n贸mbralo <strong>"Gasto BCI"</strong></span></div>
     <div class="shortcut-step"><span class="step-num">2</span><span>Ve a <strong>Automatizaciones</strong> &rarr; <strong>"Al recibir correo"</strong> &rarr; remitente: <strong>contacto@bci.cl</strong></span></div>
-    <div class="shortcut-step"><span class="step-num">3</span><span>Acción: <strong>"Obtener texto del correo"</strong> &rarr; Cuerpo del mensaje</span></div>
-    <div class="shortcut-step"><span class="step-num">4</span><span>Acción: <strong>"Ejecutar JavaScript"</strong> con el código copiado arriba</span></div>
+    <div class="shortcut-step"><span class="step-num">3</span><span>Acci贸n: <strong>"Obtener texto del correo"</strong> &rarr; Cuerpo del mensaje</span></div>
+    <div class="shortcut-step"><span class="step-num">4</span><span>Acci贸n: <strong>"Ejecutar JavaScript"</strong> con el c贸digo copiado arriba</span></div>
     <div class="shortcut-step"><span class="step-num">5</span><span>Repite para <strong>Banco Chile</strong> con remitente: <strong>enviodigital@bancochile.cl</strong></span></div>
-    <div class="shortcut-step"><span class="step-num">6</span><span>Activa <strong>"Ejecutar automáticamente"</strong> para que no pida confirmación</span></div>
+    <div class="shortcut-step"><span class="step-num">6</span><span>Activa <strong>"Ejecutar autom谩ticamente"</strong> para que no pida confirmaci贸n</span></div>
   </div>
   <div class="settings-section"><h3>Datos</h3>
     <div class="settings-list">
-      <div class="settings-row" onclick="exportData()"><span class="row-label">📤 Exportar datos (JSON)</span><span class="row-val">→</span></div>
-      <div class="settings-row" onclick="clearData()"><span class="row-label" style="color:var(--red)">🗑️ Borrar todos los gastos</span><span class="row-val">→</span></div>
+      <div class="settings-row" onclick="exportData()"><span class="row-label">馃摛 Exportar datos (JSON)</span><span class="row-val">鈫?/span></div>
+      <div class="settings-row" onclick="clearData()"><span class="row-label" style="color:var(--red)">馃棏锔?Borrar todos los gastos</span><span class="row-val">鈫?/span></div>
     </div>
   </div>
   <div style="height:20px"></div>
@@ -277,7 +292,7 @@
   <button class="nav-btn" onclick="showPage('tarjetas')" id="nav-tarjetas">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Tarjetas</button>
   <button class="nav-btn" onclick="showPage('debito')" id="nav-debito">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Débito</button>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>D茅bito</button>
   <button class="nav-btn" onclick="showPage('historial')" id="nav-historial">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Historial</button>
   <button class="nav-btn" onclick="showPage('ajustes')" id="nav-ajustes">
@@ -337,18 +352,18 @@
 'use strict';
 
 const CARDS = {
-  bci:    {id:'bci',    bank:'BCI',                num:'****6146',color:'#e63329',gradient:'card-bci',    limitCLP:9519000,limitUSD:470.74,emoji:'🔴'},
-  bchile: {id:'bchile', bank:'Banco Chile',        num:'****8447',color:'#003087',gradient:'card-bchile', limitCLP:9519000,limitUSD:470.74,emoji:'🔵'},
-  scotia: {id:'scotia', bank:'ScotiabankCencosud', num:'****',    color:'#ec111a',gradient:'card-scotia', limitCLP:1470000,limitUSD:0,     emoji:'🔴'}
+  bci:    {id:'bci',    bank:'BCI',                num:'****6146',color:'#e63329',gradient:'card-bci',    limitCLP:9519000,limitUSD:470.74,emoji:'馃敶'},
+  bchile: {id:'bchile', bank:'Banco Chile',        num:'****8447',color:'#003087',gradient:'card-bchile', limitCLP:9519000,limitUSD:470.74,emoji:'馃數'},
+  scotia: {id:'scotia', bank:'ScotiabankCencosud', num:'****',    color:'#ec111a',gradient:'card-scotia', limitCLP:1470000,limitUSD:0,     emoji:'馃敶'}
 };
 
 const ICONS = {
-  TICKETMASTER:'🎟️',TRAVEL:'✈️',UBER:'🚗',RAPPI:'🛵',CABIFY:'🚗',
-  SUPERMERCADO:'🛒',LIDER:'🛒',JUMBO:'🛒',UNIMARC:'🛒',
-  FARMACIA:'💊',CRUZ:'💊',SALCOBRAND:'💊',
-  RESTAURANT:'🍽️',DOMINO:'🍕',MCDONALD:'🍔',
-  NETFLIX:'🎬',SPOTIFY:'🎵',AMAZON:'📦',APPLE:'🍎',
-  STEAM:'🎮',COPEC:'⛽',SHELL:'⛽',DEFAULT:'💳'
+  TICKETMASTER:'馃師锔?,TRAVEL:'鉁堬笍',UBER:'馃殫',RAPPI:'馃浀',CABIFY:'馃殫',
+  SUPERMERCADO:'馃洅',LIDER:'馃洅',JUMBO:'馃洅',UNIMARC:'馃洅',
+  FARMACIA:'馃拪',CRUZ:'馃拪',SALCOBRAND:'馃拪',
+  RESTAURANT:'馃嵔锔?,DOMINO:'馃崟',MCDONALD:'馃崝',
+  NETFLIX:'馃幀',SPOTIFY:'馃幍',AMAZON:'馃摝',APPLE:'馃崕',
+  STEAM:'馃幃',COPEC:'鉀?,SHELL:'鉀?,DEFAULT:'馃挸'
 };
 
 const LS_C='gastos_credito_v2', LS_D='gastos_debito_v2', LS_S='sueldo_mensual';
@@ -565,11 +580,24 @@ function renderDebito(){
     :'<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><h3>Sin gastos debito</h3><p>Importa una cartola o toca + para agregar</p></div>';
 }
 
-let importBank='bci', pendingRows=[];
+let importBank='bci', importType='debito', pendingRows=[];
+
+function selectImportType(type){
+  importType=type;
+  document.getElementById('chip-type-debito').classList.toggle('active', type==='debito');
+  document.getElementById('chip-type-credito').classList.toggle('active', type==='credito');
+  const hint=document.getElementById('import-hint');
+  if(hint) hint.textContent = type==='credito'
+    ? 'Cartola de tarjeta de cr茅dito (.xls / .xlsx / .csv)'
+    : 'Cartola de cuenta corriente (.xls / .xlsx / .csv)';
+}
+
 function selectImportBank(bank){
   importBank=bank;
-  document.querySelectorAll('.bank-chip').forEach(c=>c.classList.remove('active'));
-  document.getElementById('chip-'+bank).classList.add('active');
+  ['bci','bchile','scotia'].forEach(b=>{
+    const el=document.getElementById('chip-'+b);
+    if(el) el.classList.toggle('active', b===bank);
+  });
 }
 function handleFileUpload(evt){
   const file=evt.target.files[0];
@@ -578,10 +606,20 @@ function handleFileUpload(evt){
   const reader=new FileReader();
   reader.onload=function(e){
     try{
-      let rows=isCSV?parseCSV(e.target.result):XLSX.utils.sheet_to_json(XLSX.read(e.target.result,{type:'array'}).Sheets[XLSX.read(e.target.result,{type:'array'}).SheetNames[0]],{header:1,raw:false});
+      let rows;
+      if(isCSV){
+        rows=parseCSV(e.target.result);
+      }else{
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+      }
       pendingRows=parseCartola(rows,importBank);
       showPreview(pendingRows);
-    }catch(err){showToast('Error al leer el archivo','var(--red)');}
+    }catch(err){
+      console.error('Error cartola:',err);
+      showToast('Error al leer el archivo: '+err.message,'var(--red)');
+    }
   };
   if(isCSV)reader.readAsText(file,'UTF-8');else reader.readAsArrayBuffer(file);
   evt.target.value='';
@@ -597,30 +635,91 @@ function parseCSV(text){
     cols.push(cur.trim());return cols;
   });
 }
-function parseCartola(rows,bank){
-  if(rows.length<2)return[];
-  let hr=-1,dc=-1,desc=-1,ac=-1;
-  for(let i=0;i<Math.min(10,rows.length);i++){
-    const r=rows[i].map(c=>String(c||'').toUpperCase());
-    const di=r.findIndex(c=>c.includes('FECHA'));
-    const xi=r.findIndex(c=>c.includes('DESCRI')||c.includes('DETALLE')||c.includes('GLOSA')||c.includes('COMERCIO'));
-    const ai=r.findIndex(c=>c.includes('MONTO')||c.includes('CARGO')||c.includes('DEBITO'));
-    if(di>=0&&(xi>=0||ai>=0)){hr=i;dc=di;desc=xi>=0?xi:Math.max(0,ai-1);ac=ai>=0?ai:2;break;}
+function parseMonto(raw){
+  // Limpia $ . espacios y convierte coma decimal
+  return Math.abs(parseFloat(String(raw||'').replace(/\$/g,'').replace(/\./g,'').replace(',','.').replace(/[^0-9.-]/g,''))||0);
+}
+
+function parseFecha(raw){
+  const s=String(raw||'').trim();
+  // DD/MM/YYYY o DD-MM-YYYY o DD.MM.YYYY
+  const dm=s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  // YYYY-MM-DD
+  const ym=s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  let d;
+  if(dm){ const y=dm[3].length===2?'20'+dm[3]:dm[3]; d=new Date(y+'-'+dm[2].padStart(2,'0')+'-'+dm[1].padStart(2,'0')); }
+  else if(ym){ d=new Date(ym[1]+'-'+ym[2].padStart(2,'0')+'-'+ym[3].padStart(2,'0')); }
+  return (d && !isNaN(d.getTime())) ? d : null;
+}
+
+function parseCartola(rows, bank){
+  if(rows.length<2) return [];
+
+  // Limpiar filas vac铆as al inicio
+  while(rows.length>0 && rows[0].every(c=>!String(c||'').trim())) rows.shift();
+
+  // Detectar fila de encabezado
+  let hr=-1, dc=-1, descC=-1, ac=-1, cargoC=-1, abonoC=-1, cuotasC=-1;
+  for(let i=0;i<Math.min(20,rows.length);i++){
+    const r=rows[i].map(c=>String(c||'').toUpperCase().trim());
+    const di=r.findIndex(c=>c==='FECHA'||c==='DATE');
+    if(di<0) continue;
+    hr=i; dc=di;
+    // Descripci贸n: puede ser col 2 en BCI cr茅dito (Fecha|C贸digo|Descripci贸n|Tipo|Monto)
+    descC = r.findIndex(c=>c.includes('DESCRI')||c.includes('DETALLE')||c.includes('GLOSA')||c.includes('CONCEPTO')||c.includes('COMERCIO'));
+    if(descC<0) descC = Math.min(di+2, r.length-1); // BCI: col despu茅s de C贸digo
+    ac     = r.findIndex(c=>c==='MONTO'||c==='IMPORTE');
+    cargoC = r.findIndex(c=>c==='CARGO'||c==='D脡BITO'||c==='DEBITO');
+    abonoC = r.findIndex(c=>c==='ABONO'||c==='CR脡DITO'||c==='CREDITO'||c==='HABER');
+    cuotasC= r.findIndex(c=>c.includes('CUOTA'));
+    break;
   }
-  if(hr<0){hr=0;dc=0;desc=1;ac=2;}
+  if(hr<0){ hr=0; dc=0; descC=1; ac=2; }
+
   const res=[];
   for(let i=hr+1;i<rows.length;i++){
-    const r=rows[i];if(!r||r.length<2)continue;
-    const rd=String(r[dc]||'').trim(),rx=String(r[desc]||'').trim();
-    const ra=String(r[ac]||'').replace(/\./g,'').replace(',','.').replace(/[^0-9.-]/g,'');
-    const amount=Math.abs(parseFloat(ra)||0);if(!amount)continue;
-    let date=new Date();
-    const dm=rd.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-    const ym=rd.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-    if(dm){const y=dm[3].length===2?'20'+dm[3]:dm[3];date=new Date(y+'-'+dm[2].padStart(2,'0')+'-'+dm[1].padStart(2,'0'));}
-    else if(ym)date=new Date(ym[1]+'-'+ym[2].padStart(2,'0')+'-'+ym[3].padStart(2,'0'));
-    if(isNaN(date.getTime()))continue;
-    res.push({id:'imp_'+Date.now()+'_'+i,bank,rawDesc:rx,date:date.toISOString(),amount,desc:rx||'Importado'});
+    const r=rows[i];
+    if(!r || r.every(c=>!String(c||'').trim())) continue;
+
+    const rawDate = String(r[dc]||'').trim();
+    const rawDesc = String(r[descC]||'').trim();
+
+    // Intentar parsear fecha 鈥?si no hay fecha v谩lida, skip
+    const fecha = parseFecha(rawDate);
+    if(!fecha) continue;
+
+    // Monto: prioridad monto > cargo > abono > buscar en todas las columnas
+    let amount=0;
+    if(ac>=0)     amount=parseMonto(r[ac]);
+    if(!amount && cargoC>=0) amount=parseMonto(r[cargoC]);
+    if(!amount && abonoC>=0) amount=parseMonto(r[abonoC]);
+    if(!amount){
+      for(let col=0;col<r.length;col++){
+        if(col===dc||col===descC) continue;
+        const v=parseMonto(r[col]);
+        if(v>1000){ amount=v; break; } // m铆nimo $1.000 para evitar falsos positivos
+      }
+    }
+    if(!amount) continue;
+
+    // Cuotas (si la columna existe)
+    let cuotas=1;
+    if(cuotasC>=0){
+      const m=String(r[cuotasC]||'').match(/(\d+)/);
+      if(m) cuotas=parseInt(m[1]);
+    }
+
+    // Limpiar descripci贸n: quitar "COMPRAS", "CC 03-03" tipo sufijos de BCI
+    const desc=(rawDesc||'Importado')
+      .replace(/\bCOMPRAS\b/gi,'').replace(/\bCC\s+\d+-\d+\b/gi,'')
+      .replace(/\bCF\s+\d+-\d+\b/gi,'').replace(/\s{2,}/g,' ').trim()||'Importado';
+
+    res.push({
+      id:'imp_'+Date.now()+'_'+i,
+      bank, rawDesc, desc, cuotas,
+      date: fecha.toISOString(),
+      amount
+    });
   }
   return res;
 }
@@ -634,12 +733,25 @@ function showPreview(rows){
 function discardPreview(){pendingRows=[];document.getElementById('preview-box').classList.remove('visible');}
 function confirmImport(){
   if(!pendingRows.length)return;
-  const newTxs=pendingRows.map(r=>({id:r.id,bank:r.bank,amount:r.amount,desc:r.desc,date:r.date,currency:'CLP',source:'cartola'}));
-  saveD([...getD(),...newTxs]);
+  if(importType==='credito'){
+    const newTxs=pendingRows.map(r=>({
+      id:r.id, cardId:importBank, amount:r.amount, desc:r.desc,
+      cuotas:r.cuotas||1, currency:'CLP',
+      date:r.date, source:'cartola'
+    }));
+    saveC([...getC(),...newTxs]);
+  } else {
+    const newTxs=pendingRows.map(r=>({
+      id:r.id, bank:importBank, amount:r.amount, desc:r.desc,
+      currency:'CLP', date:r.date, source:'cartola'
+    }));
+    saveD([...getD(),...newTxs]);
+  }
+  const n=pendingRows.length;
   pendingRows=[];
   document.getElementById('preview-box').classList.remove('visible');
-  renderDebito();renderDashboard();
-  showToast(newTxs.length+' movimientos importados');
+  renderDebito(); renderDashboard();
+  showToast(n+' movimientos importados como '+(importType==='credito'?'cr茅dito':'d茅bito'));
 }
 
 let activeFilter='all';
@@ -735,7 +847,10 @@ function copyApiInfo(){
 }
 function exportData(){
   const blob=new Blob([JSON.stringify({credito:getC(),debito:getD(),sueldo:getSueldo()},null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='misgastos_'+new Date().toISOString().slice(0,10)+'.json';a.click();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='misgastos_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
   showToast('Datos exportados');
 }
 function clearData(){
@@ -744,23 +859,23 @@ function clearData(){
     renderDashboard();showToast('Datos eliminados','var(--red)');
   }
 }
-
-function showToast(msg,color='var(--green)'){
+function showToast(msg,color){
+  color=color||'var(--green)';
   const t=document.getElementById('toast');
-  t.textContent=msg;t.style.background=color;t.style.color=color==='var(--green)'?'#0f1117':'white';
-  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800);
+  t.textContent=msg;t.style.background=color;
+  t.style.color=color==='var(--green)'?'#0f1117':'white';
+  t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
 }
-
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded',function(){
   renderDashboard();renderAjustes();
   if(!getC().length&&!getD().length){
-    const n=Date.now();
+    var n=Date.now();
     saveC([
       {id:'d1',cardId:'bci',    amount:52900, desc:'TICKETMASTER TC 2', cuotas:1,currency:'CLP',date:new Date(n-86400000).toISOString(),  source:'email'},
-      {id:'d2',cardId:'bchile', amount:3990,  desc:'TRAVEL DUTY TCOMP',cuotas:1,currency:'CLP',date:new Date(n-86400000*3).toISOString(),source:'email'},
-      {id:'d3',cardId:'bci',    amount:89990, desc:'AMAZON',            cuotas:3,currency:'CLP',date:new Date(n-86400000*5).toISOString(),source:'manual'},
-      {id:'d4',cardId:'scotia', amount:25500, desc:'SUPERMERCADO LIDER',cuotas:1,currency:'CLP',date:new Date(n-86400000*2).toISOString(),source:'manual'},
-      {id:'d5',cardId:'bchile', amount:120.5, desc:'NETFLIX USD',       cuotas:1,currency:'USD',date:new Date(n-86400000*7).toISOString(),source:'manual'},
+      {id:'d2',cardId:'bchile', amount:3990,  desc:'TRAVEL DUTY TCOMP', cuotas:1,currency:'CLP',date:new Date(n-86400000*3).toISOString(),source:'email'},
+      {id:'d3',cardId:'bci',    amount:89990, desc:'AMAZON',             cuotas:3,currency:'CLP',date:new Date(n-86400000*5).toISOString(),source:'manual'},
+      {id:'d4',cardId:'scotia', amount:25500, desc:'SUPERMERCADO LIDER', cuotas:1,currency:'CLP',date:new Date(n-86400000*2).toISOString(),source:'manual'},
+      {id:'d5',cardId:'bchile', amount:120.5, desc:'NETFLIX USD',        cuotas:1,currency:'USD',date:new Date(n-86400000*7).toISOString(),source:'manual'},
     ]);
     saveD([
       {id:'db1',bank:'bci',   amount:45000,desc:'SUPERMERCADO LIDER', currency:'CLP',date:new Date(n-86400000*2).toISOString(),source:'manual'},
