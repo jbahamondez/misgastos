@@ -612,7 +612,7 @@ function handleFileUpload(evt){
       }else{
         const wb=XLSX.read(e.target.result,{type:'array'});
         const ws=wb.Sheets[wb.SheetNames[0]];
-        rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+        rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
       }
       pendingRows=parseCartola(rows,importBank);
       showPreview(pendingRows);
@@ -636,15 +636,23 @@ function parseCSV(text){
   });
 }
 function parseMonto(raw){
-  // Limpia $ espacios y convierte formato chileno (puntos=miles, coma=decimal)
+  // Si ya es número (raw:true de SheetJS), devolver directo
+  if(typeof raw==='number') return Math.abs(raw);
+  // Si es string, limpiar formato chileno (puntos=miles, coma=decimal)
   const s=String(raw||'').trim().replace(/\$/g,'').replace(/\s/g,'');
-  // Detectar si hay coma decimal: "11.749" es miles, "11,749" es decimal
-  // Si tiene punto y no coma → puntos son miles separadores
+  // Quitar puntos de miles y convertir coma decimal a punto
   const limpio=s.replace(/\./g,'').replace(',','.');
   return Math.abs(parseFloat(limpio.replace(/[^0-9.-]/g,''))||0);
 }
 
 function parseFecha(raw){
+  // Número serial de Excel (raw:true) → convertir a fecha
+  if(typeof raw==='number' && raw>10000){
+    // Excel epoch: 1 enero 1900 = día 1 (con bug del año bisiesto 1900)
+    const excelEpoch=new Date(1899,11,30,12,0,0);
+    const fecha=new Date(excelEpoch.getTime()+raw*86400000);
+    return isNaN(fecha.getTime())?null:fecha;
+  }
   const s=String(raw||'').trim();
   // DD-MM-YYYY o DD/MM/YYYY o DD.MM.YYYY
   const dm=s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
@@ -657,7 +665,7 @@ function parseFecha(raw){
   } else if(ym){
     y=parseInt(ym[1]); m=parseInt(ym[2]); d=parseInt(ym[3]);
   } else return null;
-  // Crear fecha local (sin UTC offset) usando Date(y,m-1,d)
+  // Crear fecha local (sin UTC offset)
   const fecha=new Date(y,m-1,d,12,0,0);
   return isNaN(fecha.getTime())?null:fecha;
 }
@@ -913,6 +921,15 @@ document.addEventListener('DOMContentLoaded',function(){
     ]);
     saveD([
       {id:'db1',bank:'bci',   amount:45000,desc:'SUPERMERCADO LIDER', currency:'CLP',date:new Date(n-86400000*2).toISOString(),source:'manual'},
+      {id:'db2',bank:'bchile',amount:12990,desc:'FARMACIA CRUZ VERDE',currency:'CLP',date:new Date(n-86400000*4).toISOString(),source:'manual'},
+    ]);
+    renderDashboard();
+  }
+});
+</script>
+</body>
+</html>
+:'db1',bank:'bci',   amount:45000,desc:'SUPERMERCADO LIDER', currency:'CLP',date:new Date(n-86400000*2).toISOString(),source:'manual'},
       {id:'db2',bank:'bchile',amount:12990,desc:'FARMACIA CRUZ VERDE',currency:'CLP',date:new Date(n-86400000*4).toISOString(),source:'manual'},
     ]);
     renderDashboard();
