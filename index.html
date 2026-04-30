@@ -187,7 +187,7 @@
   <div class="salud-box" id="salud-box"></div>
   <div class="summary-box">
     <h3>Resumen Crédito del Ciclo</h3>
-    <div class="summary-row"><span class="label">Total gastado crédito</span><span class="val red" id="sum-gastado">$0</span></div>
+    <div class="summary-row"><span class="label">Cargo al 19 / Cupo comprometido</span><span class="val red" id="sum-gastado">$0</span></div>
     <div class="summary-row"><span class="label">Disponible combinado</span><span class="val green" id="sum-disponible">$0</span></div>
     <div class="summary-row"><span class="label">Transacciones crédito</span><span class="val" id="sum-txs">0</span></div>
     <div class="summary-row"><span class="label">Total débito este mes</span><span class="val blue" id="sum-debito">$0</span></div>
@@ -394,8 +394,12 @@ function getCycleTxs(cardId){
   const{start,end}=getCycle();
   return getC().filter(t=>t.cardId===cardId&&new Date(t.date)>=start&&new Date(t.date)<=end);
 }
+// Cupo comprometido: monto total (lo que bloquea el banco en tu cupo)
 function spentCLP(id){return getCycleTxs(id).filter(t=>t.currency==='CLP').reduce((s,t)=>s+t.amount,0)}
 function spentUSD(id){return getCycleTxs(id).filter(t=>t.currency==='USD').reduce((s,t)=>s+t.amount,0)}
+// Cargo al 19: solo la cuota de este mes (amount / cuotas)
+function cuotaCLP(id){return getCycleTxs(id).filter(t=>t.currency==='CLP').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0)}
+function cuotaUSD(id){return getCycleTxs(id).filter(t=>t.currency==='USD').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0)}
 function daysToFact(){
   const now=new Date(),day=now.getDate();
   const t=day<=19?new Date(now.getFullYear(),now.getMonth(),19):new Date(now.getFullYear(),now.getMonth()+1,19);
@@ -421,41 +425,52 @@ function renderDashboard(){
   // Cards
   const scroll=document.getElementById('cards-scroll');
   scroll.innerHTML='';
-  let totCLP=0,totDisp=0;
+  let totCLP=0,totDisp=0,totCuota=0;
   Object.values(CARDS).forEach(c=>{
-    const sCLP=spentCLP(c.id),sUSD=spentUSD(c.id),disp=c.limitCLP-sCLP,pct=Math.min(100,sCLP/c.limitCLP*100);
-    totCLP+=sCLP; totDisp+=disp;
+    const sCLP=spentCLP(c.id),sUSD=spentUSD(c.id),qCLP=cuotaCLP(c.id);
+    const disp=c.limitCLP-sCLP,pct=Math.min(100,sCLP/c.limitCLP*100);
+    totCLP+=sCLP; totDisp+=disp; totCuota+=qCLP;
     const d=document.createElement('div');
     d.className='card-item '+c.gradient;
     d.innerHTML=`<div class="card-bank">${c.bank}</div><div class="card-num">${c.num}</div>
-      <div class="card-balance">${fmtCLP(sCLP)}</div><div class="card-balance-label">Gastado este ciclo</div>
+      <div class="card-balance">${fmtCLP(sCLP)}</div><div class="card-balance-label">Cupo comprometido</div>
       <div class="card-bar-wrap"><div class="card-bar" style="width:${pct}%"></div></div>
-      <div class="card-footer"><div class="card-footer-item">Disponible<span>${fmtCLP(disp)}</span></div>
-      <div class="card-footer-item" style="text-align:right">Limite<span>${fmtCLP(c.limitCLP)}</span></div></div>
+      <div class="card-footer">
+        <div class="card-footer-item">Disponible<span>${fmtCLP(disp)}</span></div>
+        <div class="card-footer-item" style="text-align:center">Cargo al 19<span style="color:#fde68a">${fmtCLP(qCLP)}</span></div>
+        <div class="card-footer-item" style="text-align:right">Límite<span>${fmtCLP(c.limitCLP)}</span></div>
+      </div>
       ${c.limitUSD>0?`<div style="margin-top:7px;font-size:10px;opacity:.7">USD: ${fmtUSD(sUSD)} / ${fmtUSD(c.limitUSD)}</div>`:''}`;
     scroll.appendChild(d);
   });
 
-  renderSalud(totCLP);
+  // Salud financiera usa cuota (lo que realmente pagarás este mes)
+  renderSalud(totCuota);
 
   // Resumen
   const{start,end}=getCycle();
   const cCount=getC().filter(t=>{const d=new Date(t.date);return d>=start&&d<=end}).length;
   const totDeb=debitoThisMonth().reduce((s,t)=>s+t.amount,0);
-  document.getElementById('sum-gastado').textContent=fmtCLP(totCLP);
+  document.getElementById('sum-gastado').textContent=fmtCLP(totCuota)+' / '+fmtCLP(totCLP);
   document.getElementById('sum-disponible').textContent=fmtCLP(totDisp);
   document.getElementById('sum-txs').textContent=cCount;
   document.getElementById('sum-debito').textContent=fmtCLP(totDeb);
 
-  // Proyeccion
+  // Proyeccion al 19: muestra cargo de cuota de este mes
   const days=daysToFact();
   document.getElementById('proy-days').textContent=days===0?'Hoy es dia de facturacion!':'Faltan '+days+' dias para el dia 19';
   const pl=document.getElementById('proy-list');
   pl.innerHTML='';
   Object.values(CARDS).forEach(c=>{
+    const q=cuotaCLP(c.id), s=spentCLP(c.id);
     const d=document.createElement('div');
     d.className='proy-card';
-    d.innerHTML=`<div class="proy-dot" style="background:${c.color}"></div><span class="proy-name">${c.bank}</span><span class="proy-amount">${fmtCLP(spentCLP(c.id))}</span>`;
+    d.innerHTML=`<div class="proy-dot" style="background:${c.color}"></div>
+      <span class="proy-name">${c.bank}</span>
+      <div style="text-align:right">
+        <div class="proy-amount" style="color:#fde68a">${fmtCLP(q)}</div>
+        <div style="font-size:10px;color:var(--text2)">cupo: ${fmtCLP(s)}</div>
+      </div>`;
     pl.appendChild(d);
   });
 
@@ -533,7 +548,8 @@ function renderTarjetas(){
   const c2=document.getElementById('tarjetas-detail-list');
   c2.innerHTML='';
   Object.values(CARDS).forEach(c=>{
-    const sCLP=spentCLP(c.id),sUSD=spentUSD(c.id),disp=c.limitCLP-sCLP,pct=Math.min(100,sCLP/c.limitCLP*100);
+    const sCLP=spentCLP(c.id),sUSD=spentUSD(c.id),qCLP=cuotaCLP(c.id),qUSD=cuotaUSD(c.id);
+    const disp=c.limitCLP-sCLP,pct=Math.min(100,sCLP/c.limitCLP*100);
     const bc=pct>85?'var(--red)':pct>60?'var(--yellow)':'var(--green)';
     const txs=getCycleTxs(c.id);
     const d=document.createElement('div');
@@ -541,15 +557,19 @@ function renderTarjetas(){
     d.innerHTML=`<div class="tarjeta-detail-header"><div class="bank-dot" style="background:${c.color}"></div>
       <div><h3>${c.bank}</h3><p>${c.num} - Factura el 19</p></div></div>
       <div class="tarjeta-stats">
-        <div class="stat-cell"><div class="stat-label">Gastado CLP</div>
+        <div class="stat-cell"><div class="stat-label">Cupo comprometido</div>
           <div class="stat-val" style="color:${bc}">${fmtCLP(sCLP)}</div>
-          <div class="stat-bar-wrap"><div class="stat-bar" style="width:${pct}%;background:${bc}"></div></div></div>
+          <div class="stat-bar-wrap"><div class="stat-bar" style="width:${pct}%;background:${bc}"></div></div>
+          <div style="font-size:10px;color:var(--text2);margin-top:3px">${Math.round(pct)}% del límite</div></div>
+        <div class="stat-cell"><div class="stat-label">Cargo próximo al 19</div>
+          <div class="stat-val" style="color:#fde68a">${fmtCLP(qCLP)}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:3px">solo cuotas de este ciclo</div></div>
         <div class="stat-cell"><div class="stat-label">Disponible CLP</div>
           <div class="stat-val" style="color:var(--green)">${fmtCLP(disp)}</div></div>
-        <div class="stat-cell"><div class="stat-label">Limite CLP</div><div class="stat-val">${fmtCLP(c.limitCLP)}</div></div>
         <div class="stat-cell"><div class="stat-label">Transacciones</div><div class="stat-val">${txs.length}</div></div>
         ${c.limitUSD>0?`
         <div class="stat-cell"><div class="stat-label">Gastado USD</div><div class="stat-val">${fmtUSD(sUSD)}</div></div>
+        <div class="stat-cell"><div class="stat-label">Cargo USD al 19</div><div class="stat-val" style="color:#fde68a">${fmtUSD(qUSD)}</div></div>
         <div class="stat-cell"><div class="stat-label">Disponible USD</div><div class="stat-val" style="color:var(--green)">${fmtUSD(c.limitUSD-sUSD)}</div></div>`:''}
       </div>`;
     c2.appendChild(d);
@@ -882,9 +902,29 @@ window.parseEmailBancoChile=function(body){
   if(!m)return null;
   return window.addExpenseFromShortcut('bchile',parseFloat(m[1].replace(/\./g,'').replace(',','.')),m[3].trim(),1,'CLP');
 };
+window.parseEmailBCIDebito=function(body){
+  // Formato: "Monto $4.000", "Fecha 26/04/2026", "Comercio BELFORTPERON"
+  const mm=body.match(/Monto\s+\$?([\d.,]+)/i)||body.match(/\$([\d.,]+)/);
+  const cm=body.match(/Comercio\s+([^\n\r]+)/i);
+  const fm=body.match(/Fecha\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+  if(!mm) return null;
+  const amount=parseFloat(mm[1].replace(/\./g,'').replace(',','.'));
+  const desc=(cm?cm[1].trim():'Débito BCI');
+  const date=fm?parseFecha(fm[1]):new Date();
+  const tx={
+    id:Date.now().toString(), bank:'bci', amount, desc,
+    currency:'CLP', date:(date||new Date()).toISOString(), source:'shortcut'
+  };
+  const d=getD(); d.push(tx); saveD(d); renderDashboard(); return'OK';
+};
 
 function copyApiInfo(){
-  navigator.clipboard.writeText('// BCI\nwindow.parseEmailBCI(emailBody);\n\n// Banco Chile\nwindow.parseEmailBancoChile(emailBody);\n\n// Manual\nwindow.addExpenseFromShortcut(\'bci\', 52900, \'COMERCIO\', 1, \'CLP\');')
+  navigator.clipboard.writeText(
+    '// BCI Crédito\nwindow.parseEmailBCI(emailBody);\n\n'+
+    '// BCI Débito\nwindow.parseEmailBCIDebito(emailBody);\n\n'+
+    '// Banco Chile Crédito\nwindow.parseEmailBancoChile(emailBody);\n\n'+
+    '// Manual crédito\nwindow.addExpenseFromShortcut(\'bci\', 52900, \'COMERCIO\', 1, \'CLP\');'
+  )
     .then(()=>showToast('Codigo copiado'));
 }
 function exportData(){
@@ -921,15 +961,6 @@ document.addEventListener('DOMContentLoaded',function(){
     ]);
     saveD([
       {id:'db1',bank:'bci',   amount:45000,desc:'SUPERMERCADO LIDER', currency:'CLP',date:new Date(n-86400000*2).toISOString(),source:'manual'},
-      {id:'db2',bank:'bchile',amount:12990,desc:'FARMACIA CRUZ VERDE',currency:'CLP',date:new Date(n-86400000*4).toISOString(),source:'manual'},
-    ]);
-    renderDashboard();
-  }
-});
-</script>
-</body>
-</html>
-:'db1',bank:'bci',   amount:45000,desc:'SUPERMERCADO LIDER', currency:'CLP',date:new Date(n-86400000*2).toISOString(),source:'manual'},
       {id:'db2',bank:'bchile',amount:12990,desc:'FARMACIA CRUZ VERDE',currency:'CLP',date:new Date(n-86400000*4).toISOString(),source:'manual'},
     ]);
     renderDashboard();
