@@ -636,20 +636,30 @@ function parseCSV(text){
   });
 }
 function parseMonto(raw){
-  // Limpia $ . espacios y convierte coma decimal
-  return Math.abs(parseFloat(String(raw||'').replace(/\$/g,'').replace(/\./g,'').replace(',','.').replace(/[^0-9.-]/g,''))||0);
+  // Limpia $ espacios y convierte formato chileno (puntos=miles, coma=decimal)
+  const s=String(raw||'').trim().replace(/\$/g,'').replace(/\s/g,'');
+  // Detectar si hay coma decimal: "11.749" es miles, "11,749" es decimal
+  // Si tiene punto y no coma → puntos son miles separadores
+  const limpio=s.replace(/\./g,'').replace(',','.');
+  return Math.abs(parseFloat(limpio.replace(/[^0-9.-]/g,''))||0);
 }
 
 function parseFecha(raw){
   const s=String(raw||'').trim();
-  // DD/MM/YYYY o DD-MM-YYYY o DD.MM.YYYY
+  // DD-MM-YYYY o DD/MM/YYYY o DD.MM.YYYY
   const dm=s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
   // YYYY-MM-DD
   const ym=s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
-  let d;
-  if(dm){ const y=dm[3].length===2?'20'+dm[3]:dm[3]; d=new Date(y+'-'+dm[2].padStart(2,'0')+'-'+dm[1].padStart(2,'0')); }
-  else if(ym){ d=new Date(ym[1]+'-'+ym[2].padStart(2,'0')+'-'+ym[3].padStart(2,'0')); }
-  return (d && !isNaN(d.getTime())) ? d : null;
+  let y,m,d;
+  if(dm){
+    d=parseInt(dm[1]); m=parseInt(dm[2]);
+    y=dm[3].length===2?2000+parseInt(dm[3]):parseInt(dm[3]);
+  } else if(ym){
+    y=parseInt(ym[1]); m=parseInt(ym[2]); d=parseInt(ym[3]);
+  } else return null;
+  // Crear fecha local (sin UTC offset) usando Date(y,m-1,d)
+  const fecha=new Date(y,m-1,d,12,0,0);
+  return isNaN(fecha.getTime())?null:fecha;
 }
 
 function parseCartola(rows, bank){
@@ -658,23 +668,42 @@ function parseCartola(rows, bank){
   // Limpiar filas vacías al inicio
   while(rows.length>0 && rows[0].every(c=>!String(c||'').trim())) rows.shift();
 
-  // Detectar fila de encabezado
+  // Detectar fila de encabezado buscando columna FECHA
   let hr=-1, dc=-1, descC=-1, ac=-1, cargoC=-1, abonoC=-1, cuotasC=-1;
-  for(let i=0;i<Math.min(20,rows.length);i++){
+  for(let i=0;i<Math.min(25,rows.length);i++){
     const r=rows[i].map(c=>String(c||'').toUpperCase().trim());
-    const di=r.findIndex(c=>c==='FECHA'||c==='DATE');
+    const di=r.findIndex(c=>c==='FECHA'||c==='DATE'||c==='F.TRANSACCION'||c==='FECHA TRANSACCIÓN'||c==='FECHA TRANSACCION');
     if(di<0) continue;
     hr=i; dc=di;
-    // Descripción: puede ser col 2 en BCI crédito (Fecha|Código|Descripción|Tipo|Monto)
+
+    // Buscar columna descripción por nombre
     descC = r.findIndex(c=>c.includes('DESCRI')||c.includes('DETALLE')||c.includes('GLOSA')||c.includes('CONCEPTO')||c.includes('COMERCIO'));
-    if(descC<0) descC = Math.min(di+2, r.length-1); // BCI: col después de Código
-    ac     = r.findIndex(c=>c==='MONTO'||c==='IMPORTE');
-    cargoC = r.findIndex(c=>c==='CARGO'||c==='DÉBITO'||c==='DEBITO');
-    abonoC = r.findIndex(c=>c==='ABONO'||c==='CRÉDITO'||c==='CREDITO'||c==='HABER');
+
+    // Buscar monto — incluir variantes con paréntesis y símbolos
+    ac = r.findIndex(c=>c.replace(/[^A-Z]/g,'').includes('MONTO')||c.replace(/[^A-Z]/g,'').includes('IMPORTE')||c.replace(/[^A-Z]/g,'').includes('VALOR'));
+    cargoC = r.findIndex(c=>c.includes('CARGO')||c==='DÉBITO'||c==='DEBITO');
+    abonoC = r.findIndex(c=>c.includes('ABONO')||c==='CRÉDITO'||c==='CREDITO'||c==='HABER');
     cuotasC= r.findIndex(c=>c.includes('CUOTA'));
     break;
   }
   if(hr<0){ hr=0; dc=0; descC=1; ac=2; }
+
+  // Si no encontramos descripción por nombre, inferir por posición
+  // BCI crédito: Fecha(0)|Código(1)|Ciudad(2)|Descripción(3)|Tipo(4)|Monto(5)
+  // En ese caso descC sería -1 → usar columna después del posible "código"
+  if(descC<0){
+    // Intentar detectar columna de descripción buscando la más larga en datos
+    const sample=rows.slice(hr+1,hr+5);
+    let bestCol=-1, bestLen=0;
+    if(sample.length>0){
+      for(let col=0;col<(sample[0]||[]).length;col++){
+        if(col===dc||col===ac||col===cargoC||col===abonoC) continue;
+        const avgLen=sample.reduce((s,r)=>s+String(r[col]||'').trim().length,0)/sample.length;
+        if(avgLen>bestLen){bestLen=avgLen;bestCol=col;}
+      }
+    }
+    descC=bestCol>=0?bestCol:dc+1;
+  }
 
   const res=[];
   for(let i=hr+1;i<rows.length;i++){
@@ -684,35 +713,40 @@ function parseCartola(rows, bank){
     const rawDate = String(r[dc]||'').trim();
     const rawDesc = String(r[descC]||'').trim();
 
-    // Intentar parsear fecha — si no hay fecha válida, skip
+    // Skip si no hay fecha válida
     const fecha = parseFecha(rawDate);
     if(!fecha) continue;
 
-    // Monto: prioridad monto > cargo > abono > buscar en todas las columnas
+    // Monto: prioridad monto > cargo > abono > última columna numérica
     let amount=0;
-    if(ac>=0)     amount=parseMonto(r[ac]);
+    if(ac>=0)       amount=parseMonto(r[ac]);
     if(!amount && cargoC>=0) amount=parseMonto(r[cargoC]);
     if(!amount && abonoC>=0) amount=parseMonto(r[abonoC]);
     if(!amount){
-      for(let col=0;col<r.length;col++){
+      // Buscar la ÚLTIMA columna con valor numérico > 100 (evitar códigos)
+      for(let col=r.length-1;col>=0;col--){
         if(col===dc||col===descC) continue;
         const v=parseMonto(r[col]);
-        if(v>1000){ amount=v; break; } // mínimo $1.000 para evitar falsos positivos
+        if(v>=100){ amount=v; break; }
       }
     }
     if(!amount) continue;
 
-    // Cuotas (si la columna existe)
+    // Cuotas
     let cuotas=1;
     if(cuotasC>=0){
       const m=String(r[cuotasC]||'').match(/(\d+)/);
       if(m) cuotas=parseInt(m[1]);
     }
 
-    // Limpiar descripción: quitar "COMPRAS", "CC 03-03" tipo sufijos de BCI
+    // Limpiar descripción BCI: quitar "COMPRAS", "SAN CC 03-03", "CF 03-03", ciudad pegada
     const desc=(rawDesc||'Importado')
-      .replace(/\bCOMPRAS\b/gi,'').replace(/\bCC\s+\d+-\d+\b/gi,'')
-      .replace(/\bCF\s+\d+-\d+\b/gi,'').replace(/\s{2,}/g,' ').trim()||'Importado';
+      .replace(/\bCOMPRAS\b/gi,'')
+      .replace(/\bSAN\s+CC\s+\d+-\d+\b/gi,'')
+      .replace(/\bCC\s+\d+-\d+\b/gi,'')
+      .replace(/\bCF\s+\d+-\d+\b/gi,'')
+      .replace(/\bDP\s+\*/gi,'')
+      .replace(/\s{2,}/g,' ').trim()||'Importado';
 
     res.push({
       id:'imp_'+Date.now()+'_'+i,
