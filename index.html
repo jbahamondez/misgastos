@@ -948,8 +948,40 @@ function showToast(msg,color){
   t.style.color=color==='var(--green)'?'#0f1117':'white';
   t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
 }
+// ── Manejo de URL params para iOS Shortcuts ──────────────────────────────────
+// El shortcut abre: https://jbahamondez.github.io/misgastos?type=debito&bank=bci&amount=4000&desc=BELFORTPERON&date=26/04/2026
+function handleURLParams(){
+  const p=new URLSearchParams(window.location.search);
+  if(!p.has('amount')) return; // no hay nada que registrar
+  const amount=parseFloat(p.get('amount')||0);
+  const desc=decodeURIComponent(p.get('desc')||'Gasto automatico');
+  const type=p.get('type')||'credito'; // 'credito' o 'debito'
+  const bank=p.get('bank')||'bci';
+  const cuotas=parseInt(p.get('cuotas')||1);
+  const currency=p.get('currency')||'CLP';
+  const rawDate=p.get('date');
+  const date=rawDate?parseFecha(rawDate):new Date();
+
+  if(!amount||amount<=0) return;
+
+  if(type==='debito'){
+    const tx={id:Date.now().toString(),bank,amount,desc,currency,
+      date:(date||new Date()).toISOString(),source:'shortcut'};
+    const d=getD(); d.push(tx); saveD(d);
+  } else {
+    const tx={id:Date.now().toString(),cardId:bank,amount,desc,cuotas,currency,
+      date:(date||new Date()).toISOString(),source:'shortcut'};
+    const d=getC(); d.push(tx); saveC(d);
+  }
+
+  // Limpiar URL para evitar doble registro si refresca
+  window.history.replaceState({},'',window.location.pathname);
+  setTimeout(()=>showToast('✅ '+desc+' — '+fmtCLP(amount)+' registrado'),600);
+}
+
 document.addEventListener('DOMContentLoaded',function(){
   renderDashboard();renderAjustes();
+  handleURLParams();
   if(!getC().length&&!getD().length){
     var n=Date.now();
     saveC([
