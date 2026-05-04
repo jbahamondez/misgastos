@@ -176,6 +176,49 @@
     .toast{position:fixed;top:calc(var(--safe-top) + 8px);left:50%;transform:translateX(-50%) translateY(-80px);background:var(--green);color:#0f1117;padding:9px 18px;border-radius:20px;font-size:13px;font-weight:600;z-index:999;transition:transform .3s ease;white-space:nowrap}
     .toast.show{transform:translateX(-50%) translateY(0)}
     .pb14{padding-bottom:14px}
+
+    /* ── Deudas / División de compra ───────────────────────────── */
+    .split-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:300;backdrop-filter:blur(4px);align-items:flex-end}
+    .split-modal-overlay.open{display:flex}
+    .split-modal{width:100%;background:var(--bg2);border-radius:22px 22px 0 0;padding:22px 20px calc(22px + var(--safe-bot));animation:slideUp .28s ease;max-height:85dvh;overflow-y:auto}
+    .split-preview{background:var(--bg3);border-radius:12px;padding:14px;margin-bottom:14px}
+    .split-preview .sp-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px}
+    .split-preview .sp-row .sp-label{color:var(--text2)}
+    .split-preview .sp-row .sp-val{font-weight:600}
+    .split-preview .sp-row .sp-val.green{color:var(--green)}
+    .split-preview .sp-row .sp-val.yellow{color:var(--yellow)}
+    .person-chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+    .person-chip{padding:7px 14px;border-radius:20px;border:1px solid var(--border);background:none;color:var(--text2);font-size:13px;cursor:pointer;transition:all .2s}
+    .person-chip.active{background:var(--accent);border-color:var(--accent);color:white}
+    .deudas-page{display:none;padding-bottom:calc(70px + var(--safe-bot))}
+    .deudas-page.active{display:block}
+    .deuda-summary-box{margin:16px 20px 0;background:linear-gradient(135deg,#2d1a3a,#3a1a2d);border-radius:var(--radius);border:1px solid #6c2070;padding:18px}
+    .deuda-summary-box .ds-label{font-size:11px;color:var(--accent2);font-weight:600;text-transform:uppercase;letter-spacing:.8px}
+    .deuda-summary-box .ds-amount{font-size:30px;font-weight:700;margin:8px 0 4px;color:var(--accent2)}
+    .deuda-person-card{margin:14px 20px 0;background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden}
+    .deuda-person-header{padding:14px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);cursor:pointer}
+    .deuda-person-header h3{font-size:15px;font-weight:600}
+    .deuda-person-header .deuda-total{font-size:16px;font-weight:700;color:var(--accent2)}
+    .deuda-item{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+    .deuda-item:last-child{border-bottom:none}
+    .deuda-item.paid{opacity:.45}
+    .deuda-item-info{flex:1;min-width:0}
+    .deuda-item-desc{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .deuda-item-meta{font-size:11px;color:var(--text2);margin-top:2px}
+    .deuda-item-amount{text-align:right;flex-shrink:0}
+    .deuda-item-amount .da{font-size:14px;font-weight:700;color:var(--accent2)}
+    .deuda-item-amount .da.paid{color:var(--green)}
+    .btn-paid{padding:5px 11px;border-radius:8px;border:1px solid var(--green);background:rgba(52,211,153,.1);color:var(--green);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
+    .btn-paid.done{border-color:var(--border);background:none;color:var(--text2)}
+    /* ── Historial filtros ───────────────────────────────────────── */
+    .hist-search{margin:0 20px 0;position:relative}
+    .hist-search input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 14px 10px 38px;color:var(--text);font-size:14px;outline:none}
+    .hist-search input:focus{border-color:var(--accent)}
+    .hist-search .search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text2);width:16px;height:16px}
+    .hist-date-filters{display:flex;gap:8px;padding:10px 20px;overflow-x:auto;scrollbar-width:none}
+    .hist-date-filters::-webkit-scrollbar{display:none}
+    .hdf-chip{flex-shrink:0;padding:6px 13px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--border);background:none;color:var(--text2);cursor:pointer;transition:all .2s}
+    .hdf-chip.active{background:var(--accent2);border-color:var(--accent2);color:#0f1117}
   </style>
 </head>
 <body>
@@ -253,6 +296,11 @@
 <!-- HISTORIAL -->
 <div class="page" id="page-historial">
   <div class="page-header"><h1>Historial</h1><p id="hist-subtitle">Todos los movimientos</p></div>
+  <div style="margin-top:14px" class="hist-search">
+    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" id="hist-search-input" placeholder="Buscar por descripción..." oninput="renderHistorial()" />
+  </div>
+  <div class="hist-date-filters" id="hist-date-filters"></div>
   <div class="filter-row" id="filter-row"></div>
   <div class="tx-list pb14" id="hist-list"></div>
 </div>
@@ -285,6 +333,14 @@
   <div style="height:20px"></div>
 </div>
 
+
+<!-- DEUDAS -->
+<div class="page" id="page-deudas">
+  <div class="page-header"><h1>🤝 Deudas</h1><p id="deudas-subtitle">Compras divididas</p></div>
+  <div class="deuda-summary-box" id="deudas-summary-box"></div>
+  <div id="deudas-content" style="padding-bottom:14px"></div>
+</div>
+
 <!-- NAV -->
 <nav class="bottom-nav">
   <button class="nav-btn active" onclick="showPage('dashboard')" id="nav-dashboard">
@@ -295,6 +351,8 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Débito</button>
   <button class="nav-btn" onclick="showPage('historial')" id="nav-historial">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Historial</button>
+  <button class="nav-btn" onclick="showPage('deudas')" id="nav-deudas">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Deudas</button>
   <button class="nav-btn" onclick="showPage('ajustes')" id="nav-ajustes">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Ajustes</button>
 </nav>
@@ -345,6 +403,25 @@
   </div>
 </div>
 
+
+<!-- SPLIT MODAL -->
+<div class="split-modal-overlay" id="split-modal-overlay" onclick="closeSplitOutside(event)">
+  <div class="split-modal">
+    <div class="modal-handle"></div>
+    <h2>¿Dividir esta compra?</h2>
+    <div class="split-preview" id="split-preview-box"></div>
+    <label style="font-size:12px;color:var(--text2);margin-bottom:8px;display:block">¿Con quién divides?</label>
+    <div class="person-chips" id="person-chips"></div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <input type="text" id="split-new-person" placeholder="Otra persona..." style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 13px;color:var(--text);font-size:14px;outline:none" />
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeSplitModal()">No dividir</button>
+      <button class="btn-save" onclick="confirmSplit()">Dividir 50/50</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -366,7 +443,7 @@ const ICONS = {
   STEAM:'🎮',COPEC:'⛽',SHELL:'⛽',DEFAULT:'💳'
 };
 
-const LS_C='gastos_credito_v2', LS_D='gastos_debito_v2', LS_S='sueldo_mensual';
+const LS_C='gastos_credito_v2', LS_D='gastos_debito_v2', LS_S='sueldo_mensual', LS_DEUDAS='gastos_deudas_v1', LS_PERSONAS='deudas_personas_v1';
 
 function getC(){try{return JSON.parse(localStorage.getItem(LS_C)||'[]')}catch{return[]}}
 function getD(){try{return JSON.parse(localStorage.getItem(LS_D)||'[]')}catch{return[]}}
@@ -374,6 +451,10 @@ function saveC(a){localStorage.setItem(LS_C,JSON.stringify(a))}
 function saveD(a){localStorage.setItem(LS_D,JSON.stringify(a))}
 function getSueldo(){return parseFloat(localStorage.getItem(LS_S)||'0')}
 function setSueldo(v){localStorage.setItem(LS_S,String(v))}
+function getDeudas(){try{return JSON.parse(localStorage.getItem(LS_DEUDAS)||'[]')}catch{return[]}}
+function saveDeudas(a){localStorage.setItem(LS_DEUDAS,JSON.stringify(a))}
+function getPersonas(){try{return JSON.parse(localStorage.getItem(LS_PERSONAS)||'["Mi pareja"]')}catch{return['Mi pareja']}}
+function savePersonas(a){localStorage.setItem(LS_PERSONAS,JSON.stringify(a))}
 
 function fmtCLP(n){return '$'+Math.round(n).toLocaleString('es-CL')}
 function fmtUSD(n){return 'USD '+parseFloat(n).toFixed(2)}
@@ -415,7 +496,7 @@ function showPage(name){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.getElementById('nav-'+name).classList.add('active');
-  ({dashboard:renderDashboard,tarjetas:renderTarjetas,debito:renderDebito,historial:renderHistorial,ajustes:renderAjustes})[name]?.();
+  ({dashboard:renderDashboard,tarjetas:renderTarjetas,debito:renderDebito,historial:renderHistorial,ajustes:renderAjustes,deudas:renderDeudas})[name]?.();
 }
 
 function renderDashboard(){
@@ -816,21 +897,122 @@ function confirmImport(){
   showToast(n+' movimientos importados como '+(importType==='credito'?'crédito':'débito'));
 }
 
-let activeFilter='all';
+let activeFilter='all', activeDateFilter='ciclo';
+
 function renderHistorial(){
+  // Date filter chips
+  const dateFilters=[
+    {id:'ciclo',label:'Este ciclo'},
+    {id:'mes',label:'Este mes'},
+    {id:'mes-ant',label:'Mes anterior'},
+    {id:'todo',label:'Todo'},
+  ];
+  document.getElementById('hist-date-filters').innerHTML=dateFilters.map(f=>
+    `<button class="hdf-chip ${activeDateFilter===f.id?'active':''}" onclick="setDateFilter('${f.id}')">${f.label}</button>`
+  ).join('');
+
+  // Type filter chips
   const filters=[{id:'all',label:'Todos'},{id:'credito',label:'Credito'},{id:'debito',label:'Debito'},{id:'bci',label:'BCI'},{id:'bchile',label:'Banco Chile'},{id:'scotia',label:'Scotia'}];
   document.getElementById('filter-row').innerHTML=filters.map(f=>`<button class="filter-chip ${activeFilter===f.id?'active':''}" onclick="setFilter('${f.id}')">${f.label}</button>`).join('');
+
+  // Date range
+  let dateStart=null, dateEnd=null;
+  const now=new Date();
+  if(activeDateFilter==='ciclo'){
+    const c=getCycle(); dateStart=c.start; dateEnd=c.end;
+  } else if(activeDateFilter==='mes'){
+    dateStart=new Date(now.getFullYear(),now.getMonth(),1);
+    dateEnd=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);
+  } else if(activeDateFilter==='mes-ant'){
+    dateStart=new Date(now.getFullYear(),now.getMonth()-1,1);
+    dateEnd=new Date(now.getFullYear(),now.getMonth(),0,23,59,59);
+  }
+  // 'todo' → no filter
+
+  // Search term
+  const searchTerm=(document.getElementById('hist-search-input')?.value||'').trim().toLowerCase();
+
   let all=[];
   if(activeFilter==='all'||activeFilter==='credito'||CARDS[activeFilter])
     all=[...all,...getC().filter(t=>activeFilter==='all'||activeFilter==='credito'||t.cardId===activeFilter)];
   if(activeFilter==='all'||activeFilter==='debito')
     all=[...all,...getD().map(t=>({...t,_isDebit:true}))];
+
+  // Apply date filter
+  if(dateStart&&dateEnd){
+    all=all.filter(t=>{const d=new Date(t.date);return d>=dateStart&&d<=dateEnd;});
+  }
+
+  // Apply search filter
+  if(searchTerm){
+    all=all.filter(t=>(t.desc||'').toLowerCase().includes(searchTerm));
+  }
+
   all.sort((a,b)=>new Date(b.date)-new Date(a.date));
   document.getElementById('hist-subtitle').textContent=all.length+' movimiento'+(all.length!==1?'s':'');
   document.getElementById('hist-list').innerHTML=all.length?all.map(txHTML).join('')
-    :'<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><h3>Sin resultados</h3><p>No hay movimientos para este filtro</p></div>';
+    :'<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><h3>Sin resultados</h3><p>Prueba con otro filtro o busqueda</p></div>';
 }
 function setFilter(id){activeFilter=id;renderHistorial();}
+function setDateFilter(id){activeDateFilter=id;renderHistorial();}
+
+function renderDeudas(){
+  const deudas=getDeudas();
+  const pendientes=deudas.filter(d=>!d.paid);
+  const totalPend=pendientes.reduce((s,d)=>s+d.deudaTotal,0);
+
+  document.getElementById('deudas-subtitle').textContent=deudas.length+' registro'+(deudas.length!==1?'s':'');
+  document.getElementById('deudas-summary-box').innerHTML=`
+    <div class="ds-label">Total pendiente</div>
+    <div class="ds-amount">${fmtCLP(totalPend)}</div>
+    <div style="font-size:12px;color:var(--text2)">${pendientes.length} deuda${pendientes.length!==1?'s':''} activa${pendientes.length!==1?'s':''}</div>`;
+
+  const content=document.getElementById('deudas-content');
+  if(!deudas.length){
+    content.innerHTML='<div class="empty" style="margin-top:30px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><h3>Sin deudas</h3><p>Cuando dividas una compra aparecerá aquí</p></div>';
+    return;
+  }
+
+  // Group by person
+  const byPerson={};
+  deudas.forEach(d=>{if(!byPerson[d.person])byPerson[d.person]=[];byPerson[d.person].push(d);});
+
+  content.innerHTML=Object.entries(byPerson).map(([person, items])=>{
+    const pendTotal=items.filter(i=>!i.paid).reduce((s,i)=>s+i.deudaTotal,0);
+    const itemsHTML=items.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d=>{
+      const dateStr=new Date(d.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'numeric'});
+      const cuotaStr=d.cuotas>1?` · ${d.cuotas} cuotas · ${fmtCLP(d.deudaPerCuota)}/cuota`:'';
+      return `<div class="deuda-item ${d.paid?'paid':''}">
+        <div class="deuda-item-info">
+          <div class="deuda-item-desc">${d.desc}</div>
+          <div class="deuda-item-meta">${dateStr}${cuotaStr}${d.paid?' · ✅ Pagado el '+new Date(d.paidDate).toLocaleDateString('es-CL',{day:'2-digit',month:'short'}):''}</div>
+        </div>
+        <div class="deuda-item-amount">
+          <div class="da ${d.paid?'paid':''}">${fmtCLP(d.deudaTotal)}</div>
+          ${!d.paid?`<button class="btn-paid" onclick="markDebtPaid('${d.id}')">✓ Cobrado</button>`
+                   :`<span class="btn-paid done">Pagado</span>`}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="deuda-person-card">
+      <div class="deuda-person-header">
+        <h3>👤 ${person}</h3>
+        <span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span>
+      </div>
+      ${itemsHTML}
+    </div>`;
+  }).join('');
+}
+
+function markDebtPaid(id){
+  const ds=getDeudas();
+  const idx=ds.findIndex(d=>d.id===id);
+  if(idx<0)return;
+  ds[idx].paid=true; ds[idx].paidDate=new Date().toISOString();
+  saveDeudas(ds);
+  renderDeudas();
+  showToast('✅ Deuda marcada como pagada');
+}
 
 function renderAjustes(){
   document.getElementById('settings-cards-list').innerHTML=Object.values(CARDS).map(c=>`<div class="settings-row"><span class="row-label">${c.emoji} ${c.bank} ${c.num}</span><span class="row-val">${fmtCLP(c.limitCLP)}</span></div>`).join('');
@@ -863,6 +1045,9 @@ function openModal(){document.getElementById('modal-overlay').classList.add('ope
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');document.getElementById('m-amount').value='';document.getElementById('m-desc').value='';}
 function closeModalOutside(e){if(e.target===document.getElementById('modal-overlay'))closeModal();}
 
+// Pending split data
+let _pendingSplit=null;
+
 function saveExpense(){
   const amount=parseFloat(document.getElementById('m-amount').value);
   const desc=(document.getElementById('m-desc').value.trim())||'Sin descripcion';
@@ -871,16 +1056,108 @@ function saveExpense(){
     const cardId=document.getElementById('m-card').value;
     const cuotas=parseInt(document.getElementById('m-cuotas').value);
     const currency=document.getElementById('m-currency').value;
+    const txId=Date.now().toString();
     const d=getC();
-    d.push({id:Date.now().toString(),cardId,amount,desc,cuotas,currency,date:new Date().toISOString(),source:'manual'});
-    saveC(d); showToast('Guardado en '+CARDS[cardId].bank);
+    d.push({id:txId,cardId,amount,desc,cuotas,currency,date:new Date().toISOString(),source:'manual'});
+    saveC(d);
+    closeModal(); renderDashboard();
+    // Offer to split
+    _pendingSplit={txId,amount,desc,cuotas,currency,cardId};
+    openSplitModal(_pendingSplit);
   }else{
     const bank=document.getElementById('m-debit-bank').value;
     const d=getD();
     d.push({id:Date.now().toString(),bank,amount,desc,currency:'CLP',date:new Date().toISOString(),source:'manual'});
     saveD(d); showToast('Gasto debito guardado');
+    closeModal(); renderDashboard();
   }
-  closeModal(); renderDashboard();
+}
+
+// ── Split modal logic ──────────────────────────────────────────────────────
+let _splitSelectedPerson=null;
+
+function openSplitModal(split){
+  _splitSelectedPerson=getPersonas()[0]||'Mi pareja';
+  // Preview
+  const cuotaAmt=split.amount/Math.max(1,split.cuotas||1);
+  const myShare=cuotaAmt/2;
+  const theirShare=cuotaAmt/2;
+  document.getElementById('split-preview-box').innerHTML=`
+    <div class="sp-row"><span class="sp-label">${split.desc}</span><span class="sp-val">${fmtCLP(split.amount)} ${split.cuotas>1?'en '+split.cuotas+' cuotas':''}</span></div>
+    <div class="sp-row"><span class="sp-label">Cuota mensual</span><span class="sp-val yellow">${fmtCLP(cuotaAmt)}</span></div>
+    <div class="sp-row"><span class="sp-label">Tu parte (50%)</span><span class="sp-val green">${fmtCLP(myShare)}</span></div>
+    <div class="sp-row"><span class="sp-label">Lo que te deben</span><span class="sp-val" style="color:var(--accent2)">${fmtCLP(theirShare)}</span></div>`;
+  // Person chips
+  renderPersonChips();
+  document.getElementById('split-new-person').value='';
+  document.getElementById('split-modal-overlay').classList.add('open');
+}
+
+function renderPersonChips(){
+  const personas=getPersonas();
+  document.getElementById('person-chips').innerHTML=personas.map(p=>
+    `<button class="person-chip ${p===_splitSelectedPerson?'active':''}" onclick="selectPerson('${p.replace(/'/g,"\\'")}')">👤 ${p}</button>`
+  ).join('');
+}
+
+function selectPerson(name){
+  _splitSelectedPerson=name;
+  renderPersonChips();
+}
+
+function closeSplitModal(){
+  document.getElementById('split-modal-overlay').classList.remove('open');
+  _pendingSplit=null;
+  showToast('Gasto guardado (sin dividir)');
+}
+function closeSplitOutside(e){if(e.target===document.getElementById('split-modal-overlay'))closeSplitModal();}
+
+function confirmSplit(){
+  if(!_pendingSplit)return;
+  // Add new person if typed
+  const newP=document.getElementById('split-new-person').value.trim();
+  if(newP){
+    const ps=getPersonas();
+    if(!ps.includes(newP)){ps.push(newP);savePersonas(ps);}
+    _splitSelectedPerson=newP;
+  }
+  if(!_splitSelectedPerson){showToast('Selecciona una persona','var(--yellow)');return}
+
+  const {txId,amount,desc,cuotas,currency}=_pendingSplit;
+  const cuotaAmt=amount/Math.max(1,cuotas||1);
+  const deudaAmt=cuotaAmt/2; // their share per month
+
+  // Update original transaction to only register user's 50%
+  const credData=getC();
+  const txIdx=credData.findIndex(t=>t.id===txId);
+  if(txIdx>=0){
+    credData[txIdx].amount=amount/2; // user pays half
+    credData[txIdx].splitWith=_splitSelectedPerson;
+    credData[txIdx].splitTotal=amount;
+    saveC(credData);
+  }
+
+  // Register debt
+  const deuda={
+    id:'deu_'+Date.now(),
+    person:_splitSelectedPerson,
+    txId,
+    desc,
+    totalAmount:amount,
+    cuotas:cuotas||1,
+    deudaPerCuota:deudaAmt,
+    deudaTotal:deudaAmt*(cuotas||1),
+    currency:currency||'CLP',
+    date:new Date().toISOString(),
+    paid:false,
+    paidDate:null
+  };
+  const ds=getDeudas(); ds.push(deuda); saveDeudas(ds);
+
+  document.getElementById('split-modal-overlay').classList.remove('open');
+  _pendingSplit=null;
+  renderDashboard();
+  showToast('💜 Dividido con '+_splitSelectedPerson+' — te deben '+fmtCLP(deudaAmt)+'/cuota');
 }
 
 window.addExpenseFromShortcut=function(cardId,amount,desc,cuotas,currency){
@@ -891,11 +1168,17 @@ window.addExpenseFromShortcut=function(cardId,amount,desc,cuotas,currency){
   saveC(d); renderDashboard(); return'OK';
 };
 window.parseEmailBCI=function(body){
-  const m=body.match(/Monto\s*\$?([\d.,]+)/i)||body.match(/\$([\d.,]+)/);
-  const cm=body.match(/Comercio\s+(.+?)(?:\n|Cuotas)/is);
-  const qm=body.match(/Cuotas\s+(\d+)/i);
+  // Monto: acepta "$75.462" o "Monto $75.462"
+  const m=body.match(/Monto\s*\$?\s*([\d.,]+)/i)||body.match(/\$\s*([\d.,]+)/);
   if(!m)return null;
-  return window.addExpenseFromShortcut('bci',parseFloat(m[1].replace(/\./g,'').replace(',','.')),cm?cm[1].trim():'BCI',qm?parseInt(qm[1]):1,'CLP');
+  const amount=parseFloat(m[1].replace(/\./g,'').replace(',','.'));
+  // Comercio: todo lo que viene después de "Comercio" hasta salto de línea o "Cuotas"
+  const cm=body.match(/Comercio\s+([^\n\r]+?)(?:\s*(?:Cuotas|$))/is)||body.match(/Comercio\s+([^\n\r]+)/i);
+  const desc=cm?cm[1].trim().replace(/\s+/g,' '):'BCI';
+  // Cuotas: 0 o vacío = 1 cuota
+  const qm=body.match(/Cuotas\s+(\d+)/i);
+  const cuotas=qm?Math.max(1,parseInt(qm[1])):1;
+  return window.addExpenseFromShortcut('bci',amount,desc,cuotas,'CLP');
 };
 window.parseEmailBancoChile=function(body){
   const m=body.match(/compra por \$([\d.,]+) con Tarjeta de Credito \*+(\d+) en (.+?) el/i);
