@@ -192,7 +192,7 @@
     .person-chip.active{background:var(--accent);border-color:var(--accent);color:white}
     .deudas-page{display:none;padding-bottom:calc(70px + var(--safe-bot))}
     .deudas-page.active{display:block}
-    .deuda-summary-box{margin:16px 20px 0;background:linear-gradient(135deg,#2d1a3a,#3a1a2d);border-radius:var(--radius);border:1px solid #6c2070;padding:18px}
+    .deuda-summary-box{background:linear-gradient(135deg,#2d1a3a,#3a1a2d);border-radius:var(--radius);border:1px solid #6c2070;padding:18px}
     .deuda-summary-box .ds-label{font-size:11px;color:var(--accent2);font-weight:600;text-transform:uppercase;letter-spacing:.8px}
     .deuda-summary-box .ds-amount{font-size:30px;font-weight:700;margin:8px 0 4px;color:var(--accent2)}
     .deuda-person-card{margin:14px 20px 0;background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden}
@@ -337,13 +337,15 @@
 <!-- DEUDAS -->
 <div class="page" id="page-deudas">
   <div class="page-header"><h1>🤝 Deudas</h1><p id="deudas-subtitle">Compras divididas</p></div>
-  <div class="deuda-summary-box" id="deudas-summary-box"></div>
   <div style="margin-top:14px" class="hist-search">
     <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     <input type="text" id="deudas-search-input" placeholder="Buscar por descripción..." oninput="renderDeudas()" />
   </div>
   <div class="hist-date-filters" id="deudas-date-filters"></div>
   <div class="filter-row" id="deudas-filter-row"></div>
+  <div style="margin:14px 20px 0" id="deudas-summary-box-wrap">
+    <div class="deuda-summary-box" id="deudas-summary-box"></div>
+  </div>
   <div id="deudas-content" style="padding-bottom:14px"></div>
 </div>
 
@@ -459,7 +461,7 @@ function getSueldo(){return parseFloat(localStorage.getItem(LS_S)||'0')}
 function setSueldo(v){localStorage.setItem(LS_S,String(v))}
 function getDeudas(){try{return JSON.parse(localStorage.getItem(LS_DEUDAS)||'[]')}catch{return[]}}
 function saveDeudas(a){localStorage.setItem(LS_DEUDAS,JSON.stringify(a))}
-function getPersonas(){try{return JSON.parse(localStorage.getItem(LS_PERSONAS)||'["Mi pareja"]')}catch{return['Mi pareja']}}
+function getPersonas(){try{return JSON.parse(localStorage.getItem(LS_PERSONAS)||'["🤍 Tamarindo"]')}catch{return['🤍 Tamarindo']}}
 function savePersonas(a){localStorage.setItem(LS_PERSONAS,JSON.stringify(a))}
 
 function fmtCLP(n){return '$'+Math.round(n).toLocaleString('es-CL')}
