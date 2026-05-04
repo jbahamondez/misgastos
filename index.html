@@ -338,6 +338,12 @@
 <div class="page" id="page-deudas">
   <div class="page-header"><h1>🤝 Deudas</h1><p id="deudas-subtitle">Compras divididas</p></div>
   <div class="deuda-summary-box" id="deudas-summary-box"></div>
+  <div style="margin-top:14px" class="hist-search">
+    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="text" id="deudas-search-input" placeholder="Buscar por descripción..." oninput="renderDeudas()" />
+  </div>
+  <div class="hist-date-filters" id="deudas-date-filters"></div>
+  <div class="filter-row" id="deudas-filter-row"></div>
   <div id="deudas-content" style="padding-bottom:14px"></div>
 </div>
 
@@ -956,20 +962,72 @@ function renderHistorial(){
 function setFilter(id){activeFilter=id;renderHistorial();}
 function setDateFilter(id){activeDateFilter=id;renderHistorial();}
 
+let activeDeudasDateFilter='todo', activeDeudasStatusFilter='pendiente';
+
 function renderDeudas(){
-  const deudas=getDeudas();
-  const pendientes=deudas.filter(d=>!d.paid);
+  const todasDeudas=getDeudas();
+  const pendientes=todasDeudas.filter(d=>!d.paid);
   const totalPend=pendientes.reduce((s,d)=>s+d.deudaTotal,0);
 
-  document.getElementById('deudas-subtitle').textContent=deudas.length+' registro'+(deudas.length!==1?'s':'');
+  // Summary siempre con totales reales
   document.getElementById('deudas-summary-box').innerHTML=`
     <div class="ds-label">Total pendiente</div>
     <div class="ds-amount">${fmtCLP(totalPend)}</div>
     <div style="font-size:12px;color:var(--text2)">${pendientes.length} deuda${pendientes.length!==1?'s':''} activa${pendientes.length!==1?'s':''}</div>`;
 
+  // Date filter chips
+  const dateFilters=[
+    {id:'todo',label:'Todo'},
+    {id:'ciclo',label:'Este ciclo'},
+    {id:'mes',label:'Este mes'},
+    {id:'mes-ant',label:'Mes anterior'},
+  ];
+  document.getElementById('deudas-date-filters').innerHTML=dateFilters.map(f=>
+    `<button class="hdf-chip ${activeDeudasDateFilter===f.id?'active':''}" onclick="setDeudasDateFilter('${f.id}')">${f.label}</button>`
+  ).join('');
+
+  // Status filter chips
+  const statusFilters=[
+    {id:'pendiente',label:'Pendientes'},
+    {id:'pagado',label:'Pagadas'},
+    {id:'all',label:'Todas'},
+  ];
+  document.getElementById('deudas-filter-row').innerHTML=statusFilters.map(f=>
+    `<button class="filter-chip ${activeDeudasStatusFilter===f.id?'active':''}" onclick="setDeudasStatusFilter('${f.id}')">${f.label}</button>`
+  ).join('');
+
+  // Date range
+  let dateStart=null, dateEnd=null;
+  const now=new Date();
+  if(activeDeudasDateFilter==='ciclo'){
+    const c=getCycle(); dateStart=c.start; dateEnd=c.end;
+  } else if(activeDeudasDateFilter==='mes'){
+    dateStart=new Date(now.getFullYear(),now.getMonth(),1);
+    dateEnd=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);
+  } else if(activeDeudasDateFilter==='mes-ant'){
+    dateStart=new Date(now.getFullYear(),now.getMonth()-1,1);
+    dateEnd=new Date(now.getFullYear(),now.getMonth(),0,23,59,59);
+  }
+
+  // Search term
+  const searchTerm=(document.getElementById('deudas-search-input')?.value||'').trim().toLowerCase();
+
+  // Apply filters
+  let deudas=todasDeudas;
+  if(dateStart&&dateEnd) deudas=deudas.filter(d=>{const dt=new Date(d.date);return dt>=dateStart&&dt<=dateEnd;});
+  if(activeDeudasStatusFilter==='pendiente') deudas=deudas.filter(d=>!d.paid);
+  else if(activeDeudasStatusFilter==='pagado') deudas=deudas.filter(d=>d.paid);
+  if(searchTerm) deudas=deudas.filter(d=>(d.desc||'').toLowerCase().includes(searchTerm));
+
+  document.getElementById('deudas-subtitle').textContent=deudas.length+' registro'+(deudas.length!==1?'s':'');
+
   const content=document.getElementById('deudas-content');
-  if(!deudas.length){
+  if(!todasDeudas.length){
     content.innerHTML='<div class="empty" style="margin-top:30px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><h3>Sin deudas</h3><p>Cuando dividas una compra aparecerá aquí</p></div>';
+    return;
+  }
+  if(!deudas.length){
+    content.innerHTML='<div class="empty" style="margin-top:20px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><h3>Sin resultados</h3><p>Prueba con otro filtro o búsqueda</p></div>';
     return;
   }
 
@@ -1004,6 +1062,8 @@ function renderDeudas(){
     </div>`;
   }).join('');
 }
+function setDeudasDateFilter(id){activeDeudasDateFilter=id;renderDeudas();}
+function setDeudasStatusFilter(id){activeDeudasStatusFilter=id;renderDeudas();}
 
 function markDebtPaid(id){
   const ds=getDeudas();
@@ -1229,7 +1289,8 @@ function exportData(){
   showToast('Datos exportados');
 }
 function clearData(){
-  if(confirm('Borrar TODOS los gastos? No se puede deshacer.')){
+  if(
+confirm('Borrar TODOS los gastos? No se puede deshacer.')){
     localStorage.removeItem(LS_C);localStorage.removeItem(LS_D);
     renderDashboard();showToast('Datos eliminados','var(--red)');
   }
@@ -1242,21 +1303,18 @@ function showToast(msg,color){
   t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
 }
 // ── Manejo de URL params para iOS Shortcuts ──────────────────────────────────
-// El shortcut abre: https://jbahamondez.github.io/misgastos?type=debito&bank=bci&amount=4000&desc=BELFORTPERON&date=26/04/2026
 function handleURLParams(){
   const p=new URLSearchParams(window.location.search);
-  if(!p.has('amount')) return; // no hay nada que registrar
+  if(!p.has('amount')) return;
   const amount=parseFloat(p.get('amount')||0);
   const desc=decodeURIComponent(p.get('desc')||'Gasto automatico');
-  const type=p.get('type')||'credito'; // 'credito' o 'debito'
+  const type=p.get('type')||'credito';
   const bank=p.get('bank')||'bci';
   const cuotas=parseInt(p.get('cuotas')||1);
   const currency=p.get('currency')||'CLP';
   const rawDate=p.get('date');
   const date=rawDate?parseFecha(rawDate):new Date();
-
   if(!amount||amount<=0) return;
-
   if(type==='debito'){
     const tx={id:Date.now().toString(),bank,amount,desc,currency,
       date:(date||new Date()).toISOString(),source:'shortcut'};
@@ -1266,8 +1324,6 @@ function handleURLParams(){
       date:(date||new Date()).toISOString(),source:'shortcut'};
     const d=getC(); d.push(tx); saveC(d);
   }
-
-  // Limpiar URL para evitar doble registro si refresca
   window.history.replaceState({},'',window.location.pathname);
   setTimeout(()=>showToast('✅ '+desc+' — '+fmtCLP(amount)+' registrado'),600);
 }
