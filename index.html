@@ -1304,6 +1304,88 @@ function showToast(msg,color){
   t.style.color=color==='var(--green)'?'#0f1117':'white';
   t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
 }
+// ── Sincronización desde Google Sheets (cola Make.com) ───────────────────────
+const SHEET_ID='1oEJN2VFNNy_iL041GBrx7bP4MEt0V2vIv3RRoNIe5nk';
+const SHEET_CSV=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Cola`;
+const LS_SYNC='misgastos_sync_last';
+
+async function syncFromSheets(){
+  // Evitar sync si ya se hizo en los últimos 60 segundos
+  const last=parseInt(localStorage.getItem(LS_SYNC)||'0');
+  if(Date.now()-last < 60000) return;
+  try{
+    const res=await fetch(SHEET_CSV+'&_='+Date.now(),{cache:'no-store'});
+    if(!res.ok) return;
+    const text=await res.text();
+    const rows=text.trim().split('\n').map(l=>{
+      // Parsear CSV respetando comillas
+      const cols=[];let cur='',inQ=false;
+      for(let i=0;i<l.length;i++){
+        if(l[i]==='"'){inQ=!inQ;}
+        else if(l[i]===','&&!inQ){cols.push(cur.replace(/^"|"$/g,'').trim());cur='';}
+        else cur+=l[i];
+      }
+      cols.push(cur.replace(/^"|"$/g,'').trim());
+      return cols;
+    });
+
+    // Fila 0 = encabezados (status,type,bank,amount,desc,cuotas,date)
+    // Ignorar si no hay datos
+    if(rows.length<2) return;
+
+    let imported=0;
+    const toasts=[];
+
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i];
+      const status=(r[0]||'').toUpperCase().trim();
+      if(status!=='PENDING') continue;
+
+      const type=(r[1]||'credito').toLowerCase().trim();
+      const bank=(r[2]||'bci').toLowerCase().trim();
+      const amount=parseFloat((r[3]||'0').replace(/[^0-9.]/g,''));
+      const desc=(r[4]||'Gasto automatico').trim();
+      const cuotas=Math.max(1,parseInt(r[5]||'1')||1);
+      const rawDate=(r[6]||'').trim();
+      const date=rawDate?parseFecha(rawDate):new Date();
+
+      if(!amount||amount<=0) continue;
+
+      // Generar ID único basado en fila + datos para evitar duplicados
+      const txId='sheet_'+i+'_'+amount+'_'+bank;
+      // Verificar que no exista ya
+      const yaExiste=[...getC(),...getD()].some(t=>t.id===txId);
+      if(yaExiste) continue;
+
+      if(type==='debito'){
+        const d=getD();
+        d.push({id:txId,bank,amount,desc,currency:'CLP',
+          date:(date||new Date()).toISOString(),source:'email_auto'});
+        saveD(d);
+      } else {
+        const d=getC();
+        d.push({id:txId,cardId:bank,amount,desc,cuotas,currency:'CLP',
+          date:(date||new Date()).toISOString(),source:'email_auto'});
+        saveC(d);
+      }
+      imported++;
+      toasts.push(desc+' — '+fmtCLP(amount));
+    }
+
+    localStorage.setItem(LS_SYNC, Date.now().toString());
+
+    if(imported>0){
+      renderDashboard();
+      // Mostrar toasts uno por uno con delay
+      toasts.forEach((msg,i)=>{
+        setTimeout(()=>showToast('📩 '+msg),i*3200);
+      });
+    }
+  }catch(e){
+    console.warn('syncFromSheets error:',e);
+  }
+}
+
 // ── Manejo de URL params para iOS Shortcuts ──────────────────────────────────
 function handleURLParams(){
   const p=new URLSearchParams(window.location.search);
@@ -1333,6 +1415,12 @@ function handleURLParams(){
 document.addEventListener('DOMContentLoaded',function(){
   renderDashboard();renderAjustes();
   handleURLParams();
+  // Sync al abrir la app
+  syncFromSheets();
+  // Sync cada vez que el usuario vuelve a la app (desde segundo plano)
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='visible') syncFromSheets();
+  });
   if(!getC().length&&!getD().length){
     var n=Date.now();
     saveC([
