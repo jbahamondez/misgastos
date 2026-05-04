@@ -1119,6 +1119,17 @@ function closeModalOutside(e){if(e.target===document.getElementById('modal-overl
 
 // Pending split data
 let _pendingSplit=null;
+let _splitQueue=[];
+
+function processSplitQueue(){
+  if(_splitQueue.length===0) return;
+  const next=_splitQueue.shift();
+  _pendingSplit=next;
+  openSplitModal(next);
+}
+
+// Override closeSplitModal para procesar siguiente en cola
+const _origCloseSplit=window.closeSplitModal;
 
 function saveExpense(){
   const amount=parseFloat(document.getElementById('m-amount').value);
@@ -1181,6 +1192,8 @@ function closeSplitModal(){
   document.getElementById('split-modal-overlay').classList.remove('open');
   _pendingSplit=null;
   showToast('Gasto guardado (sin dividir)');
+  // Procesar siguiente en cola si hay más
+  if(_splitQueue.length>0) setTimeout(processSplitQueue, 800);
 }
 function closeSplitOutside(e){if(e.target===document.getElementById('split-modal-overlay'))closeSplitModal();}
 
@@ -1230,6 +1243,8 @@ function confirmSplit(){
   _pendingSplit=null;
   renderDashboard();
   showToast('💜 Dividido con '+_splitSelectedPerson+' — te deben '+fmtCLP(deudaAmt)+'/cuota');
+  // Procesar siguiente en cola si hay más
+  if(_splitQueue.length>0) setTimeout(processSplitQueue, 800);
 }
 
 window.addExpenseFromShortcut=function(cardId,amount,desc,cuotas,currency){
@@ -1320,6 +1335,7 @@ async function syncFromSheets(){
 
     let imported=0;
     const toasts=[];
+    const pendingSplits=[];
 
     for(let i=0;i<rows.length;i++){
       const r=rows[i];
@@ -1351,19 +1367,31 @@ async function syncFromSheets(){
         d.push({id:txId,cardId:bank,amount,desc,cuotas,currency:'CLP',
           date:(date||new Date()).toISOString(),source:'email_auto'});
         saveC(d);
+        // Guardar para preguntar división después
+        pendingSplits.push({txId,amount,desc,cuotas,currency:'CLP',cardId:bank});
       }
       imported++;
-      toasts.push(desc+' — '+fmtCLP(amount));
+      toasts.push({msg:desc+' — '+fmtCLP(amount),type});
     }
 
     localStorage.setItem(LS_SYNC, Date.now().toString());
 
     if(imported>0){
       renderDashboard();
-      // Mostrar toasts uno por uno con delay
-      toasts.forEach((msg,i)=>{
-        setTimeout(()=>showToast('📩 '+msg),i*3200);
+      // Mostrar toast por cada gasto y luego abrir modal de división para crédito
+      let delay=0;
+      toasts.forEach((t)=>{
+        setTimeout(()=>showToast('📩 '+t.msg),delay);
+        delay+=3200;
       });
+      // Abrir modal de división para el primer gasto de crédito
+      if(pendingSplits.length>0){
+        setTimeout(()=>{
+          _splitQueue=[...pendingSplits];
+          _pendingSplit=null;
+          processSplitQueue();
+        }, delay);
+      }
     }
   }catch(e){
     console.warn('syncFromSheets error:',e);
@@ -1424,4 +1452,3 @@ document.addEventListener('DOMContentLoaded',function(){
 </script>
 </body>
 </html>
-
