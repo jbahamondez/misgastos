@@ -1304,9 +1304,8 @@ function showToast(msg,color){
   t.style.color=color==='var(--green)'?'#0f1117':'white';
   t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
 }
-// ── Sincronización desde Google Sheets (cola Make.com) ───────────────────────
-const SHEET_ID='1oEJN2VFNNy_iL041GBrx7bP4MEt0V2vIv3RRoNIe5nk';
-const SHEET_CSV=`https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=Cola`;
+// ── Sincronización desde Google Apps Script API ───────────────────────────────
+const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbwxWhRJehKodrfiPFu5iG6gwaMq2JtX6sRwm5ngKTjduB2v6W2d14p-WD9mF4swUoFj/exec';
 const LS_SYNC='misgastos_sync_last';
 
 async function syncFromSheets(){
@@ -1314,46 +1313,31 @@ async function syncFromSheets(){
   const last=parseInt(localStorage.getItem(LS_SYNC)||'0');
   if(Date.now()-last < 60000) return;
   try{
-    const res=await fetch(SHEET_CSV+'&_='+Date.now(),{cache:'no-store'});
+    const res=await fetch(APPS_SCRIPT_URL+'?_='+Date.now(),{cache:'no-store'});
     if(!res.ok) return;
-    const text=await res.text();
-    const rows=text.trim().split('\n').map(l=>{
-      // Parsear CSV respetando comillas
-      const cols=[];let cur='',inQ=false;
-      for(let i=0;i<l.length;i++){
-        if(l[i]==='"'){inQ=!inQ;}
-        else if(l[i]===','&&!inQ){cols.push(cur.replace(/^"|"$/g,'').trim());cur='';}
-        else cur+=l[i];
-      }
-      cols.push(cur.replace(/^"|"$/g,'').trim());
-      return cols;
-    });
-
-    // Fila 0 = encabezados (status,type,bank,amount,desc,cuotas,date)
-    // Ignorar si no hay datos
-    if(rows.length<2) return;
+    const rows=await res.json();
+    if(!rows||!rows.length) return;
 
     let imported=0;
     const toasts=[];
 
-    for(let i=1;i<rows.length;i++){
+    for(let i=0;i<rows.length;i++){
       const r=rows[i];
-      const status=(r[0]||'').toUpperCase().trim();
+      const status=(r.status||'').toUpperCase().trim();
       if(status!=='PENDING') continue;
 
-      const type=(r[1]||'credito').toLowerCase().trim();
-      const bank=(r[2]||'bci').toLowerCase().trim();
-      const amount=parseFloat((r[3]||'0').replace(/[^0-9.]/g,''));
-      const desc=(r[4]||'Gasto automatico').trim();
-      const cuotas=Math.max(1,parseInt(r[5]||'1')||1);
-      const rawDate=(r[6]||'').trim();
+      const type=(r.type||'credito').toLowerCase().trim();
+      const bank=(r.bank||'bci').toLowerCase().trim();
+      const amount=parseFloat(r.amount||0);
+      const desc=(r.desc||'Gasto automatico').trim();
+      const cuotas=Math.max(1,parseInt(r.cuotas||1)||1);
+      const rawDate=(r.date||'').trim();
       const date=rawDate?parseFecha(rawDate):new Date();
 
       if(!amount||amount<=0) continue;
 
-      // Generar ID único basado en fila + datos para evitar duplicados
-      const txId='sheet_'+i+'_'+amount+'_'+bank;
-      // Verificar que no exista ya
+      // ID único para evitar duplicados
+      const txId='sheet_'+amount+'_'+bank+'_'+(rawDate||i);
       const yaExiste=[...getC(),...getD()].some(t=>t.id===txId);
       if(yaExiste) continue;
 
@@ -1440,3 +1424,4 @@ document.addEventListener('DOMContentLoaded',function(){
 </script>
 </body>
 </html>
+
