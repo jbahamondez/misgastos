@@ -209,7 +209,7 @@
     .deuda-item-amount .da{font-size:14px;font-weight:700;color:var(--accent2)}
     .deuda-item-amount .da.paid{color:var(--green)}
     .btn-paid{padding:5px 11px;border-radius:8px;border:1px solid var(--green);background:rgba(52,211,153,.1);color:var(--green);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
-    .btn-paid.done{border-color:var(--border);background:none;color:var(--text2)}
+    .btn-paid.done{border-color:var(--yellow);background:rgba(251,191,36,.08);color:var(--yellow)}
     /* ── Historial filtros ───────────────────────────────────────── */
     .hist-search{margin:0 20px 0;position:relative}
     .hist-search input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 14px 10px 38px;color:var(--text);font-size:14px;outline:none}
@@ -989,8 +989,9 @@ function renderDeudas(){
         </div>
         <div class="deuda-item-amount">
           <div class="da ${d.paid?'paid':''}">${fmtCLP(d.deudaTotal)}</div>
-          ${!d.paid?`<button class="btn-paid" onclick="markDebtPaid('${d.id}')">✓ Cobrado</button>`
-                   :`<span class="btn-paid done">Pagado</span>`}
+          ${!d.paid
+            ?`<button class="btn-paid" onclick="markDebtPaid('${d.id}')">✓ Cobrado</button>`
+            :`<button class="btn-paid done" onclick="unmarkDebtPaid('${d.id}')">↩ Revertir</button>`}
         </div>
       </div>`;
     }).join('');
@@ -1012,6 +1013,15 @@ function markDebtPaid(id){
   saveDeudas(ds);
   renderDeudas();
   showToast('✅ Deuda marcada como pagada');
+}
+function unmarkDebtPaid(id){
+  const ds=getDeudas();
+  const idx=ds.findIndex(d=>d.id===id);
+  if(idx<0)return;
+  ds[idx].paid=false; ds[idx].paidDate=null;
+  saveDeudas(ds);
+  renderDeudas();
+  showToast('↩️ Deuda revertida a pendiente','var(--yellow)');
 }
 
 function renderAjustes(){
