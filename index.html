@@ -309,21 +309,8 @@
 <div class="page" id="page-ajustes">
   <div class="page-header"><h1>Ajustes</h1><p>Configuración y automatización</p></div>
   <div class="settings-section"><h3>Tarjetas de Crédito</h3><div class="settings-list" id="settings-cards-list"></div></div>
-  <div class="settings-section"><h3>API para Shortcuts iOS</h3></div>
-  <div class="api-box" style="margin-bottom:14px">
-    <h4>📲 Registrar gasto desde Shortcut</h4>
-    <div class="api-url">window.addExpenseFromShortcut(cardId, monto, desc, cuotas, moneda)</div>
-    <button class="copy-btn" onclick="copyApiInfo()">Copiar código del Shortcut</button>
-  </div>
-  <div class="settings-section"><h3>Configurar Shortcut paso a paso</h3></div>
-  <div style="padding:0 20px 14px">
-    <div class="shortcut-step"><span class="step-num">1</span><span>Abre <strong>Atajos</strong> en iPhone &rarr; toca <strong>"+"</strong> &rarr; nómbralo <strong>"Gasto BCI"</strong></span></div>
-    <div class="shortcut-step"><span class="step-num">2</span><span>Ve a <strong>Automatizaciones</strong> &rarr; <strong>"Al recibir correo"</strong> &rarr; remitente: <strong>contacto@bci.cl</strong></span></div>
-    <div class="shortcut-step"><span class="step-num">3</span><span>Acción: <strong>"Obtener texto del correo"</strong> &rarr; Cuerpo del mensaje</span></div>
-    <div class="shortcut-step"><span class="step-num">4</span><span>Acción: <strong>"Ejecutar JavaScript"</strong> con el código copiado arriba</span></div>
-    <div class="shortcut-step"><span class="step-num">5</span><span>Repite para <strong>Banco Chile</strong> con remitente: <strong>enviodigital@bancochile.cl</strong></span></div>
-    <div class="shortcut-step"><span class="step-num">6</span><span>Activa <strong>"Ejecutar automáticamente"</strong> para que no pida confirmación</span></div>
-  </div>
+  <div class="settings-section"><h3>📅 Fecha de facturación por tarjeta</h3></div>
+  <div style="padding:0 20px 14px" id="billing-dates-list"></div>
   <div class="settings-section"><h3>Datos</h3>
     <div class="settings-list">
       <div class="settings-row" onclick="exportData()"><span class="row-label">📤 Exportar datos (JSON)</span><span class="row-val">→</span></div>
@@ -426,6 +413,13 @@
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeSplitModal()">No dividir</button>
       <button class="btn-save" onclick="confirmSplit()">Dividir 50/50</button>
+    </div>
+    <div id="split-import-actions" style="display:none;margin-top:10px;display:none">
+      <div style="text-align:center;font-size:11px;color:var(--text2);margin-bottom:8px">Aplicar a todos los gastos restantes:</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-cancel" style="flex:1;font-size:12px" onclick="splitApplyNone()">❌ No dividir ninguno</button>
+        <button class="btn-save" style="flex:1;font-size:12px" onclick="splitApplyAll()">✅ Dividir todos</button>
+      </div>
     </div>
   </div>
 </div>
@@ -884,25 +878,41 @@ function showPreview(rows){
 function discardPreview(){pendingRows=[];document.getElementById('preview-box').classList.remove('visible');}
 function confirmImport(){
   if(!pendingRows.length)return;
+  const n=pendingRows.length;
   if(importType==='credito'){
+    // Guardar todos primero
     const newTxs=pendingRows.map(r=>({
       id:r.id, cardId:importBank, amount:r.amount, desc:r.desc,
       cuotas:r.cuotas||1, currency:'CLP',
       date:r.date, source:'cartola'
     }));
     saveC([...getC(),...newTxs]);
+    // Preparar cola de splits con opción "Aplicar a todos / No aplicar a ninguno"
+    const splitItems=pendingRows.map(r=>({
+      txId:r.id, amount:r.amount, desc:r.desc,
+      cuotas:r.cuotas||1, currency:'CLP', cardId:importBank, type:'credito'
+    }));
+    pendingRows=[];
+    document.getElementById('preview-box').classList.remove('visible');
+    renderDebito(); renderDashboard();
+    showToast(n+' movimientos importados');
+    // Abrir modal de split uno por uno con botones extra
+    if(splitItems.length>0){
+      _splitQueue=[...splitItems];
+      _splitImportMode=true; // modo importación: mostrar botones "Todos/Ninguno"
+      setTimeout(()=>processSplitQueue(),400);
+    }
   } else {
     const newTxs=pendingRows.map(r=>({
       id:r.id, bank:importBank, amount:r.amount, desc:r.desc,
       currency:'CLP', date:r.date, source:'cartola'
     }));
     saveD([...getD(),...newTxs]);
+    pendingRows=[];
+    document.getElementById('preview-box').classList.remove('visible');
+    renderDebito(); renderDashboard();
+    showToast(n+' movimientos importados como débito');
   }
-  const n=pendingRows.length;
-  pendingRows=[];
-  document.getElementById('preview-box').classList.remove('visible');
-  renderDebito(); renderDashboard();
-  showToast(n+' movimientos importados como '+(importType==='credito'?'crédito':'débito'));
 }
 
 let activeFilter='all', activeDateFilter='ciclo';
@@ -1086,8 +1096,35 @@ function unmarkDebtPaid(id){
   showToast('↩️ Deuda revertida a pendiente','var(--yellow)');
 }
 
+function getBillingDates(){try{return JSON.parse(localStorage.getItem('misgastos_billing_dates')||'{}')}catch{return{}}}
+function saveBillingDates(d){localStorage.setItem('misgastos_billing_dates',JSON.stringify(d))}
+
 function renderAjustes(){
   document.getElementById('settings-cards-list').innerHTML=Object.values(CARDS).map(c=>`<div class="settings-row"><span class="row-label">${c.emoji} ${c.bank} ${c.num}</span><span class="row-val">${fmtCLP(c.limitCLP)}</span></div>`).join('');
+  // Fechas de facturación
+  const billing=getBillingDates();
+  const tarjetas=[
+    {id:'bci',label:'💳 BCI'},
+    {id:'bchile',label:'💳 Banco Chile'},
+    {id:'scotia',label:'💳 Scotiabank'},
+  ];
+  document.getElementById('billing-dates-list').innerHTML=tarjetas.map(t=>`
+    <div class="settings-row" style="align-items:center;gap:10px">
+      <span class="row-label" style="flex:1">${t.label}</span>
+      <span style="font-size:12px;color:var(--text2)">Día de cierre:</span>
+      <input type="number" min="1" max="31" value="${billing[t.id]||1}"
+        style="width:52px;text-align:center;padding:6px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"
+        onchange="updateBillingDate('${t.id}',this.value)"
+        oninput="if(this.value>31)this.value=31;if(this.value<1)this.value=1"
+      />
+    </div>`).join('');
+}
+
+function updateBillingDate(cardId, val){
+  const d=getBillingDates();
+  d[cardId]=Math.min(31,Math.max(1,parseInt(val)||1));
+  saveBillingDates(d);
+  showToast('Fecha de cierre actualizada');
 }
 
 function txHTML(t){
@@ -1120,6 +1157,7 @@ function closeModalOutside(e){if(e.target===document.getElementById('modal-overl
 // Pending split data
 let _pendingSplit=null;
 let _splitQueue=[];
+let _splitImportMode=false; // true cuando viene de importación de cartola
 
 function processSplitQueue(){
   if(_splitQueue.length===0) return;
@@ -1181,7 +1219,49 @@ function openSplitModal(split){
   // Person chips
   renderPersonChips();
   document.getElementById('split-new-person').value='';
+  // Mostrar botones "Aplicar a todos/ninguno" solo en modo importación y si hay más de 1 en cola
+  const importActions=document.getElementById('split-import-actions');
+  if(_splitImportMode && _splitQueue.length>0){
+    importActions.style.display='block';
+  } else {
+    importActions.style.display='none';
+  }
   document.getElementById('split-modal-overlay').classList.add('open');
+}
+
+function splitApplyAll(){
+  // Dividir este + todos los restantes en la cola
+  confirmSplit();
+  // Ahora dividir todos los que quedan en cola automáticamente con la misma persona
+  const persona=_splitSelectedPerson||getPersonas()[0];
+  while(_splitQueue.length>0){
+    const item=_splitQueue.shift();
+    const cuotasR=(item.type||'credito')==='debito'?1:Math.max(1,item.cuotas||1);
+    const deudaAmt=(item.amount/cuotasR)/2;
+    // Actualizar monto en crédito
+    const credData=getC();
+    const idx=credData.findIndex(t=>t.id===item.txId);
+    if(idx>=0){credData[idx].amount=item.amount/2;credData[idx].splitWith=persona;credData[idx].splitTotal=item.amount;saveC(credData);}
+    // Crear deuda
+    const deuda={id:'deu_'+Date.now()+'_'+item.txId,person:persona,txId:item.txId,desc:item.desc,
+      totalAmount:item.amount,cuotas:item.cuotas||1,deudaPerCuota:deudaAmt,
+      deudaTotal:deudaAmt*(item.cuotas||1),currency:item.currency||'CLP',
+      date:new Date().toISOString(),paid:false,paidDate:null};
+    const ds=getDeudas();ds.push(deuda);saveDeudas(ds);
+  }
+  _splitImportMode=false;
+  _splitQueue=[];
+  renderDashboard();
+  showToast('✅ Todos los gastos divididos con '+persona);
+}
+
+function splitApplyNone(){
+  // Cerrar sin dividir este ni los restantes
+  document.getElementById('split-modal-overlay').classList.remove('open');
+  _pendingSplit=null;
+  _splitQueue=[];
+  _splitImportMode=false;
+  showToast('Gastos guardados sin dividir');
 }
 
 function renderPersonChips(){
@@ -1201,7 +1281,11 @@ function closeSplitModal(){
   _pendingSplit=null;
   showToast('Gasto guardado (sin dividir)');
   // Procesar siguiente en cola si hay más
-  if(_splitQueue.length>0) setTimeout(processSplitQueue, 800);
+  if(_splitQueue.length>0){
+    setTimeout(processSplitQueue, 800);
+  } else {
+    _splitImportMode=false;
+  }
 }
 function closeSplitOutside(e){if(e.target===document.getElementById('split-modal-overlay'))closeSplitModal();}
 
@@ -1265,7 +1349,11 @@ function confirmSplit(){
   renderDashboard();
   showToast('💜 Dividido con '+_splitSelectedPerson+' — te deben '+fmtCLP(deudaAmt)+'/cuota');
   // Procesar siguiente en cola si hay más
-  if(_splitQueue.length>0) setTimeout(processSplitQueue, 800);
+  if(_splitQueue.length>0){
+    setTimeout(processSplitQueue, 800);
+  } else {
+    _splitImportMode=false;
+  }
 }
 
 window.addExpenseFromShortcut=function(cardId,amount,desc,cuotas,currency){
@@ -1381,16 +1469,15 @@ async function syncFromSheets(){
       if(type==='debito'){
         const d=getD();
         d.push({id:txId,bank,amount,desc,currency:'CLP',
+          date:(date||ne
           date:(date||new Date()).toISOString(),source:'email_auto'});
         saveD(d);
-        // También preguntar división para débito
         pendingSplits.push({txId,amount,desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'});
       } else {
         const d=getC();
         d.push({id:txId,cardId:bank,amount,desc,cuotas,currency:'CLP',
           date:(date||new Date()).toISOString(),source:'email_auto'});
         saveC(d);
-        // Guardar para preguntar división después
         pendingSplits.push({txId,amount,desc,cuotas,currency:'CLP',cardId:bank,type:'credito'});
       }
       imported++;
@@ -1401,17 +1488,16 @@ async function syncFromSheets(){
 
     if(imported>0){
       renderDashboard();
-      // Mostrar toast por cada gasto y luego abrir modal de división para crédito
       let delay=0;
       toasts.forEach((t)=>{
         setTimeout(()=>showToast('📩 '+t.msg),delay);
         delay+=3200;
       });
-      // Abrir modal de división para el primer gasto de crédito
       if(pendingSplits.length>0){
         setTimeout(()=>{
           _splitQueue=[...pendingSplits];
           _pendingSplit=null;
+          _splitImportMode=false;
           processSplitQueue();
         }, delay);
       }
@@ -1421,7 +1507,6 @@ async function syncFromSheets(){
   }
 }
 
-// ── Manejo de URL params para iOS Shortcuts ──────────────────────────────────
 function handleURLParams(){
   const p=new URLSearchParams(window.location.search);
   if(!p.has('amount')) return;
@@ -1444,32 +1529,28 @@ function handleURLParams(){
     const d=getC(); d.push(tx); saveC(d);
   }
   window.history.replaceState({},'',window.location.pathname);
-  setTimeout(()=>showToast('✅ '+desc+' — '+fmtCLP(amount)+' registrado'),600);
+  setTimeout(()=>showToast('✅ '+desc+' registrado'),600);
 }
 
 document.addEventListener('DOMContentLoaded',function(){
   renderDashboard();renderAjustes();
   handleURLParams();
-  // Sync al abrir la app
   syncFromSheets();
-  // Sync cada vez que el usuario vuelve a la app (desde segundo plano)
   document.addEventListener('visibilitychange',function(){
     if(document.visibilityState==='visible') syncFromSheets();
   });
   if(!getC().length&&!getD().length){
     var n=Date.now();
     saveC([
-      {id:'d1',cardId:'bci',    amount:52900, desc:'TICKETMASTER TC 2', cuotas:1,currency:'CLP',date:new Date(n-86400000).toISOString(),  source:'email'},
-      {id:'d2',cardId:'bchile', amount:3990,  desc:'TRAVEL DUTY TCOMP', cuotas:1,currency:'CLP',date:new Date(n-86400000*3).toISOString(),source:'email'},
-      {id:'d3',cardId:'bci',    amount:89990, desc:'AMAZON',             cuotas:3,currency:'CLP',date:new Date(n-86400000*5).toISOString(),source:'manual'},
-      {id:'d4',cardId:'scotia', amount:25500, desc:'SUPERMERCADO LIDER', cuotas:1,currency:'CLP',date:new Date(n-86400000*2).toISOString(),source:'manual'},
-      {id:'d5',cardId:'bchile', amount:120.5, desc:'NETFLIX USD',        cuotas:1,currency:'USD',date:new Date(n-86400000*7).toISOString(),source:'manual'},
+      {id:'d1',cardId:'bci',    amount:52900, desc:'TICKETMASTER TC 2',  cuotas:1,currency:'CLP',date:new Date(n-86400000).toISOString(),  source:'email'},
+      {id:'d2',cardId:'bci',    amount:15990, desc:'SPOTIFY',            cuotas:1,currency:'CLP',date:new Date(n-172800000).toISOString(), source:'email'},
+      {id:'d3',cardId:'bchile', amount:89000, desc:'SUPERMERCADO LIDER', cuotas:3,currency:'CLP',date:new Date(n-259200000).toISOString(), source:'email'},
+      {id:'d4',cardId:'scotia', amount:25000, desc:'COPEC GASOLINA',     cuotas:1,currency:'CLP',date:new Date(n-345600000).toISOString(), source:'email'},
     ]);
     saveD([
-      {id:'db1',bank:'bci',   amount:45000,desc:'SUPERMERCADO LIDER', currency:'CLP',date:new Date(n-86400000*2).toISOString(),source:'manual'},
-      {id:'db2',bank:'bchile',amount:12990,desc:'FARMACIA CRUZ VERDE',currency:'CLP',date:new Date(n-86400000*4).toISOString(),source:'manual'},
+      {id:'e1',bank:'bci',amount:4200, desc:'CAFE HAITI',       currency:'CLP',date:new Date(n-43200000).toISOString(), source:'manual'},
+      {id:'e2',bank:'bci',amount:12500,desc:'ALMUERZO TRABAJO',  currency:'CLP',date:new Date(n-129600000).toISOString(),source:'manual'},
     ]);
-    renderDashboard();
   }
 });
 </script>
