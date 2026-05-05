@@ -1538,19 +1538,6 @@ document.addEventListener('DOMContentLoaded',function(){
   document.addEventListener('visibilitychange',function(){
     if(document.visibilityState==='visible') syncFromSheets();
   });
-  if(!getC().length&&!getD().length){
-    var n=Date.now();
-    saveC([
-      {id:'d1',cardId:'bci',    amount:52900, desc:'TICKETMASTER TC 2',  cuotas:1,currency:'CLP',date:new Date(n-86400000).toISOString(),  source:'email'},
-      {id:'d2',cardId:'bci',    amount:15990, desc:'SPOTIFY',            cuotas:1,currency:'CLP',date:new Date(n-172800000).toISOString(), source:'email'},
-      {id:'d3',cardId:'bchile', amount:89000, desc:'SUPERMERCADO LIDER', cuotas:3,currency:'CLP',date:new Date(n-259200000).toISOString(), source:'email'},
-      {id:'d4',cardId:'scotia', amount:25000, desc:'COPEC GASOLINA',     cuotas:1,currency:'CLP',date:new Date(n-345600000).toISOString(), source:'email'},
-    ]);
-    saveD([
-      {id:'e1',bank:'bci',amount:4200, desc:'CAFE HAITI',       currency:'CLP',date:new Date(n-43200000).toISOString(), source:'manual'},
-      {id:'e2',bank:'bci',amount:12500,desc:'ALMUERZO TRABAJO',  currency:'CLP',date:new Date(n-129600000).toISOString(),source:'manual'},
-    ]);
-  }
 });
 </script>
 </body>
