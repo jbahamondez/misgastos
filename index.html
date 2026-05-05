@@ -1324,9 +1324,9 @@ const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbwxWhRJehKodrfiPF
 const LS_SYNC='misgastos_sync_last';
 
 async function syncFromSheets(){
-  // Evitar sync si ya se hizo en los últimos 60 segundos
+  // Evitar sync si ya se hizo en los últimos 15 segundos
   const last=parseInt(localStorage.getItem(LS_SYNC)||'0');
-  if(Date.now()-last < 60000) return;
+  if(Date.now()-last < 15000) return;
   try{
     const res=await fetch(APPS_SCRIPT_URL+'?_='+Date.now(),{cache:'no-store'});
     if(!res.ok) return;
