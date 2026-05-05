@@ -1149,10 +1149,14 @@ function saveExpense(){
     openSplitModal(_pendingSplit);
   }else{
     const bank=document.getElementById('m-debit-bank').value;
+    const txId=Date.now().toString();
     const d=getD();
-    d.push({id:Date.now().toString(),bank,amount,desc,currency:'CLP',date:new Date().toISOString(),source:'manual'});
-    saveD(d); showToast('Gasto debito guardado');
+    d.push({id:txId,bank,amount,desc,currency:'CLP',date:new Date().toISOString(),source:'manual'});
+    saveD(d);
     closeModal(); renderDashboard();
+    // Offer to split (igual que crédito)
+    _pendingSplit={txId,amount,desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'};
+    openSplitModal(_pendingSplit);
   }
 }
 
@@ -1162,12 +1166,16 @@ let _splitSelectedPerson=null;
 function openSplitModal(split){
   _splitSelectedPerson=getPersonas()[0]||'Mi pareja';
   // Preview
-  const cuotaAmt=split.amount/Math.max(1,split.cuotas||1);
+  const esDebito=(split.type||'credito')==='debito';
+  const cuotas=esDebito?1:Math.max(1,split.cuotas||1);
+  const cuotaAmt=split.amount/cuotas;
   const myShare=cuotaAmt/2;
   const theirShare=cuotaAmt/2;
+  const tipoLabel=esDebito?'💳 Débito':'💳 Crédito';
   document.getElementById('split-preview-box').innerHTML=`
-    <div class="sp-row"><span class="sp-label">${split.desc}</span><span class="sp-val">${fmtCLP(split.amount)} ${split.cuotas>1?'en '+split.cuotas+' cuotas':''}</span></div>
-    <div class="sp-row"><span class="sp-label">Cuota mensual</span><span class="sp-val yellow">${fmtCLP(cuotaAmt)}</span></div>
+    <div class="sp-row"><span class="sp-label">${tipoLabel}</span><span class="sp-val" style="font-size:0.8em;opacity:0.7">${split.desc}</span></div>
+    <div class="sp-row"><span class="sp-label">Monto total</span><span class="sp-val">${fmtCLP(split.amount)}${!esDebito&&cuotas>1?' ('+cuotas+' cuotas)':''}</span></div>
+    ${!esDebito&&cuotas>1?`<div class="sp-row"><span class="sp-label">Cuota mensual</span><span class="sp-val yellow">${fmtCLP(cuotaAmt)}</span></div>`:''}
     <div class="sp-row"><span class="sp-label">Tu parte (50%)</span><span class="sp-val green">${fmtCLP(myShare)}</span></div>
     <div class="sp-row"><span class="sp-label">Lo que te deben</span><span class="sp-val" style="color:var(--accent2)">${fmtCLP(theirShare)}</span></div>`;
   // Person chips
@@ -1208,18 +1216,31 @@ function confirmSplit(){
   }
   if(!_splitSelectedPerson){showToast('Selecciona una persona','var(--yellow)');return}
 
-  const {txId,amount,desc,cuotas,currency}=_pendingSplit;
-  const cuotaAmt=amount/Math.max(1,cuotas||1);
+  const {txId,amount,desc,cuotas,currency,type}=_pendingSplit;
+  const esDebito=(type||'credito')==='debito';
+  const cuotasReal=esDebito?1:Math.max(1,cuotas||1);
+  const cuotaAmt=amount/cuotasReal;
   const deudaAmt=cuotaAmt/2; // their share per month
 
   // Update original transaction to only register user's 50%
-  const credData=getC();
-  const txIdx=credData.findIndex(t=>t.id===txId);
-  if(txIdx>=0){
-    credData[txIdx].amount=amount/2; // user pays half
-    credData[txIdx].splitWith=_splitSelectedPerson;
-    credData[txIdx].splitTotal=amount;
-    saveC(credData);
+  if(esDebito){
+    const debitData=getD();
+    const txIdx=debitData.findIndex(t=>t.id===txId);
+    if(txIdx>=0){
+      debitData[txIdx].amount=amount/2;
+      debitData[txIdx].splitWith=_splitSelectedPerson;
+      debitData[txIdx].splitTotal=amount;
+      saveD(debitData);
+    }
+  } else {
+    const credData=getC();
+    const txIdx=credData.findIndex(t=>t.id===txId);
+    if(txIdx>=0){
+      credData[txIdx].amount=amount/2; // user pays half
+      credData[txIdx].splitWith=_splitSelectedPerson;
+      credData[txIdx].splitTotal=amount;
+      saveC(credData);
+    }
   }
 
   // Register debt
@@ -1362,13 +1383,15 @@ async function syncFromSheets(){
         d.push({id:txId,bank,amount,desc,currency:'CLP',
           date:(date||new Date()).toISOString(),source:'email_auto'});
         saveD(d);
+        // También preguntar división para débito
+        pendingSplits.push({txId,amount,desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'});
       } else {
         const d=getC();
         d.push({id:txId,cardId:bank,amount,desc,cuotas,currency:'CLP',
           date:(date||new Date()).toISOString(),source:'email_auto'});
         saveC(d);
         // Guardar para preguntar división después
-        pendingSplits.push({txId,amount,desc,cuotas,currency:'CLP',cardId:bank});
+        pendingSplits.push({txId,amount,desc,cuotas,currency:'CLP',cardId:bank,type:'credito'});
       }
       imported++;
       toasts.push({msg:desc+' — '+fmtCLP(amount),type});
