@@ -1469,7 +1469,6 @@ async function syncFromSheets(){
       if(type==='debito'){
         const d=getD();
         d.push({id:txId,bank,amount,desc,currency:'CLP',
-          date:(date||ne
           date:(date||new Date()).toISOString(),source:'email_auto'});
         saveD(d);
         pendingSplits.push({txId,amount,desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'});
