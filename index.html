@@ -1112,10 +1112,10 @@ function renderAjustes(){
     <div class="settings-row" style="align-items:center;gap:10px">
       <span class="row-label" style="flex:1">${t.label}</span>
       <span style="font-size:12px;color:var(--text2)">Día de cierre:</span>
-      <input type="number" min="1" max="31" value="${billing[t.id]||1}"
+      <input type="number" min="1" max="31" inputmode="numeric" pattern="[0-9]*" value="${billing[t.id]||1}"
         style="width:52px;text-align:center;padding:6px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"
-        onchange="updateBillingDate('${t.id}',this.value)"
-        oninput="if(this.value>31)this.value=31;if(this.value<1)this.value=1"
+        onblur="updateBillingDate('${t.id}',this.value||'1');this.value=getBillingDates()['${t.id}']||1"
+        onkeydown="if(event.key==='Enter'){this.blur()}"
       />
     </div>`).join('');
 }
