@@ -1271,17 +1271,26 @@ function openTxMenu(e, txId, txType){
   const menu=document.createElement('div');
   menu.className='tx-ctx-menu';
   menu.innerHTML=`
-    <button class="tx-ctx-btn" onclick="openEditModal('${txId}','${txType}')">✏️ Editar</button>
-    <button class="tx-ctx-btn danger" onclick="deleteTx('${txId}','${txType}')">🗑️ Eliminar</button>`;
+    <button class="tx-ctx-btn">✏️ Editar</button>
+    <button class="tx-ctx-btn danger">🗑️ Eliminar</button>`;
   // Posicionar el menú cerca del toque
   const x=Math.min(e.clientX, window.innerWidth-200);
   const y=Math.min(e.clientY, window.innerHeight-100);
   menu.style.cssText=`left:${x}px;top:${y}px`;
   document.body.appendChild(menu);
   _ctxMenu=menu;
+  // Usar touchend para evitar conflicto con el listener de cierre
+  const btns=menu.querySelectorAll('.tx-ctx-btn');
+  btns[0].addEventListener('touchend', (ev)=>{ev.preventDefault();ev.stopPropagation();closeCtxMenu();openEditModal(txId,txType);});
+  btns[1].addEventListener('touchend', (ev)=>{ev.preventDefault();ev.stopPropagation();closeCtxMenu();deleteTx(txId,txType);});
+  // Fallback click para desktop
+  btns[0].addEventListener('click', (ev)=>{ev.stopPropagation();closeCtxMenu();openEditModal(txId,txType);});
+  btns[1].addEventListener('click', (ev)=>{ev.stopPropagation();closeCtxMenu();deleteTx(txId,txType);});
   // Cerrar al tocar fuera
-  setTimeout(()=>document.addEventListener('touchstart', closeCtxMenu, {once:true}), 100);
-  setTimeout(()=>document.addEventListener('click', closeCtxMenu, {once:true}), 100);
+  setTimeout(()=>{
+    document.addEventListener('touchstart', closeCtxMenu, {once:true});
+    document.addEventListener('click', closeCtxMenu, {once:true});
+  }, 150);
 }
 
 // ── Editar tx ─────────────────────────────────────────────────────────────
