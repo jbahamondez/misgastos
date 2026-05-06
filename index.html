@@ -2031,14 +2031,17 @@ const LS_SYNC='misgastos_sync_last';
 
 async function syncFromSheets(){
   // Evitar sync si ya se hizo en los últimos 15 segundos
-arseInt(localStorage.getItem(LS_SYNC)||'0');
+  const last=parseInt(localStorage.getItem(LS_SYNC)||'0');
   if(Date.now()-last < 15000) return;
   localStorage.setItem(LS_SYNC, Date.now().toString());
   try{
-    const r=await fetch(APPS_SCRIPT_URL+'?action=getPending');
-    if(!r.ok) return;
-    const data=await r.json();
-    if(!data.rows||!data.rows.length) return;
+    const r=await fetch(APPS_SCRIPT_URL+'?action=getPending',{cache:'no-store'});
+    if(!r.ok){console.warn('syncFromSheets HTTP error:',r.status);return;}
+    const text=await r.text();
+    console.log('syncFromSheets raw response:',text.substring(0,200));
+    let data;
+    try{data=JSON.parse(text);}catch(pe){console.warn('syncFromSheets JSON parse error:',pe,text);return;}
+    if(!data.rows||!data.rows.length){console.log('syncFromSheets: no pending rows');return;}
     const pendingSplits=[];
     let imported=0;
     const toasts=[];
