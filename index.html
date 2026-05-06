@@ -1738,18 +1738,15 @@ window.parseEmailBCIDebito=function(body){
 
 // ── Init ──────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function(){
-  showPage('dashboard');
+  renderDashboard();
   renderAjustes();
-  // Verificar recordatorio de pago al abrir
-  setTimeout(checkPaymentReminder, 1000);
-  // Sync automático
-  setInterval(function(){
-    if(document.visibilityState==='visible') syncFromSheets();
-  }, 15000);
+  handleURLParams();
+  syncFromSheets();
   document.addEventListener('visibilitychange', function(){
     if(document.visibilityState==='visible') syncFromSheets();
   });
-  syncFromSheets();
+  // Verificar recordatorio de pago al abrir
+  setTimeout(checkPaymentReminder, 1200);
 });
 </script>
 </body>
