@@ -277,6 +277,11 @@
       <div id="ciclo-ant-list"></div>
     </div>
   </div>
+  <div style="margin:14px 20px 4px;text-align:right">
+    <button onclick="openAnalisisModal()" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:20px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+      📊 Ver análisis de gastos
+    </button>
+  </div>
   <div class="section-header"><h3>Últimos gastos</h3><button onclick="showPage('historial')">Ver todos</button></div>
   <div class="tx-list pb14" id="recent-list"></div>
 </div>
@@ -350,6 +355,16 @@
   <div style="padding:0 20px 14px" id="billing-dates-list"></div>
   <div class="settings-section"><h3>💳 Día de vencimiento de pago</h3></div>
   <div style="padding:0 20px 14px" id="payment-dates-list"></div>
+  <div class="settings-section"><h3>🏷️ Categorías</h3></div>
+  <div style="padding:0 20px 14px" id="categorias-list"></div>
+  <div style="padding:0 20px 14px">
+    <button onclick="openAddCatModal()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar categoría</button>
+  </div>
+  <div class="settings-section"><h3>🔑 Reglas de auto-categorización</h3></div>
+  <div style="padding:0 20px 4px" id="cat-rules-list"></div>
+  <div style="padding:0 20px 14px">
+    <button onclick="openAddRuleModal()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar regla</button>
+  </div>
   <div class="settings-section"><h3>Datos</h3>
     <div class="settings-list">
       <div class="settings-row" onclick="exportData()"><span class="row-label">📤 Exportar datos (JSON)</span><span class="row-val">→</span></div>
@@ -378,6 +393,49 @@
     </button>
   </div>
   <div id="deudas-content" style="padding-bottom:14px"></div>
+</div>
+
+<!-- MODAL: Agregar/Editar Categoría -->
+<div class="modal-overlay" id="add-cat-overlay" onclick="closeAddCatModal(event)">
+  <div class="modal-box" style="max-width:340px">
+    <div class="modal-header"><h3 id="add-cat-title">Nueva categoría</h3><button class="modal-close" onclick="closeAddCatModal()">✕</button></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="cat-emoji-input" type="text" placeholder="Emoji" maxlength="2" style="width:52px;text-align:center;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:20px"/>
+        <input id="cat-name-input" type="text" placeholder="Nombre categoría" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"/>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Color</div>
+        <div id="cat-color-picker" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+      <button onclick="confirmSaveCat()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Agregar Regla -->
+<div class="modal-overlay" id="add-rule-overlay" onclick="closeAddRuleModal(event)">
+  <div class="modal-box" style="max-width:340px">
+    <div class="modal-header"><h3>Nueva regla</h3><button class="modal-close" onclick="closeAddRuleModal()">✕</button></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <input id="rule-keyword-input" type="text" placeholder="Palabra clave (ej: LIDER, COPEC)" style="padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;width:100%;box-sizing:border-box"/>
+      <select id="rule-cat-select" style="padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;width:100%"></select>
+      <button onclick="confirmSaveRule()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Guardar regla</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Análisis de Gastos -->
+<div class="modal-overlay" id="analisis-overlay" onclick="closeAnalisisOutside(event)" style="align-items:flex-start;padding-top:0">
+  <div style="background:var(--bg);width:100%;max-height:92vh;overflow-y:auto;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom,20px)">
+    <div style="padding:16px 20px 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg);z-index:1;border-bottom:1px solid var(--border);padding-bottom:12px">
+      <h2 style="font-size:18px;font-weight:700">📊 Análisis de gastos</h2>
+      <button onclick="closeAnalisisModal()" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="padding:14px 20px 0;display:flex;gap:8px;overflow-x:auto;padding-bottom:8px" id="analisis-period-filters"></div>
+    <div style="padding:14px 20px 0" id="analisis-type-filters"></div>
+    <div style="padding:14px 20px" id="analisis-content"></div>
+  </div>
 </div>
 
 <!-- NAV -->
@@ -437,6 +495,8 @@
     <input type="text" id="m-desc" placeholder="Ej: TICKETMASTER" />
     <label>Fecha</label>
     <input type="date" id="m-date" />
+    <label>Categoría</label>
+    <select id="m-cat" style="padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;width:100%"></select>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
       <button class="btn-save"   onclick="saveExpense()">Guardar</button>
@@ -465,6 +525,8 @@
     <input type="text" id="edit-desc" placeholder="Ej: TICKETMASTER" />
     <label>Monto</label>
     <input type="number" id="edit-amount" placeholder="Ej: 52900" inputmode="decimal" />
+    <label>Categoría</label>
+    <select id="edit-cat" style="padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;width:100%"></select>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeEditModal()">Cancelar</button>
       <button class="btn-save" onclick="confirmEditTx()">Guardar</button>
@@ -518,7 +580,7 @@ const ICONS = {
   STEAM:'🎮',COPEC:'⛽',SHELL:'⛽',DEFAULT:'💳'
 };
 
-const LS_C='gastos_credito_v2', LS_D='gastos_debito_v2', LS_S='sueldo_mensual', LS_DEUDAS='gastos_deudas_v1', LS_PERSONAS='deudas_personas_v1';
+const LS_C='gastos_credito_v2', LS_D='gastos_debito_v2', LS_S='sueldo_mensual', LS_DEUDAS='gastos_deudas_v1', LS_PERSONAS='deudas_personas_v1', LS_CATS='misgastos_categorias_v1', LS_CAT_RULES='misgastos_cat_rules_v1';
 
 function getC(){try{return JSON.parse(localStorage.getItem(LS_C)||'[]')}catch{return[]}}
 function getD(){try{return JSON.parse(localStorage.getItem(LS_D)||'[]')}catch{return[]}}
@@ -530,6 +592,30 @@ function getDeudas(){try{return JSON.parse(localStorage.getItem(LS_DEUDAS)||'[]'
 function saveDeudas(a){localStorage.setItem(LS_DEUDAS,JSON.stringify(a))}
 function getPersonas(){try{return JSON.parse(localStorage.getItem(LS_PERSONAS)||'["🤍 Tamarindo"]')}catch{return['🤍 Tamarindo']}}
 function savePersonas(a){localStorage.setItem(LS_PERSONAS,JSON.stringify(a))}
+const DEFAULT_CATS=[
+  {id:'super',name:'Supermercado',emoji:'🛒',color:'#4CAF50'},
+  {id:'comida',name:'Comida',emoji:'🍔',color:'#FF9800'},
+  {id:'bencina',name:'Bencina',emoji:'⛽',color:'#F44336'},
+  {id:'entrete',name:'Entretención',emoji:'🎬',color:'#9C27B0'},
+  {id:'salud',name:'Salud',emoji:'💊',color:'#E91E63'},
+  {id:'hogar',name:'Hogar',emoji:'🏠',color:'#795548'},
+  {id:'ropa',name:'Ropa',emoji:'👕',color:'#00BCD4'},
+  {id:'tech',name:'Tecnología',emoji:'📱',color:'#2196F3'},
+  {id:'viajes',name:'Viajes',emoji:'✈️',color:'#FF5722'},
+  {id:'otros',name:'Otros',emoji:'💰',color:'#607D8B'},
+];
+function getCategorias(){try{const s=localStorage.getItem(LS_CATS);return s?JSON.parse(s):DEFAULT_CATS.map(c=>({...c}))}catch{return DEFAULT_CATS.map(c=>({...c}))}}
+function saveCategorias(a){localStorage.setItem(LS_CATS,JSON.stringify(a))}
+function getCatById(id){return getCategorias().find(c=>c.id===id)||null}
+function getCatRules(){try{return JSON.parse(localStorage.getItem(LS_CAT_RULES)||'[]')}catch{return[]}}
+function saveCatRules(a){localStorage.setItem(LS_CAT_RULES,JSON.stringify(a))}
+function autoCategorize(desc){
+  if(!desc) return null;
+  const rules=getCatRules();
+  const lower=desc.toLowerCase();
+  for(const r of rules){if(lower.includes(r.keyword.toLowerCase())) return r.catId;}
+  return null;
+}
 
 function fmtCLP(n){return '$'+Math.round(n).toLocaleString('es-CL')}
 function fmtUSD(n){return 'USD '+parseFloat(n).toFixed(2)}
@@ -1031,7 +1117,8 @@ function confirmImport(){
     const newTxs=pendingRows.map(r=>({
       id:r.id, cardId:importBank, amount:r.amount, desc:r.desc,
       cuotas:r.cuotas||1, currency:'CLP',
-      date:r.date, source:'cartola'
+      date:r.date, source:'cartola',
+      catId:autoCategorize(r.desc)||''
     }));
     saveC([...getC(),...newTxs]);
     // Preparar cola de splits con opción "Aplicar a todos / No aplicar a ninguno"
@@ -1052,7 +1139,8 @@ function confirmImport(){
   } else {
     const newTxs=pendingRows.map(r=>({
       id:r.id, bank:importBank, amount:r.amount, desc:r.desc,
-      currency:'CLP', date:r.date, source:'cartola'
+      currency:'CLP', date:r.date, source:'cartola',
+      catId:autoCategorize(r.desc)||''
     }));
     saveD([...getD(),...newTxs]);
     pendingRows=[];
@@ -1309,6 +1397,139 @@ function renderAjustes(){
     </div>`).join('');
 }
 
+// ── Categorías ────────────────────────────────────────────────────────────
+const CAT_COLORS=['#4CAF50','#FF9800','#F44336','#9C27B0','#E91E63','#795548','#00BCD4','#2196F3','#FF5722','#607D8B','#FFC107','#009688','#673AB7','#3F51B5','#CDDC39'];
+let _editCatId=null;
+
+function renderCategoriasAjustes(){
+  const cats=getCategorias();
+  const rules=getCatRules();
+  // Render categories list
+  const catList=document.getElementById('categorias-list');
+  if(catList){
+    catList.innerHTML=cats.map(c=>`
+      <div class="settings-row" style="gap:10px">
+        <span style="font-size:18px">${c.emoji}</span>
+        <span class="row-label" style="flex:1">${c.name}</span>
+        <span style="width:14px;height:14px;border-radius:50%;background:${c.color};display:inline-block;flex-shrink:0"></span>
+        <button onclick="openEditCatModal('${c.id}')" style="background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;padding:4px 6px">✏️</button>
+        <button onclick="deleteCat('${c.id}')" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 6px">🗑️</button>
+      </div>`).join('');
+  }
+  // Render rules list
+  const ruleList=document.getElementById('cat-rules-list');
+  if(ruleList){
+    ruleList.innerHTML=rules.length?rules.map((r,i)=>{
+      const cat=getCatById(r.catId);
+      return `<div class="settings-row" style="gap:10px">
+        <span style="font-size:16px">${cat?cat.emoji:'❓'}</span>
+        <span class="row-label" style="flex:1">"${r.keyword}" → ${cat?cat.name:'Desconocida'}</span>
+        <button onclick="deleteRule(${i})" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 6px">🗑️</button>
+      </div>`;
+    }).join(''):'<div style="padding:8px 0;color:var(--text2);font-size:13px">Sin reglas aún. Agrega una para auto-categorizar cartolas.</div>';
+  }
+}
+
+function openAddCatModal(){
+  _editCatId=null;
+  document.getElementById('add-cat-title').textContent='Nueva categoría';
+  document.getElementById('cat-emoji-input').value='';
+  document.getElementById('cat-name-input').value='';
+  renderColorPicker(CAT_COLORS[0]);
+  document.getElementById('add-cat-overlay').classList.add('open');
+}
+function openEditCatModal(id){
+  const cat=getCatById(id);
+  if(!cat) return;
+  _editCatId=id;
+  document.getElementById('add-cat-title').textContent='Editar categoría';
+  document.getElementById('cat-emoji-input').value=cat.emoji;
+  document.getElementById('cat-name-input').value=cat.name;
+  renderColorPicker(cat.color);
+  document.getElementById('add-cat-overlay').classList.add('open');
+}
+function closeAddCatModal(e){
+  if(e&&e.target!==document.getElementById('add-cat-overlay')) return;
+  document.getElementById('add-cat-overlay').classList.remove('open');
+  _editCatId=null;
+}
+function renderColorPicker(selected){
+  document.getElementById('cat-color-picker').innerHTML=CAT_COLORS.map(c=>`
+    <div onclick="selectCatColor('${c}')" style="width:26px;height:26px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${c===selected?'#fff':'transparent'};box-sizing:border-box" data-color="${c}"></div>
+  `).join('');
+}
+function selectCatColor(color){
+  renderColorPicker(color);
+}
+function getSelectedColor(){
+  const sel=document.querySelector('#cat-color-picker div[style*="border: 3px solid rgb(255"]');
+  if(sel) return sel.getAttribute('data-color');
+  // fallback: find by white border
+  const divs=document.querySelectorAll('#cat-color-picker div');
+  for(const d of divs){if(d.style.border.includes('#fff')||d.style.borderColor==='white') return d.getAttribute('data-color');}
+  return CAT_COLORS[0];
+}
+function confirmSaveCat(){
+  const emoji=document.getElementById('cat-emoji-input').value.trim()||'📦';
+  const name=document.getElementById('cat-name-input').value.trim();
+  if(!name){showToast('Ingresa un nombre','var(--yellow)');return;}
+  // find selected color
+  const colorDivs=document.querySelectorAll('#cat-color-picker div');
+  let color=CAT_COLORS[0];
+  colorDivs.forEach(d=>{if(d.style.border&&d.style.border.includes('rgb(255, 255, 255)')) color=d.getAttribute('data-color');});
+  const cats=getCategorias();
+  if(_editCatId){
+    const idx=cats.findIndex(c=>c.id===_editCatId);
+    if(idx>=0){cats[idx]={...cats[idx],emoji,name,color};}
+  } else {
+    const id='cat_'+Date.now();
+    cats.push({id,name,emoji,color});
+  }
+  saveCategorias(cats);
+  document.getElementById('add-cat-overlay').classList.remove('open');
+  _editCatId=null;
+  renderCategoriasAjustes();
+  showToast('✅ Categoría guardada');
+}
+function deleteCat(id){
+  const cats=getCategorias().filter(c=>c.id!==id);
+  saveCategorias(cats);
+  // Remove rules referencing this cat
+  const rules=getCatRules().filter(r=>r.catId!==id);
+  saveCatRules(rules);
+  renderCategoriasAjustes();
+  showToast('Categoría eliminada');
+}
+
+function openAddRuleModal(){
+  document.getElementById('rule-keyword-input').value='';
+  const cats=getCategorias();
+  document.getElementById('rule-cat-select').innerHTML=cats.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
+  document.getElementById('add-rule-overlay').classList.add('open');
+}
+function closeAddRuleModal(e){
+  if(e&&e.target!==document.getElementById('add-rule-overlay')) return;
+  document.getElementById('add-rule-overlay').classList.remove('open');
+}
+function confirmSaveRule(){
+  const keyword=document.getElementById('rule-keyword-input').value.trim();
+  const catId=document.getElementById('rule-cat-select').value;
+  if(!keyword){showToast('Ingresa una palabra clave','var(--yellow)');return;}
+  const rules=getCatRules();
+  rules.push({keyword,catId});
+  saveCatRules(rules);
+  document.getElementById('add-rule-overlay').classList.remove('open');
+  renderCategoriasAjustes();
+  showToast('✅ Regla guardada');
+}
+function deleteRule(idx){
+  const rules=getCatRules();
+  rules.splice(idx,1);
+  saveCatRules(rules);
+  renderCategoriasAjustes();
+  showToast('Regla eliminada');
+}
+
 function updateBillingDate(cardId, val){
   const d=getBillingDates();
   d[cardId]=Math.min(31,Math.max(1,parseInt(val)||1));
@@ -1421,6 +1642,7 @@ function openEditModal(txId, txType){
   if(!tx) return;
   document.getElementById('edit-desc').value=tx.desc||'';
   document.getElementById('edit-amount').value=tx.amount||'';
+  populateCatSelect('edit-cat', tx.catId||'');
   document.getElementById('edit-modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('edit-desc').focus(), 300);
 }
@@ -1437,14 +1659,15 @@ function confirmEditTx(){
   const amount=parseFloat(document.getElementById('edit-amount').value);
   if(!desc){showToast('La descripción no puede estar vacía','var(--yellow)');return;}
   if(!amount||amount<=0){showToast('Ingresa un monto válido','var(--yellow)');return;}
+  const catId=document.getElementById('edit-cat').value||'';
   if(_editTxType==='debito'){
     const d=getD();
     const idx=d.findIndex(t=>t.id===_editTxId);
-    if(idx>=0){d[idx].desc=desc;d[idx].amount=amount;saveD(d);}
+    if(idx>=0){d[idx].desc=desc;d[idx].amount=amount;d[idx].catId=catId;saveD(d);}
   } else {
     const c=getC();
     const idx=c.findIndex(t=>t.id===_editTxId);
-    if(idx>=0){c[idx].desc=desc;c[idx].amount=amount;saveC(c);}
+    if(idx>=0){c[idx].desc=desc;c[idx].amount=amount;c[idx].catId=catId;saveC(c);}
   }
   // Actualizar descripción en deuda asociada si existe
   const deudas=getDeudas();
@@ -1494,6 +1717,12 @@ function switchModalTab(tab){
   document.getElementById('fields-credito').style.display=tab==='credito'?'':'none';
   document.getElementById('fields-debito').style.display=tab==='debito'?'':'none';
 }
+function populateCatSelect(selectId, selectedId){
+  const cats=getCategorias();
+  const sel=document.getElementById(selectId);
+  if(!sel) return;
+  sel.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.emoji} ${c.name}</option>`).join('');
+}
 function openModal(){
   // Fecha de hoy en formato YYYY-MM-DD que requiere input type=date
   const hoy=new Date();
@@ -1501,8 +1730,15 @@ function openModal(){
   const mm=String(hoy.getMonth()+1).padStart(2,'0');
   const dd=String(hoy.getDate()).padStart(2,'0');
   document.getElementById('m-date').value=`${yyyy}-${mm}-${dd}`;
+  populateCatSelect('m-cat','');
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('m-amount').focus(),300);
+  // Auto-categorize on desc blur
+  const descEl=document.getElementById('m-desc');
+  descEl.onblur=function(){
+    const auto=autoCategorize(this.value);
+    if(auto) document.getElementById('m-cat').value=auto;
+  };
 }
 function closeModal(){
   document.getElementById('modal-overlay').classList.remove('open');
@@ -1539,8 +1775,9 @@ function saveExpense(){
     const cuotas=parseInt(document.getElementById('m-cuotas').value);
     const currency=document.getElementById('m-currency').value;
     const txId=Date.now().toString();
+    const catId=document.getElementById('m-cat').value||'';
     const d=getC();
-    d.push({id:txId,cardId,amount,desc,cuotas,currency,date:txDate,source:'manual'});
+    d.push({id:txId,cardId,amount,desc,cuotas,currency,date:txDate,source:'manual',catId});
     saveC(d);
     closeModal(); renderDashboard();
     _pendingSplit={txId,amount,desc,cuotas,currency,cardId};
@@ -1548,8 +1785,9 @@ function saveExpense(){
   }else{
     const bank=document.getElementById('m-debit-bank').value;
     const txId=Date.now().toString();
+    const catId=document.getElementById('m-cat').value||'';
     const d=getD();
-    d.push({id:txId,bank,amount,desc,currency:'CLP',date:txDate,source:'manual'});
+    d.push({id:txId,bank,amount,desc,currency:'CLP',date:txDate,source:'manual',catId});
     saveD(d);
     closeModal(); renderDashboard();
     _pendingSplit={txId,amount,desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'};
@@ -1874,6 +2112,127 @@ function handleURLParams(){
   }
   window.history.replaceState({},'',window.location.pathname);
   setTimeout(()=>showToast('✅ '+desc+' registrado'),600);
+}
+
+// ── Análisis de Gastos ────────────────────────────────────────────────────
+let _analisisPeriod='ciclo';
+let _analisisTxType='ambos';
+
+function openAnalisisModal(){
+  renderAnalisis();
+  document.getElementById('analisis-overlay').classList.add('open');
+}
+function closeAnalisisModal(){
+  document.getElementById('analisis-overlay').classList.remove('open');
+}
+function closeAnalisisOutside(e){
+  if(e.target===document.getElementById('analisis-overlay')) closeAnalisisModal();
+}
+function setAnalisisPeriod(p){_analisisPeriod=p;renderAnalisis();}
+function setAnalisisTxType(t){_analisisTxType=t;renderAnalisis();}
+
+function renderAnalisis(){
+  // Period filters
+  const periods=[
+    {id:'ciclo',label:'Este ciclo'},
+    {id:'mes',label:'Este mes'},
+    {id:'mes-ant',label:'Mes anterior'},
+    {id:'todo',label:'Todo'},
+  ];
+  document.getElementById('analisis-period-filters').innerHTML=periods.map(p=>
+    `<button onclick="setAnalisisPeriod('${p.id}')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:1px solid ${_analisisPeriod===p.id?'var(--accent2)':'var(--border)'};background:${_analisisPeriod===p.id?'var(--accent2)':'transparent'};color:${_analisisPeriod===p.id?'#fff':'var(--text2)'};font-size:13px;cursor:pointer">${p.label}</button>`
+  ).join('');
+
+  // Type filters
+  const types=[
+    {id:'ambos',label:'Todos'},
+    {id:'credito',label:'Crédito'},
+    {id:'debito',label:'Débito'},
+  ];
+  document.getElementById('analisis-type-filters').innerHTML=`<div style="display:flex;gap:8px">`+types.map(t=>
+    `<button onclick="setAnalisisTxType('${t.id}')" style="flex:1;padding:7px;border-radius:10px;border:1px solid ${_analisisTxType===t.id?'var(--accent2)':'var(--border)'};background:${_analisisTxType===t.id?'var(--accent2)':'transparent'};color:${_analisisTxType===t.id?'#fff':'var(--text2)'};font-size:13px;cursor:pointer">${t.label}</button>`
+  ).join('')+'</div>';
+
+  // Get date range
+  const now=new Date();
+  let dateStart=null,dateEnd=null;
+  if(_analisisPeriod==='ciclo'){const c=getCycle('bci');dateStart=c.start;dateEnd=c.end;}
+  else if(_analisisPeriod==='mes'){dateStart=new Date(now.getFullYear(),now.getMonth(),1);dateEnd=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);}
+  else if(_analisisPeriod==='mes-ant'){dateStart=new Date(now.getFullYear(),now.getMonth()-1,1);dateEnd=new Date(now.getFullYear(),now.getMonth(),0,23,59,59);}
+
+  // Collect transactions
+  let txs=[];
+  if(_analisisTxType!=='debito'){
+    let c=getC();
+    if(dateStart) c=c.filter(t=>{const d=new Date(t.date);return d>=dateStart&&d<=dateEnd;});
+    txs=txs.concat(c.map(t=>({...t,_tipo:'credito',_monto:t.currency==='CLP'?t.amount/Math.max(1,t.cuotas||1):0})));
+  }
+  if(_analisisTxType!=='credito'){
+    let d=getD();
+    if(dateStart) d=d.filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;});
+    txs=txs.concat(d.map(t=>({...t,_tipo:'debito',_monto:t.amount||0})));
+  }
+
+  if(!txs.length){
+    document.getElementById('analisis-content').innerHTML='<div style="text-align:center;padding:40px 0;color:var(--text2)"><div style="font-size:40px">📭</div><p style="margin-top:8px">Sin gastos en este período</p></div>';
+    return;
+  }
+
+  // Group by category
+  const cats=getCategorias();
+  const catMap={};
+  cats.forEach(c=>{catMap[c.id]={...c,total:0,count:0};});
+  catMap['']={id:'',name:'Sin categoría',emoji:'❓',color:'#555',total:0,count:0};
+
+  txs.forEach(t=>{
+    const cid=t.catId||'';
+    if(!catMap[cid]) catMap[cid]={id:cid,name:'Sin categoría',emoji:'❓',color:'#555',total:0,count:0};
+    catMap[cid].total+=t._monto;
+    catMap[cid].count++;
+  });
+
+  const catData=Object.values(catMap).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
+  const grandTotal=catData.reduce((s,c)=>s+c.total,0);
+
+  // Draw pie chart SVG
+  const size=220,cx=110,cy=110,r=85,ri=45;
+  let startAngle=-Math.PI/2;
+  let slices='';
+  catData.forEach(c=>{
+    const angle=(c.total/grandTotal)*2*Math.PI;
+    const endAngle=startAngle+angle;
+    const x1=cx+r*Math.cos(startAngle),y1=cy+r*Math.sin(startAngle);
+    const x2=cx+r*Math.cos(endAngle),y2=cy+r*Math.sin(endAngle);
+    const xi1=cx+ri*Math.cos(startAngle),yi1=cy+ri*Math.sin(startAngle);
+    const xi2=cx+ri*Math.cos(endAngle),yi2=cy+ri*Math.sin(endAngle);
+    const large=angle>Math.PI?1:0;
+    slices+=`<path d="M${xi1},${yi1} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} L${xi2},${yi2} A${ri},${ri} 0 ${large} 0 ${xi1},${yi1}" fill="${c.color}" opacity="0.9"/>`;
+    startAngle=endAngle;
+  });
+  const pieChart=`<svg viewBox="0 0 ${size} ${size}" style="width:180px;height:180px;display:block;margin:0 auto 16px">
+    ${slices}
+    <circle cx="${cx}" cy="${cy}" r="${ri-2}" fill="var(--bg)"/>
+    <text x="${cx}" y="${cy-6}" text-anchor="middle" fill="var(--text)" font-size="11" font-weight="600">Total</text>
+    <text x="${cx}" y="${cy+10}" text-anchor="middle" fill="var(--accent2)" font-size="12" font-weight="700">${fmtCLP(grandTotal)}</text>
+  </svg>`;
+
+  // Category breakdown
+  const breakdown=catData.map(c=>{
+    const pct=((c.total/grandTotal)*100).toFixed(1);
+    const barW=Math.round((c.total/grandTotal)*100);
+    return `<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:13px;font-weight:600">${c.emoji} ${c.name}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--accent2)">${fmtCLP(c.total)}</span>
+      </div>
+      <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
+        <div style="background:${c.color};height:100%;width:${barW}%;border-radius:4px;transition:width .4s"></div>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:2px">${pct}% · ${c.count} gasto${c.count!==1?'s':''}</div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('analisis-content').innerHTML=pieChart+breakdown;
 }
 
 document.addEventListener('DOMContentLoaded',function(){
