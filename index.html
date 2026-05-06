@@ -2080,8 +2080,7 @@ async function syncFromSheets(){
       if(pendingSplits.length>0){
         const delay=toasts.length*1200+600;
         setTimeout(()=>{
-          _splitQueue=[...pendingSplits.slice(1)];
-          _pendingSplit=pendingSplits[0];
+          _splitQueue=[...pendingSplits];
           _splitImportMode=false;
           processSplitQueue();
         }, delay);
