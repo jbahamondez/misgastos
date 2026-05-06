@@ -1285,25 +1285,20 @@ function getPaymentDates(){try{return JSON.parse(localStorage.getItem('misgastos
 function savePaymentDates(d){localStorage.setItem('misgastos_payment_dates',JSON.stringify(d))}
 function getPaidFlags(){try{return JSON.parse(localStorage.getItem('misgastos_paid_flags')||'{}')}catch{return{}}}
 function savePaidFlags(d){localStorage.setItem('misgastos_paid_flags',JSON.stringify(d))}
-
-function updatePaymentDate(cardId, val){
+function updatePaymentDate(cardId,val){
   const d=getPaymentDates();
   d[cardId]=Math.min(31,Math.max(1,parseInt(val)||1));
   savePaymentDates(d);
   showToast('Día de pago actualizado');
 }
-
-// ── Recordatorio de pago ──────────────────────────────────────────────────
 function checkPaymentReminder(){
-  const now=new Date();
-  const day=now.getDate();
-  const monthKey=`${now.getFullYear()}-${now.getMonth()+1}`;
-  const payDates=getPaymentDates();
-  const paidFlags=getPaidFlags();
+  const now=new Date(),day=now.getDate();
+  const monthKey=now.getFullYear()+'-'+(now.getMonth()+1);
+  const payDates=getPaymentDates(),paidFlags=getPaidFlags();
   const pendientes=Object.values(CARDS).filter(c=>{
     const payDay=payDates[c.id]||5;
     if(day>payDay) return false;
-    if(paidFlags[`${c.id}_${monthKey}`]) return false;
+    if(paidFlags[c.id+'_'+monthKey]) return false;
     const prevTxs=getPrevCycleTxs(c.id);
     const saldo=prevTxs.filter(t=>t.currency==='CLP').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0);
     return saldo>0;
@@ -1314,24 +1309,19 @@ function checkPaymentReminder(){
     const prevTxs=getPrevCycleTxs(c.id);
     const saldo=prevTxs.filter(t=>t.currency==='CLP').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0);
     const payDay=payDates2[c.id]||5;
-    return`<div class="payment-card-row">
-      <div class="payment-card-info">
-        <span class="payment-card-name">${c.emoji} ${c.bank}</span>
-        <span class="payment-card-amount">${fmtCLP(saldo)} · vence día ${payDay}</span>
-      </div>
-      <button class="payment-paid-btn" id="paid-btn-${c.id}" onclick="markAsPaid('${c.id}','${monthKey}')">✓ Pagué</button>
-    </div>`;
+    const rowId='paid-btn-'+c.id;
+    return `<div class="payment-card-row"><div class="payment-card-info"><span class="payment-card-name">${c.emoji} ${c.bank}</span><span class="payment-card-amount">${fmtCLP(saldo)} · vence día ${payDay}</span></div><button class="payment-paid-btn" id="${rowId}" onclick="markAsPaid('${c.id}','${monthKey}')">✓ Pagué</button></div>`;
   }).join('');
   document.getElementById('payment-reminder-overlay').classList.add('open');
 }
-function markAsPaid(cardId, monthKey){
+function markAsPaid(cardId,monthKey){
   const flags=getPaidFlags();
-  flags[`${cardId}_${monthKey}`]=true;
+  flags[cardId+'_'+monthKey]=true;
   savePaidFlags(flags);
-  const btn=document.getElementById(`paid-btn-${cardId}`);
+  const btn=document.getElementById('paid-btn-'+cardId);
   if(btn){btn.textContent='✓ Listo';btn.className='payment-paid-btn done';btn.disabled=true;}
   const allDone=[...document.querySelectorAll('.payment-paid-btn')].every(b=>b.disabled);
-  if(allDone) setTimeout(closePaymentReminder, 800);
+  if(allDone) setTimeout(closePaymentReminder,800);
 }
 function closePaymentReminder(){
   document.getElementById('payment-reminder-overlay').classList.remove('open');
@@ -1728,11 +1718,128 @@ window.parseEmailBCIDebito=function(body){
     id:Date.now().toString(), bank:'bci', amount, desc,
     currency:'CLP', date:(date||new Date()).toISOString(), source:'shortcut'
   };
-  const d=getD();
-  d.push(tx); saveD(d);
-  renderDashboard(); renderDebito();
-  return 'OK';
+  const d=getD(); d.push(tx); saveD(d); renderDashboard(); return'OK';
 };
+
+function copyApiInfo(){
+  navigator.clipboard.writeText(
+    '// BCI Crédito\nwindow.parseEmailBCI(emailBody);\n\n'+
+    '// BCI Débito\nwindow.parseEmailBCIDebito(emailBody);\n\n'+
+    '// Banco Chile Crédito\nwindow.parseEmailBancoChile(emailBody);\n\n'+
+    '// Manual crédito\nwindow.addExpenseFromShortcut(\'bci\', 52900, \'COMERCIO\', 1, \'CLP\');'
+  )
+    .then(()=>showToast('Codigo copiado'));
+}
+function exportData(){
+  const blob=new Blob([JSON.stringify({credito:getC(),debito:getD(),sueldo:getSueldo()},null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='misgastos_'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  showToast('Datos exportados');
+}
+function clearData(){
+  if(
+confirm('Borrar TODOS los gastos? No se puede deshacer.')){
+    localStorage.removeItem(LS_C);localStorage.removeItem(LS_D);
+    renderDashboard();showToast('Datos eliminados','var(--red)');
+  }
+}
+function showToast(msg,color){
+  color=color||'var(--green)';
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.style.background=color;
+  t.style.color=color==='var(--green)'?'#0f1117':'white';
+  t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
+}
+// ── Sincronización desde Google Apps Script API ───────────────────────────────
+const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbwxWhRJehKodrfiPFu5iG6gwaMq2JtX6sRwm5ngKTjduB2v6W2d14p-WD9mF4swUoFj/exec';
+const LS_SYNC='misgastos_sync_last';
+
+async function syncFromSheets(){
+  // Evitar sync si ya se hizo en los últimos 15 segundos
+arseInt(localStorage.getItem(LS_SYNC)||'0');
+  if(Date.now()-last < 15000) return;
+  localStorage.setItem(LS_SYNC, Date.now().toString());
+  try{
+    const r=await fetch(APPS_SCRIPT_URL+'?action=getPending');
+    if(!r.ok) return;
+    const data=await r.json();
+    if(!data.rows||!data.rows.length) return;
+    const pendingSplits=[];
+    let imported=0;
+    const toasts=[];
+    for(const row of data.rows){
+      const[txId,bank,type,amount,desc,cuotas,currency,date]=row;
+      if(!txId||!amount) continue;
+      const existing=[...getC(),...getD()].find(t=>t.id===txId);
+      if(existing) continue;
+      if(type==='debito'){
+        const d=getD();
+        d.push({id:txId,bank,amount:parseFloat(amount),desc,currency:'CLP',
+          date:(date?new Date(date):new Date()).toISOString(),source:'email_auto'});
+        saveD(d);
+        pendingSplits.push({txId,amount:parseFloat(amount),desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'});
+      } else {
+        const d=getC();
+        d.push({id:txId,cardId:bank,amount:parseFloat(amount),desc,cuotas:parseInt(cuotas)||1,currency:'CLP',
+          date:(date?new Date(date):new Date()).toISOString(),source:'email_auto'});
+        saveC(d);
+        pendingSplits.push({txId,amount:parseFloat(amount),desc,cuotas:parseInt(cuotas)||1,currency:'CLP',cardId:bank,type:'credito'});
+      }
+      imported++;
+      toasts.push({msg:desc+' — '+fmtCLP(parseFloat(amount)),type});
+    }
+    if(imported>0){
+      renderDashboard(); renderDebito();
+      toasts.forEach((t,i)=>{
+        setTimeout(()=>showToast('📩 '+t.msg),i*1200);
+      });
+      // Marcar como procesados
+      await fetch(APPS_SCRIPT_URL+'?action=markDone',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ids:data.rows.map(r=>r[0])})
+      }).catch(()=>{});
+      // Abrir split modals después de todos los toasts
+      if(pendingSplits.length>0){
+        const delay=toasts.length*1200+600;
+        setTimeout(()=>{
+          _splitQueue=[...pendingSplits.slice(1)];
+          _pendingSplit=pendingSplits[0];
+          _splitImportMode=false;
+          processSplitQueue();
+        }, delay);
+      }
+    }
+  }catch(e){
+    console.warn('syncFromSheets error:',e);
+  }
+}
+
+function handleURLParams(){
+  const p=new URLSearchParams(window.location.search);
+  if(!p.has('amount')) return;
+  const amount=parseFloat(p.get('amount')||0);
+  const desc=decodeURIComponent(p.get('desc')||'Gasto automatico');
+  const type=p.get('type')||'credito';
+  const bank=p.get('bank')||'bci';
+  const cuotas=parseInt(p.get('cuotas')||1);
+  const currency=p.get('currency')||'CLP';
+  const rawDate=p.get('date');
+  const date=rawDate?parseFecha(rawDate):new Date();
+  if(!amount||amount<=0) return;
+  if(type==='debito'){
+    const tx={id:Date.now().toString(),bank,amount,desc,currency,
+      date:(date||new Date()).toISOString(),source:'shortcut'};
+    const d=getD(); d.push(tx); saveD(d);
+  } else {
+    const tx={id:Date.now().toString(),cardId:bank,amount,desc,cuotas,currency,
+      date:(date||new Date()).toISOString(),source:'shortcut'};
+    const d=getC(); d.push(tx); saveC(d);
+  }
+  window.history.replaceState({},'',window.location.pathname);
+  setTimeout(()=>showToast('✅ '+desc+' registrado'),600);
+}
 
 document.addEventListener('DOMContentLoaded',function(){
   renderDashboard();renderAjustes();
@@ -1741,7 +1848,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.addEventListener('visibilitychange',function(){
     if(document.visibilityState==='visible') syncFromSheets();
   });
-  setTimeout(checkPaymentReminder, 1200);
+  setTimeout(checkPaymentReminder,1200);
 });
 </script>
 </body>
