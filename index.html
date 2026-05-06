@@ -52,6 +52,7 @@
     .salud-sueldo-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
     .salud-sueldo-label{font-size:13px;color:var(--text2);flex:1}
     .sueldo-edit-btn{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer}
+    .sueldo-eye-btn{background:none;border:none;padding:4px 6px;cursor:pointer;color:var(--text2);font-size:16px;line-height:1;border-radius:6px}
     .sueldo-input-row{display:none;gap:8px;margin-bottom:12px}
     .sueldo-input-row.visible{display:flex}
     .sueldo-input-row input{flex:1;background:var(--bg3);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;color:var(--text);font-size:15px;outline:none}
@@ -79,6 +80,15 @@
     .proy-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
     .proy-name{font-size:13px;margin-left:9px;flex:1}
     .proy-amount{font-size:14px;font-weight:600}
+    .ciclo-ant-box{margin:14px 20px 0;background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden}
+    .ciclo-ant-header{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;cursor:pointer;user-select:none}
+    .ciclo-ant-header h3{font-size:12px;color:var(--text2);font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin:0}
+    .ciclo-ant-header .chevron{font-size:12px;color:var(--text2);transition:transform .25s}
+    .ciclo-ant-header .chevron.open{transform:rotate(180deg)}
+    .ciclo-ant-body{padding:0 16px 14px;display:none}
+    .ciclo-ant-body.open{display:block}
+    .ciclo-ant-total{font-size:22px;font-weight:700;color:var(--yellow);margin-bottom:12px}
+    .ciclo-ant-total span{font-size:11px;font-weight:400;color:var(--text2);margin-left:6px}
     .section-header{display:flex;justify-content:space-between;align-items:center;padding:0 20px;margin-top:16px;margin-bottom:10px}
     .section-header h3{font-size:15px;font-weight:600}
     .section-header button{font-size:13px;color:var(--accent2);background:none;border:none;cursor:pointer}
@@ -177,6 +187,16 @@
     .toast.show{transform:translateX(-50%) translateY(0)}
     .pb14{padding-bottom:14px}
 
+    /* ── Menú contextual tx ────────────────────────────────────── */
+    .tx-item{position:relative;cursor:pointer;-webkit-user-select:none;user-select:none}
+    .tx-ctx-menu{position:fixed;background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:6px;z-index:500;min-width:180px;box-shadow:0 8px 32px rgba(0,0,0,.5);animation:fadeIn .15s ease}
+    @keyframes fadeIn{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+    .tx-ctx-btn{display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;background:none;border:none;color:var(--text);font-size:14px;border-radius:9px;cursor:pointer;text-align:left}
+    .tx-ctx-btn:active{background:var(--bg3)}
+    .tx-ctx-btn.danger{color:var(--red)}
+    /* ── Modal editar tx ───────────────────────────────────────── */
+    .edit-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:400;backdrop-filter:blur(4px);align-items:flex-end}
+    .edit-modal-overlay.open{display:flex}
     /* ── Deudas / División de compra ───────────────────────────── */
     .split-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:300;backdrop-filter:blur(4px);align-items:flex-end}
     .split-modal-overlay.open{display:flex}
@@ -230,15 +250,25 @@
   <div class="salud-box" id="salud-box"></div>
   <div class="summary-box">
     <h3>Resumen Crédito del Ciclo</h3>
-    <div class="summary-row"><span class="label">Cargo al 19 / Cupo comprometido</span><span class="val red" id="sum-gastado">$0</span></div>
+    <div class="summary-row"><span class="label" id="sum-gastado-label">Cargo al cierre / Cupo comprometido</span><span class="val red" id="sum-gastado">$0</span></div>
     <div class="summary-row"><span class="label">Disponible combinado</span><span class="val green" id="sum-disponible">$0</span></div>
     <div class="summary-row"><span class="label">Transacciones crédito</span><span class="val" id="sum-txs">0</span></div>
     <div class="summary-row"><span class="label">Total débito este mes</span><span class="val blue" id="sum-debito">$0</span></div>
   </div>
   <div class="proyeccion-box">
-    <h3>Proyección al 19 (Facturación)</h3>
+    <h3 id="proy-title">Proyección (Facturación)</h3>
     <div class="days" id="proy-days"></div>
     <div id="proy-list"></div>
+  </div>
+  <div class="ciclo-ant-box" id="ciclo-ant-box">
+    <div class="ciclo-ant-header" onclick="toggleCicloAnt()">
+      <h3 id="ciclo-ant-title">Ciclo anterior</h3>
+      <span class="chevron" id="ciclo-ant-chevron">▼</span>
+    </div>
+    <div class="ciclo-ant-body" id="ciclo-ant-body">
+      <div class="ciclo-ant-total" id="ciclo-ant-total"></div>
+      <div id="ciclo-ant-list"></div>
+    </div>
   </div>
   <div class="section-header"><h3>Últimos gastos</h3><button onclick="showPage('historial')">Ver todos</button></div>
   <div class="tx-list pb14" id="recent-list"></div>
@@ -399,6 +429,22 @@
 </div>
 
 
+<!-- EDIT TX MODAL -->
+<div class="edit-modal-overlay" id="edit-modal-overlay" onclick="closeEditModalOutside(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Editar gasto</h2>
+    <label>Descripción</label>
+    <input type="text" id="edit-desc" placeholder="Ej: TICKETMASTER" />
+    <label>Monto</label>
+    <input type="number" id="edit-amount" placeholder="Ej: 52900" inputmode="decimal" />
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeEditModal()">Cancelar</button>
+      <button class="btn-save" onclick="confirmEditTx()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- SPLIT MODAL -->
 <div class="split-modal-overlay" id="split-modal-overlay" onclick="closeSplitOutside(event)">
   <div class="split-modal">
@@ -463,18 +509,38 @@ function fmtUSD(n){return 'USD '+parseFloat(n).toFixed(2)}
 function fmtPct(n){return n.toFixed(1)+'%'}
 function getIcon(d){const u=(d||'').toUpperCase();for(const[k,v]of Object.entries(ICONS))if(u.includes(k))return v;return ICONS.DEFAULT}
 
-function getCycle(){
+function getBillingDay(cardId){
+  // Retorna el día de cierre de una tarjeta específica, o el global si no se especifica
+  const dates=getBillingDates();
+  if(cardId) return dates[cardId]||19;
+  // Sin cardId: usar el día de BCI como referencia general del dashboard
+  return dates['bci']||19;
+}
+function getCycle(cardId){
+  const cutDay=getBillingDay(cardId);
   const now=new Date(),day=now.getDate();
-  return day<=19
-    ?{start:new Date(now.getFullYear(),now.getMonth()-1,20),end:new Date(now.getFullYear(),now.getMonth(),19)}
-    :{start:new Date(now.getFullYear(),now.getMonth(),20),end:new Date(now.getFullYear(),now.getMonth()+1,19)};
+  return day<=cutDay
+    ?{start:new Date(now.getFullYear(),now.getMonth()-1,cutDay+1),end:new Date(now.getFullYear(),now.getMonth(),cutDay,23,59,59)}
+    :{start:new Date(now.getFullYear(),now.getMonth(),cutDay+1),end:new Date(now.getFullYear(),now.getMonth()+1,cutDay,23,59,59)};
+}
+function getPrevCycle(cardId){
+  const cutDay=getBillingDay(cardId);
+  const cur=getCycle(cardId);
+  // El ciclo anterior termina el día antes del inicio del ciclo actual
+  const prevEnd=new Date(cur.start.getTime()-1);
+  const prevStart=new Date(prevEnd.getFullYear(),prevEnd.getMonth()-1,cutDay+1);
+  return{start:prevStart,end:prevEnd};
+}
+function getPrevCycleTxs(cardId){
+  const{start,end}=getPrevCycle(cardId);
+  return getC().filter(t=>t.cardId===cardId&&new Date(t.date)>=start&&new Date(t.date)<=end);
 }
 function getMonth(){
   const now=new Date();
   return{start:new Date(now.getFullYear(),now.getMonth(),1),end:new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59)};
 }
 function getCycleTxs(cardId){
-  const{start,end}=getCycle();
+  const{start,end}=getCycle(cardId);
   return getC().filter(t=>t.cardId===cardId&&new Date(t.date)>=start&&new Date(t.date)<=end);
 }
 // Cupo comprometido: monto total (lo que bloquea el banco en tu cupo)
@@ -483,9 +549,10 @@ function spentUSD(id){return getCycleTxs(id).filter(t=>t.currency==='USD').reduc
 // Cargo al 19: solo la cuota de este mes (amount / cuotas)
 function cuotaCLP(id){return getCycleTxs(id).filter(t=>t.currency==='CLP').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0)}
 function cuotaUSD(id){return getCycleTxs(id).filter(t=>t.currency==='USD').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0)}
-function daysToFact(){
+function daysToFact(cardId){
+  const cutDay=getBillingDay(cardId);
   const now=new Date(),day=now.getDate();
-  const t=day<=19?new Date(now.getFullYear(),now.getMonth(),19):new Date(now.getFullYear(),now.getMonth()+1,19);
+  const t=day<=cutDay?new Date(now.getFullYear(),now.getMonth(),cutDay):new Date(now.getFullYear(),now.getMonth()+1,cutDay);
   return Math.max(0,Math.ceil((t-now)/86400000));
 }
 function debitoThisMonth(){
@@ -499,6 +566,43 @@ function showPage(name){
   document.getElementById('page-'+name).classList.add('active');
   document.getElementById('nav-'+name).classList.add('active');
   ({dashboard:renderDashboard,tarjetas:renderTarjetas,debito:renderDebito,historial:renderHistorial,ajustes:renderAjustes,deudas:renderDeudas})[name]?.();
+}
+
+let _cicloAntOpen=false;
+function toggleCicloAnt(){
+  _cicloAntOpen=!_cicloAntOpen;
+  document.getElementById('ciclo-ant-body').classList.toggle('open',_cicloAntOpen);
+  document.getElementById('ciclo-ant-chevron').classList.toggle('open',_cicloAntOpen);
+}
+function renderCicloAnt(){
+  const cards=Object.values(CARDS);
+  let totalAnt=0;
+  const rows=cards.map(c=>{
+    const txs=getPrevCycleTxs(c.id);
+    const cuota=txs.filter(t=>t.currency==='CLP').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0);
+    const total=txs.filter(t=>t.currency==='CLP').reduce((s,t)=>s+t.amount,0);
+    totalAnt+=cuota;
+    const{start,end}=getPrevCycle(c.id);
+    const label=start.toLocaleDateString('es-CL',{day:'2-digit',month:'short'})+' – '+end.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
+    return{c,cuota,total,txs:txs.length,label};
+  });
+  // Título con rango de fechas del ciclo anterior de BCI como referencia
+  const{start,end}=getPrevCycle('bci');
+  const rangeLabel=start.toLocaleDateString('es-CL',{day:'2-digit',month:'short'})+' – '+end.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
+  document.getElementById('ciclo-ant-title').textContent='Ciclo anterior ('+rangeLabel+')';
+  document.getElementById('ciclo-ant-total').innerHTML=fmtCLP(totalAnt)+'<span>total facturado</span>';
+  document.getElementById('ciclo-ant-list').innerHTML=rows.map(r=>`
+    <div class="proy-card">
+      <div class="proy-dot" style="background:${r.c.color}"></div>
+      <span class="proy-name">${r.c.bank}</span>
+      <div style="text-align:right">
+        <div class="proy-amount" style="color:#fde68a">${fmtCLP(r.cuota)}</div>
+        <div style="font-size:10px;color:var(--text2)">${r.txs} tx · cupo ${fmtCLP(r.total)}</div>
+      </div>
+    </div>`).join('');
+  // Ocultar si no hay nada en ninguna tarjeta
+  const hayDatos=rows.some(r=>r.txs>0);
+  document.getElementById('ciclo-ant-box').style.display=hayDatos?'':'none';
 }
 
 function renderDashboard(){
@@ -520,7 +624,7 @@ function renderDashboard(){
       <div class="card-bar-wrap"><div class="card-bar" style="width:${pct}%"></div></div>
       <div class="card-footer">
         <div class="card-footer-item">Disponible<span>${fmtCLP(disp)}</span></div>
-        <div class="card-footer-item" style="text-align:center">Cargo al 19<span style="color:#fde68a">${fmtCLP(qCLP)}</span></div>
+        <div class="card-footer-item" style="text-align:center">Cargo al ${getBillingDay(c.id)}<span style="color:#fde68a">${fmtCLP(qCLP)}</span></div>
         <div class="card-footer-item" style="text-align:right">Límite<span>${fmtCLP(c.limitCLP)}</span></div>
       </div>
       ${c.limitUSD>0?`<div style="margin-top:7px;font-size:10px;opacity:.7">USD: ${fmtUSD(sUSD)} / ${fmtUSD(c.limitUSD)}</div>`:''}`;
@@ -531,7 +635,7 @@ function renderDashboard(){
   renderSalud(totCuota);
 
   // Resumen
-  const{start,end}=getCycle();
+  const{start,end}=getCycle('bci');
   const cCount=getC().filter(t=>{const d=new Date(t.date);return d>=start&&d<=end}).length;
   const totDeb=debitoThisMonth().reduce((s,t)=>s+t.amount,0);
   document.getElementById('sum-gastado').textContent=fmtCLP(totCuota)+' / '+fmtCLP(totCLP);
@@ -540,8 +644,11 @@ function renderDashboard(){
   document.getElementById('sum-debito').textContent=fmtCLP(totDeb);
 
   // Proyeccion al 19: muestra cargo de cuota de este mes
-  const days=daysToFact();
-  document.getElementById('proy-days').textContent=days===0?'Hoy es dia de facturacion!':'Faltan '+days+' dias para el dia 19';
+  const refDay=getBillingDay('bci');
+  const days=daysToFact('bci');
+  document.getElementById('proy-title').textContent='Proyección al '+refDay+' (Facturación)';
+  document.getElementById('sum-gastado-label').textContent='Cargo al '+refDay+' / Cupo comprometido';
+  document.getElementById('proy-days').textContent=days===0?'¡Hoy es día de facturación!':'Faltan '+days+' días para el día '+refDay;
   const pl=document.getElementById('proy-list');
   pl.innerHTML='';
   Object.values(CARDS).forEach(c=>{
@@ -561,6 +668,9 @@ function renderDashboard(){
   const recent=[...getC(),...getD().map(t=>({...t,_isDebit:true}))].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
   document.getElementById('recent-list').innerHTML=recent.length?recent.map(txHTML).join('')
     :'<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg><h3>Sin gastos aun</h3><p>Toca + para agregar tu primer gasto</p></div>';
+
+  // Ciclo anterior
+  renderCicloAnt();
 }
 
 function renderSalud(totCred){
@@ -581,7 +691,8 @@ function renderSalud(totCred){
   document.getElementById('salud-box').innerHTML=`
     <div class="salud-header"><h3>Salud Financiera</h3><span class="salud-badge ${cls}">${badge}</span></div>
     <div class="salud-sueldo-row">
-      <span class="salud-sueldo-label">Ingreso mensual: <strong style="color:var(--text)">${sueldo?fmtCLP(sueldo):'No ingresado'}</strong></span>
+      <span class="salud-sueldo-label">Ingreso mensual: <strong style="color:var(--text)" id="sueldo-display">${sueldo?(_sueldoOculto?'••••••':fmtCLP(sueldo)):'No ingresado'}</strong></span>
+      ${sueldo?`<button class="sueldo-eye-btn" onclick="toggleSueldoVisibility()" title="Ocultar ingreso">${_sueldoOculto?'👁️‍🗨️':'👁️'}</button>`:''}
       <button class="sueldo-edit-btn" onclick="toggleSueldoInput()">${sueldo?'Editar':'+ Ingresar'}</button>
     </div>
     <div class="sueldo-input-row" id="sueldo-input-row">
@@ -616,6 +727,15 @@ function renderSalud(totCred){
     </div>`:'<p style="font-size:13px;color:var(--text2);text-align:center;padding:10px 0">Ingresa tu sueldo para ver metricas</p>'}`;
 }
 
+let _sueldoOculto=false;
+function toggleSueldoVisibility(){
+  _sueldoOculto=!_sueldoOculto;
+  const sueldo=getSueldo();
+  const display=document.getElementById('sueldo-display');
+  const btn=display?.parentElement?.querySelector('.sueldo-eye-btn');
+  if(display) display.textContent=_sueldoOculto?'••••••':fmtCLP(sueldo);
+  if(btn) btn.textContent=_sueldoOculto?'👁️‍🗨️':'👁️';
+}
 function toggleSueldoInput(){
   const r=document.getElementById('sueldo-input-row');
   r.classList.toggle('visible');
@@ -638,13 +758,13 @@ function renderTarjetas(){
     const d=document.createElement('div');
     d.className='tarjeta-detail';
     d.innerHTML=`<div class="tarjeta-detail-header"><div class="bank-dot" style="background:${c.color}"></div>
-      <div><h3>${c.bank}</h3><p>${c.num} - Factura el 19</p></div></div>
+      <div><h3>${c.bank}</h3><p>${c.num} - Factura el ${getBillingDay(c.id)}</p></div></div>
       <div class="tarjeta-stats">
         <div class="stat-cell"><div class="stat-label">Cupo comprometido</div>
           <div class="stat-val" style="color:${bc}">${fmtCLP(sCLP)}</div>
           <div class="stat-bar-wrap"><div class="stat-bar" style="width:${pct}%;background:${bc}"></div></div>
           <div style="font-size:10px;color:var(--text2);margin-top:3px">${Math.round(pct)}% del límite</div></div>
-        <div class="stat-cell"><div class="stat-label">Cargo próximo al 19</div>
+        <div class="stat-cell"><div class="stat-label">Cargo próximo al ${getBillingDay(c.id)}</div>
           <div class="stat-val" style="color:#fde68a">${fmtCLP(qCLP)}</div>
           <div style="font-size:10px;color:var(--text2);margin-top:3px">solo cuotas de este ciclo</div></div>
         <div class="stat-cell"><div class="stat-label">Disponible CLP</div>
@@ -652,7 +772,7 @@ function renderTarjetas(){
         <div class="stat-cell"><div class="stat-label">Transacciones</div><div class="stat-val">${txs.length}</div></div>
         ${c.limitUSD>0?`
         <div class="stat-cell"><div class="stat-label">Gastado USD</div><div class="stat-val">${fmtUSD(sUSD)}</div></div>
-        <div class="stat-cell"><div class="stat-label">Cargo USD al 19</div><div class="stat-val" style="color:#fde68a">${fmtUSD(qUSD)}</div></div>
+        <div class="stat-cell"><div class="stat-label">Cargo USD al ${getBillingDay(c.id)}</div><div class="stat-val" style="color:#fde68a">${fmtUSD(qUSD)}</div></div>
         <div class="stat-cell"><div class="stat-label">Disponible USD</div><div class="stat-val" style="color:var(--green)">${fmtUSD(c.limitUSD-sUSD)}</div></div>`:''}
       </div>`;
     c2.appendChild(d);
@@ -937,7 +1057,7 @@ function renderHistorial(){
   let dateStart=null, dateEnd=null;
   const now=new Date();
   if(activeDateFilter==='ciclo'){
-    const c=getCycle(); dateStart=c.start; dateEnd=c.end;
+    const c=getCycle('bci'); dateStart=c.start; dateEnd=c.end;
   } else if(activeDateFilter==='mes'){
     dateStart=new Date(now.getFullYear(),now.getMonth(),1);
     dateEnd=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);
@@ -1012,7 +1132,7 @@ function renderDeudas(){
   let dateStart=null, dateEnd=null;
   const now=new Date();
   if(activeDeudasDateFilter==='ciclo'){
-    const c=getCycle(); dateStart=c.start; dateEnd=c.end;
+    const c=getCycle('bci'); dateStart=c.start; dateEnd=c.end;
   } else if(activeDeudasDateFilter==='mes'){
     dateStart=new Date(now.getFullYear(),now.getMonth(),1);
     dateEnd=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);
@@ -1127,15 +1247,108 @@ function updateBillingDate(cardId, val){
   showToast('Fecha de cierre actualizada');
 }
 
+// ── Menú contextual (long press / right click) ────────────────────────────
+let _txHoldTimer=null;
+let _ctxMenu=null;
+
+function startTxHold(e, txId, txType){
+  _txHoldTimer=setTimeout(()=>{
+    const touch=e.touches[0];
+    openTxMenu({clientX:touch.clientX, clientY:touch.clientY, preventDefault:()=>{}}, txId, txType);
+  }, 500);
+}
+function cancelTxHold(){
+  if(_txHoldTimer){clearTimeout(_txHoldTimer);_txHoldTimer=null;}
+}
+function closeCtxMenu(){
+  if(_ctxMenu){_ctxMenu.remove();_ctxMenu=null;}
+}
+function openTxMenu(e, txId, txType){
+  e.preventDefault();
+  closeCtxMenu();
+  const menu=document.createElement('div');
+  menu.className='tx-ctx-menu';
+  menu.innerHTML=`
+    <button class="tx-ctx-btn" onclick="openEditModal('${txId}','${txType}')">✏️ Editar</button>
+    <button class="tx-ctx-btn danger" onclick="deleteTx('${txId}','${txType}')">🗑️ Eliminar</button>`;
+  // Posicionar el menú cerca del toque
+  const x=Math.min(e.clientX, window.innerWidth-200);
+  const y=Math.min(e.clientY, window.innerHeight-100);
+  menu.style.cssText=`left:${x}px;top:${y}px`;
+  document.body.appendChild(menu);
+  _ctxMenu=menu;
+  // Cerrar al tocar fuera
+  setTimeout(()=>document.addEventListener('touchstart', closeCtxMenu, {once:true}), 100);
+  setTimeout(()=>document.addEventListener('click', closeCtxMenu, {once:true}), 100);
+}
+
+// ── Editar tx ─────────────────────────────────────────────────────────────
+let _editTxId=null, _editTxType=null;
+
+function openEditModal(txId, txType){
+  closeCtxMenu();
+  _editTxId=txId; _editTxType=txType;
+  const tx=txType==='debito'
+    ? getD().find(t=>t.id===txId)
+    : getC().find(t=>t.id===txId);
+  if(!tx) return;
+  document.getElementById('edit-desc').value=tx.desc||'';
+  document.getElementById('edit-amount').value=tx.amount||'';
+  document.getElementById('edit-modal-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('edit-desc').focus(), 300);
+}
+function closeEditModal(){
+  document.getElementById('edit-modal-overlay').classList.remove('open');
+  _editTxId=null; _editTxType=null;
+}
+function closeEditModalOutside(e){
+  if(e.target===document.getElementById('edit-modal-overlay')) closeEditModal();
+}
+function confirmEditTx(){
+  if(!_editTxId) return;
+  const desc=document.getElementById('edit-desc').value.trim();
+  const amount=parseFloat(document.getElementById('edit-amount').value);
+  if(!desc){showToast('La descripción no puede estar vacía','var(--yellow)');return;}
+  if(!amount||amount<=0){showToast('Ingresa un monto válido','var(--yellow)');return;}
+  if(_editTxType==='debito'){
+    const d=getD();
+    const idx=d.findIndex(t=>t.id===_editTxId);
+    if(idx>=0){d[idx].desc=desc;d[idx].amount=amount;saveD(d);}
+  } else {
+    const c=getC();
+    const idx=c.findIndex(t=>t.id===_editTxId);
+    if(idx>=0){c[idx].desc=desc;c[idx].amount=amount;saveC(c);}
+  }
+  closeEditModal();
+  renderDashboard(); renderDebito(); renderHistorial();
+  showToast('✅ Gasto actualizado');
+}
+
+// ── Eliminar tx ───────────────────────────────────────────────────────────
+function deleteTx(txId, txType){
+  closeCtxMenu();
+  if(!confirm('¿Eliminar este gasto?')) return;
+  if(txType==='debito'){
+    saveD(getD().filter(t=>t.id!==txId));
+  } else {
+    saveC(getC().filter(t=>t.id!==txId));
+    // También eliminar deuda asociada si existe
+    saveDeudas(getDeudas().filter(d=>d.txId!==txId));
+  }
+  renderDashboard(); renderDebito(); renderHistorial();
+  showToast('Gasto eliminado');
+}
+
 function txHTML(t){
-  const isD=t._isDebit||t.source==='cartola';
+  const isD=t._isDebit||t.bank!==undefined&&t.cardId===undefined;
   const c=isD?null:CARDS[t.cardId];
   const color=isD?'var(--blue)':(c?.color||'#888');
   const bank=isD?(t.bank?CARDS[t.bank]?.bank||t.bank:'Cuenta Corriente'):(c?.bank||'');
   const date=new Date(t.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
   const amt=t.currency==='USD'?fmtUSD(t.amount):fmtCLP(t.amount);
-  const cuota=!isD&&t.cuotas>1?t.cuotas+' cuotas':(isD?'Debito':'Contado');
-  return`<div class="tx-item ${isD?'debito':''}">
+  const cuota=!isD&&t.cuotas>1?t.cuotas+' cuotas':(isD?'Débito':'Contado');
+  const txType=isD?'debito':'credito';
+  return`<div class="tx-item ${isD?'debito':''}" oncontextmenu="openTxMenu(event,'${t.id}','${txType}')" ontouchstart="startTxHold(event,'${t.id}','${txType}')" ontouchend="cancelTxHold()" ontouchmove="cancelTxHold()">
     <div class="tx-icon" style="background:${color}22">${getIcon(t.desc)}</div>
     <div class="tx-info"><div class="tx-name">${t.desc||'Sin descripcion'}</div><div class="tx-meta">${bank} - ${date}</div></div>
     <div class="tx-amount"><div class="amount" style="color:${isD?'var(--blue)':'var(--text)'}">${amt}</div><div class="cuotas">${cuota}</div></div>
@@ -1434,68 +1647,54 @@ const LS_SYNC='misgastos_sync_last';
 
 async function syncFromSheets(){
   // Evitar sync si ya se hizo en los últimos 15 segundos
-  const last=parseInt(localStorage.getItem(LS_SYNC)||'0');
+arseInt(localStorage.getItem(LS_SYNC)||'0');
   if(Date.now()-last < 15000) return;
+  localStorage.setItem(LS_SYNC, Date.now().toString());
   try{
-    const res=await fetch(APPS_SCRIPT_URL+'?_='+Date.now(),{cache:'no-store'});
-    if(!res.ok) return;
-    const rows=await res.json();
-    if(!rows||!rows.length) return;
-
+    const r=await fetch(APPS_SCRIPT_URL+'?action=getPending');
+    if(!r.ok) return;
+    const data=await r.json();
+    if(!data.rows||!data.rows.length) return;
+    const pendingSplits=[];
     let imported=0;
     const toasts=[];
-    const pendingSplits=[];
-
-    for(let i=0;i<rows.length;i++){
-      const r=rows[i];
-      const status=(r.status||'').toUpperCase().trim();
-      if(status!=='PENDING') continue;
-
-      const type=(r.type||'credito').toLowerCase().trim();
-      const bank=(r.bank||'bci').toLowerCase().trim();
-      const amount=parseFloat(r.amount||0);
-      const desc=(r.desc||'Gasto automatico').trim();
-      const cuotas=Math.max(1,parseInt(r.cuotas||1)||1);
-      const rawDate=(r.date||'').trim();
-      const date=rawDate?parseFecha(rawDate):new Date();
-
-      if(!amount||amount<=0) continue;
-
-      // ID único para evitar duplicados
-      const txId='sheet_'+amount+'_'+bank+'_'+(rawDate||i);
-      const yaExiste=[...getC(),...getD()].some(t=>t.id===txId);
-      if(yaExiste) continue;
-
+    for(const row of data.rows){
+      const[txId,bank,type,amount,desc,cuotas,currency,date]=row;
+      if(!txId||!amount) continue;
+      const existing=[...getC(),...getD()].find(t=>t.id===txId);
+      if(existing) continue;
       if(type==='debito'){
         const d=getD();
-        d.push({id:txId,bank,amount,desc,currency:'CLP',
-          date:(date||new Date()).toISOString(),source:'email_auto'});
+        d.push({id:txId,bank,amount:parseFloat(amount),desc,currency:'CLP',
+          date:(date?new Date(date):new Date()).toISOString(),source:'email_auto'});
         saveD(d);
-        pendingSplits.push({txId,amount,desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'});
+        pendingSplits.push({txId,amount:parseFloat(amount),desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'});
       } else {
         const d=getC();
-        d.push({id:txId,cardId:bank,amount,desc,cuotas,currency:'CLP',
-          date:(date||new Date()).toISOString(),source:'email_auto'});
+        d.push({id:txId,cardId:bank,amount:parseFloat(amount),desc,cuotas:parseInt(cuotas)||1,currency:'CLP',
+          date:(date?new Date(date):new Date()).toISOString(),source:'email_auto'});
         saveC(d);
-        pendingSplits.push({txId,amount,desc,cuotas,currency:'CLP',cardId:bank,type:'credito'});
+        pendingSplits.push({txId,amount:parseFloat(amount),desc,cuotas:parseInt(cuotas)||1,currency:'CLP',cardId:bank,type:'credito'});
       }
       imported++;
-      toasts.push({msg:desc+' — '+fmtCLP(amount),type});
+      toasts.push({msg:desc+' — '+fmtCLP(parseFloat(amount)),type});
     }
-
-    localStorage.setItem(LS_SYNC, Date.now().toString());
-
     if(imported>0){
-      renderDashboard();
-      let delay=0;
-      toasts.forEach((t)=>{
-        setTimeout(()=>showToast('📩 '+t.msg),delay);
-        delay+=3200;
+      renderDashboard(); renderDebito();
+      toasts.forEach((t,i)=>{
+        setTimeout(()=>showToast('📩 '+t.msg),i*1200);
       });
+      // Marcar como procesados
+      await fetch(APPS_SCRIPT_URL+'?action=markDone',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({ids:data.rows.map(r=>r[0])})
+      }).catch(()=>{});
+      // Abrir split modals después de todos los toasts
       if(pendingSplits.length>0){
+        const delay=toasts.length*1200+600;
         setTimeout(()=>{
-          _splitQueue=[...pendingSplits];
-          _pendingSplit=null;
+          _splitQueue=[...pendingSplits.slice(1)];
+          _pendingSplit=pendingSplits[0];
           _splitImportMode=false;
           processSplitQueue();
         }, delay);
