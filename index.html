@@ -12,7 +12,7 @@
       --bg:#0f1117;--bg2:#1a1d27;--bg3:#22263a;--accent:#6c63ff;--accent2:#a78bfa;
       --green:#34d399;--yellow:#fbbf24;--red:#f87171;--blue:#38bdf8;
       --text:#f1f5f9;--text2:#94a3b8;--border:#2d3148;--radius:16px;
-      --safe-top:env(safe-area-inset-top,44px);--safe-bot:env(safe-area-inset-bottom,34px);
+      --safe-top:env(safe-area-inset-top,44px);--safe-bot:calc(env(safe-area-inset-bottom,34px) + 12px);
     }
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
     body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100dvh;overflow-x:hidden}
@@ -197,6 +197,13 @@
     /* ── Modal editar tx ───────────────────────────────────────── */
     .edit-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:400;backdrop-filter:blur(4px);align-items:flex-end}
     .edit-modal-overlay.open{display:flex}
+    /* ── Recordatorio de pago ──────────────────────────────────── */
+    .payment-card-row{display:flex;justify-content:space-between;align-items:center;padding:12px;background:var(--bg3);border-radius:12px;margin-bottom:10px}
+    .payment-card-info{display:flex;flex-direction:column;gap:3px}
+    .payment-card-name{font-size:14px;font-weight:600}
+    .payment-card-amount{font-size:13px;color:var(--yellow)}
+    .payment-paid-btn{padding:8px 16px;background:var(--green);border:none;border-radius:8px;color:#0f1117;font-size:13px;font-weight:700;cursor:pointer}
+    .payment-paid-btn.done{background:var(--bg2);color:var(--text2);border:1px solid var(--border)}
     /* ── Deudas / División de compra ───────────────────────────── */
     .split-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:300;backdrop-filter:blur(4px);align-items:flex-end}
     .split-modal-overlay.open{display:flex}
@@ -341,6 +348,8 @@
   <div class="settings-section"><h3>Tarjetas de Crédito</h3><div class="settings-list" id="settings-cards-list"></div></div>
   <div class="settings-section"><h3>📅 Fecha de facturación por tarjeta</h3></div>
   <div style="padding:0 20px 14px" id="billing-dates-list"></div>
+  <div class="settings-section"><h3>💳 Día de vencimiento de pago</h3></div>
+  <div style="padding:0 20px 14px" id="payment-dates-list"></div>
   <div class="settings-section"><h3>Datos</h3>
     <div class="settings-list">
       <div class="settings-row" onclick="exportData()"><span class="row-label">📤 Exportar datos (JSON)</span><span class="row-val">→</span></div>
@@ -430,6 +439,17 @@
   </div>
 </div>
 
+
+<!-- RECORDATORIO DE PAGO -->
+<div class="modal-overlay" id="payment-reminder-overlay" onclick="closePaymentReminderOutside(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>💳 Recordatorio de pago</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Tienes tarjetas con saldo del ciclo anterior pendientes de pago.</p>
+    <div id="payment-reminder-list"></div>
+    <button class="btn-cancel" style="width:100%;margin-top:8px" onclick="closePaymentReminder()">Cerrar</button>
+  </div>
+</div>
 
 <!-- EDIT TX MODAL -->
 <div class="edit-modal-overlay" id="edit-modal-overlay" onclick="closeEditModalOutside(event)">
@@ -1220,23 +1240,39 @@ function unmarkDebtPaid(id){
 
 function getBillingDates(){try{return JSON.parse(localStorage.getItem('misgastos_billing_dates')||'{}')}catch{return{}}}
 function saveBillingDates(d){localStorage.setItem('misgastos_billing_dates',JSON.stringify(d))}
+function getPaymentDates(){try{return JSON.parse(localStorage.getItem('misgastos_payment_dates')||'{}')}catch{return{}}}
+function savePaymentDates(d){localStorage.setItem('misgastos_payment_dates',JSON.stringify(d))}
+function getPaidFlags(){try{return JSON.parse(localStorage.getItem('misgastos_paid_flags')||'{}')}catch{return{}}}
+function savePaidFlags(d){localStorage.setItem('misgastos_paid_flags',JSON.stringify(d))}
 
 function renderAjustes(){
   document.getElementById('settings-cards-list').innerHTML=Object.values(CARDS).map(c=>`<div class="settings-row"><span class="row-label">${c.emoji} ${c.bank} ${c.num}</span><span class="row-val">${fmtCLP(c.limitCLP)}</span></div>`).join('');
-  // Fechas de facturación
-  const billing=getBillingDates();
   const tarjetas=[
     {id:'bci',label:'💳 BCI'},
     {id:'bchile',label:'💳 Banco Chile'},
     {id:'scotia',label:'💳 Scotiabank'},
   ];
+  // Fechas de facturación
+  const billing=getBillingDates();
   document.getElementById('billing-dates-list').innerHTML=tarjetas.map(t=>`
     <div class="settings-row" style="align-items:center;gap:10px">
       <span class="row-label" style="flex:1">${t.label}</span>
       <span style="font-size:12px;color:var(--text2)">Día de cierre:</span>
-      <input type="number" min="1" max="31" inputmode="numeric" pattern="[0-9]*" value="${billing[t.id]||1}"
+      <input type="number" min="1" max="31" inputmode="numeric" pattern="[0-9]*" value="${billing[t.id]||19}"
         style="width:52px;text-align:center;padding:6px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"
-        onblur="updateBillingDate('${t.id}',this.value||'1');this.value=getBillingDates()['${t.id}']||1"
+        onblur="updateBillingDate('${t.id}',this.value||'19');this.value=getBillingDates()['${t.id}']||19"
+        onkeydown="if(event.key==='Enter'){this.blur()}"
+      />
+    </div>`).join('');
+  // Días de vencimiento de pago
+  const payment=getPaymentDates();
+  document.getElementById('payment-dates-list').innerHTML=tarjetas.map(t=>`
+    <div class="settings-row" style="align-items:center;gap:10px">
+      <span class="row-label" style="flex:1">${t.label}</span>
+      <span style="font-size:12px;color:var(--text2)">Día de pago:</span>
+      <input type="number" min="1" max="31" inputmode="numeric" pattern="[0-9]*" value="${payment[t.id]||5}"
+        style="width:52px;text-align:center;padding:6px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"
+        onblur="updatePaymentDate('${t.id}',this.value||'5');this.value=getPaymentDates()['${t.id}']||5"
         onkeydown="if(event.key==='Enter'){this.blur()}"
       />
     </div>`).join('');
@@ -1247,6 +1283,64 @@ function updateBillingDate(cardId, val){
   d[cardId]=Math.min(31,Math.max(1,parseInt(val)||1));
   saveBillingDates(d);
   showToast('Fecha de cierre actualizada');
+}
+function updatePaymentDate(cardId, val){
+  const d=getPaymentDates();
+  d[cardId]=Math.min(31,Math.max(1,parseInt(val)||1));
+  savePaymentDates(d);
+  showToast('Día de pago actualizado');
+}
+
+// ── Recordatorio de pago ──────────────────────────────────────────────────
+function checkPaymentReminder(){
+  const now=new Date();
+  const day=now.getDate();
+  const monthKey=`${now.getFullYear()}-${now.getMonth()+1}`;
+  const payDates=getPaymentDates();
+  const paidFlags=getPaidFlags();
+  // Ver si alguna tarjeta tiene saldo del ciclo anterior y está dentro del período de pago
+  const pendientes=Object.values(CARDS).filter(c=>{
+    const payDay=payDates[c.id]||5;
+    if(day>payDay) return false; // ya pasó el día de pago
+    const flagKey=`${c.id}_${monthKey}`;
+    if(paidFlags[flagKey]) return false; // ya marcó como pagado
+    // Verificar si tiene saldo en ciclo anterior
+    const prevTxs=getPrevCycleTxs(c.id);
+    const saldo=prevTxs.filter(t=>t.currency==='CLP').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0);
+    return saldo>0;
+  });
+  if(!pendientes.length) return;
+  const monthKey2=monthKey;
+  const payDates2=getPaymentDates();
+  document.getElementById('payment-reminder-list').innerHTML=pendientes.map(c=>{
+    const prevTxs=getPrevCycleTxs(c.id);
+    const saldo=prevTxs.filter(t=>t.currency==='CLP').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0);
+    const payDay=payDates2[c.id]||5;
+    return`<div class="payment-card-row">
+      <div class="payment-card-info">
+        <span class="payment-card-name">${c.emoji} ${c.bank}</span>
+        <span class="payment-card-amount">${fmtCLP(saldo)} · vence día ${payDay}</span>
+      </div>
+      <button class="payment-paid-btn" id="paid-btn-${c.id}" onclick="markAsPaid('${c.id}','${monthKey2}')">✓ Pagué</button>
+    </div>`;
+  }).join('');
+  document.getElementById('payment-reminder-overlay').classList.add('open');
+}
+function markAsPaid(cardId, monthKey){
+  const flags=getPaidFlags();
+  flags[`${cardId}_${monthKey}`]=true;
+  savePaidFlags(flags);
+  const btn=document.getElementById(`paid-btn-${cardId}`);
+  if(btn){btn.textContent='✓ Listo';btn.className='payment-paid-btn done';btn.disabled=true;}
+  // Si todos están marcados, cerrar
+  const allDone=[...document.querySelectorAll('.payment-paid-btn')].every(b=>b.disabled);
+  if(allDone) setTimeout(closePaymentReminder, 800);
+}
+function closePaymentReminder(){
+  document.getElementById('payment-reminder-overlay').classList.remove('open');
+}
+function closePaymentReminderOutside(e){
+  if(e.target===document.getElementById('payment-reminder-overlay')) closePaymentReminder();
 }
 
 // ── Menú contextual (long press / right click) ────────────────────────────
@@ -1330,8 +1424,12 @@ function confirmEditTx(){
     const idx=c.findIndex(t=>t.id===_editTxId);
     if(idx>=0){c[idx].desc=desc;c[idx].amount=amount;saveC(c);}
   }
+  // Actualizar descripción en la deuda asociada si existe
+  const deudas=getDeudas();
+  const dIdx=deudas.findIndex(d=>d.txId===_editTxId);
+  if(dIdx>=0){deudas[dIdx].desc=desc;saveDeudas(deudas);}
   closeEditModal();
-  renderDashboard(); renderDebito(); renderHistorial();
+  renderDashboard(); renderDebito(); renderHistorial(); renderDeudas();
   showToast('✅ Gasto actualizado');
 }
 
@@ -1627,142 +1725,31 @@ window.parseEmailBCIDebito=function(body){
   const fm=body.match(/Fecha\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
   if(!mm) return null;
   const amount=parseFloat(mm[1].replace(/\./g,'').replace(',','.'));
-  const desc=(cm?cm[1].trim():'Débito BCI');
+  const desc=cm?cm[1].trim():'BCI Débito';
   const date=fm?parseFecha(fm[1]):new Date();
-  const tx={
-    id:Date.now().toString(), bank:'bci', amount, desc,
-    currency:'CLP', date:(date||new Date()).toISOString(), source:'shortcut'
-  };
-  const d=getD(); d.push(tx); saveD(d); renderDashboard(); return'OK';
+  const txId='bci_deb_'+Date.now();
+  const d=getD();
+  d.push({id:txId,bank:'bci',amount,desc,currency:'CLP',
+    date:(date||new Date()).toISOString(),source:'shortcut'});
+  saveD(d);
+  renderDashboard(); renderDebito();
+  return 'OK';
 };
 
-function copyApiInfo(){
-  navigator.clipboard.writeText(
-    '// BCI Crédito\nwindow.parseEmailBCI(emailBody);\n\n'+
-    '// BCI Débito\nwindow.parseEmailBCIDebito(emailBody);\n\n'+
-    '// Banco Chile Crédito\nwindow.parseEmailBancoChile(emailBody);\n\n'+
-    '// Manual crédito\nwindow.addExpenseFromShortcut(\'bci\', 52900, \'COMERCIO\', 1, \'CLP\');'
-  )
-    .then(()=>showToast('Codigo copiado'));
-}
-function exportData(){
-  const blob=new Blob([JSON.stringify({credito:getC(),debito:getD(),sueldo:getSueldo()},null,2)],{type:'application/json'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='misgastos_'+new Date().toISOString().slice(0,10)+'.json';
-  a.click();
-  showToast('Datos exportados');
-}
-function clearData(){
-  if(
-confirm('Borrar TODOS los gastos? No se puede deshacer.')){
-    localStorage.removeItem(LS_C);localStorage.removeItem(LS_D);
-    renderDashboard();showToast('Datos eliminados','var(--red)');
-  }
-}
-function showToast(msg,color){
-  color=color||'var(--green)';
-  const t=document.getElementById('toast');
-  t.textContent=msg;t.style.background=color;
-  t.style.color=color==='var(--green)'?'#0f1117':'white';
-  t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
-}
-// ── Sincronización desde Google Apps Script API ───────────────────────────────
-const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbwxWhRJehKodrfiPFu5iG6gwaMq2JtX6sRwm5ngKTjduB2v6W2d14p-WD9mF4swUoFj/exec';
-const LS_SYNC='misgastos_sync_last';
-
-async function syncFromSheets(){
-  // Evitar sync si ya se hizo en los últimos 15 segundos
-arseInt(localStorage.getItem(LS_SYNC)||'0');
-  if(Date.now()-last < 15000) return;
-  localStorage.setItem(LS_SYNC, Date.now().toString());
-  try{
-    const r=await fetch(APPS_SCRIPT_URL+'?action=getPending');
-    if(!r.ok) return;
-    const data=await r.json();
-    if(!data.rows||!data.rows.length) return;
-    const pendingSplits=[];
-    let imported=0;
-    const toasts=[];
-    for(const row of data.rows){
-      const[txId,bank,type,amount,desc,cuotas,currency,date]=row;
-      if(!txId||!amount) continue;
-      const existing=[...getC(),...getD()].find(t=>t.id===txId);
-      if(existing) continue;
-      if(type==='debito'){
-        const d=getD();
-        d.push({id:txId,bank,amount:parseFloat(amount),desc,currency:'CLP',
-          date:(date?new Date(date):new Date()).toISOString(),source:'email_auto'});
-        saveD(d);
-        pendingSplits.push({txId,amount:parseFloat(amount),desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'});
-      } else {
-        const d=getC();
-        d.push({id:txId,cardId:bank,amount:parseFloat(amount),desc,cuotas:parseInt(cuotas)||1,currency:'CLP',
-          date:(date?new Date(date):new Date()).toISOString(),source:'email_auto'});
-        saveC(d);
-        pendingSplits.push({txId,amount:parseFloat(amount),desc,cuotas:parseInt(cuotas)||1,currency:'CLP',cardId:bank,type:'credito'});
-      }
-      imported++;
-      toasts.push({msg:desc+' — '+fmtCLP(parseFloat(amount)),type});
-    }
-    if(imported>0){
-      renderDashboard(); renderDebito();
-      toasts.forEach((t,i)=>{
-        setTimeout(()=>showToast('📩 '+t.msg),i*1200);
-      });
-      // Marcar como procesados
-      await fetch(APPS_SCRIPT_URL+'?action=markDone',{method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({ids:data.rows.map(r=>r[0])})
-      }).catch(()=>{});
-      // Abrir split modals después de todos los toasts
-      if(pendingSplits.length>0){
-        const delay=toasts.length*1200+600;
-        setTimeout(()=>{
-          _splitQueue=[...pendingSplits.slice(1)];
-          _pendingSplit=pendingSplits[0];
-          _splitImportMode=false;
-          processSplitQueue();
-        }, delay);
-      }
-    }
-  }catch(e){
-    console.warn('syncFromSheets error:',e);
-  }
-}
-
-function handleURLParams(){
-  const p=new URLSearchParams(window.location.search);
-  if(!p.has('amount')) return;
-  const amount=parseFloat(p.get('amount')||0);
-  const desc=decodeURIComponent(p.get('desc')||'Gasto automatico');
-  const type=p.get('type')||'credito';
-  const bank=p.get('bank')||'bci';
-  const cuotas=parseInt(p.get('cuotas')||1);
-  const currency=p.get('currency')||'CLP';
-  const rawDate=p.get('date');
-  const date=rawDate?parseFecha(rawDate):new Date();
-  if(!amount||amount<=0) return;
-  if(type==='debito'){
-    const tx={id:Date.now().toString(),bank,amount,desc,currency,
-      date:(date||new Date()).toISOString(),source:'shortcut'};
-    const d=getD(); d.push(tx); saveD(d);
-  } else {
-    const tx={id:Date.now().toString(),cardId:bank,amount,desc,cuotas,currency,
-      date:(date||new Date()).toISOString(),source:'shortcut'};
-    const d=getC(); d.push(tx); saveC(d);
-  }
-  window.history.replaceState({},'',window.location.pathname);
-  setTimeout(()=>showToast('✅ '+desc+' registrado'),600);
-}
-
-document.addEventListener('DOMContentLoaded',function(){
-  renderDashboard();renderAjustes();
-  handleURLParams();
-  syncFromSheets();
-  document.addEventListener('visibilitychange',function(){
+// ── Init ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function(){
+  showPage('dashboard');
+  renderAjustes();
+  // Verificar recordatorio de pago al abrir
+  setTimeout(checkPaymentReminder, 1000);
+  // Sync automático
+  setInterval(function(){
+    if(document.visibilityState==='visible') syncFromSheets();
+  }, 15000);
+  document.addEventListener('visibilitychange', function(){
     if(document.visibilityState==='visible') syncFromSheets();
   });
+  syncFromSheets();
 });
 </script>
 </body>
