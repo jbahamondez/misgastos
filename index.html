@@ -421,6 +421,8 @@
     <input type="number" id="m-amount" placeholder="Ej: 52900" inputmode="decimal" />
     <label>Comercio / Descripcion</label>
     <input type="text" id="m-desc" placeholder="Ej: TICKETMASTER" />
+    <label>Fecha</label>
+    <input type="date" id="m-date" />
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
       <button class="btn-save"   onclick="saveExpense()">Guardar</button>
@@ -1363,8 +1365,22 @@ function switchModalTab(tab){
   document.getElementById('fields-credito').style.display=tab==='credito'?'':'none';
   document.getElementById('fields-debito').style.display=tab==='debito'?'':'none';
 }
-function openModal(){document.getElementById('modal-overlay').classList.add('open');setTimeout(()=>document.getElementById('m-amount').focus(),300);}
-function closeModal(){document.getElementById('modal-overlay').classList.remove('open');document.getElementById('m-amount').value='';document.getElementById('m-desc').value='';}
+function openModal(){
+  // Fecha de hoy en formato YYYY-MM-DD que requiere input type=date
+  const hoy=new Date();
+  const yyyy=hoy.getFullYear();
+  const mm=String(hoy.getMonth()+1).padStart(2,'0');
+  const dd=String(hoy.getDate()).padStart(2,'0');
+  document.getElementById('m-date').value=`${yyyy}-${mm}-${dd}`;
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('m-amount').focus(),300);
+}
+function closeModal(){
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('m-amount').value='';
+  document.getElementById('m-desc').value='';
+  document.getElementById('m-date').value='';
+}
 function closeModalOutside(e){if(e.target===document.getElementById('modal-overlay'))closeModal();}
 
 // Pending split data
@@ -1386,26 +1402,27 @@ function saveExpense(){
   const amount=parseFloat(document.getElementById('m-amount').value);
   const desc=(document.getElementById('m-desc').value.trim())||'Sin descripcion';
   if(!amount||amount<=0){showToast('Ingresa un monto valido','var(--yellow)');return}
+  // Fecha: usar la del campo, o hoy si está vacío
+  const dateVal=document.getElementById('m-date').value;
+  const txDate=dateVal?new Date(dateVal+'T12:00:00').toISOString():new Date().toISOString();
   if(modalTab==='credito'){
     const cardId=document.getElementById('m-card').value;
     const cuotas=parseInt(document.getElementById('m-cuotas').value);
     const currency=document.getElementById('m-currency').value;
     const txId=Date.now().toString();
     const d=getC();
-    d.push({id:txId,cardId,amount,desc,cuotas,currency,date:new Date().toISOString(),source:'manual'});
+    d.push({id:txId,cardId,amount,desc,cuotas,currency,date:txDate,source:'manual'});
     saveC(d);
     closeModal(); renderDashboard();
-    // Offer to split
     _pendingSplit={txId,amount,desc,cuotas,currency,cardId};
     openSplitModal(_pendingSplit);
   }else{
     const bank=document.getElementById('m-debit-bank').value;
     const txId=Date.now().toString();
     const d=getD();
-    d.push({id:txId,bank,amount,desc,currency:'CLP',date:new Date().toISOString(),source:'manual'});
+    d.push({id:txId,bank,amount,desc,currency:'CLP',date:txDate,source:'manual'});
     saveD(d);
     closeModal(); renderDashboard();
-    // Offer to split (igual que crédito)
     _pendingSplit={txId,amount,desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'};
     openSplitModal(_pendingSplit);
   }
