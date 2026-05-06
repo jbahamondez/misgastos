@@ -372,6 +372,11 @@
   <div style="margin:14px 20px 0" id="deudas-summary-box-wrap">
     <div class="deuda-summary-box" id="deudas-summary-box"></div>
   </div>
+  <div style="margin:10px 20px 0;text-align:right">
+    <button onclick="compartirResumenDeudas()" style="background:var(--accent2);color:#fff;border:none;border-radius:20px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+      📤 Compartir resumen
+    </button>
+  </div>
   <div id="deudas-content" style="padding-bottom:14px"></div>
 </div>
 
@@ -1218,6 +1223,36 @@ function renderDeudas(){
 }
 function setDeudasDateFilter(id){activeDeudasDateFilter=id;renderDeudas();}
 function setDeudasStatusFilter(id){activeDeudasStatusFilter=id;renderDeudas();}
+function compartirResumenDeudas(){
+  const todas=getDeudas();
+  const pendientes=todas.filter(d=>!d.paid);
+  if(!pendientes.length){showToast('No hay deudas pendientes','var(--yellow)');return;}
+  // Group by person
+  const byPerson={};
+  pendientes.forEach(d=>{if(!byPerson[d.person])byPerson[d.person]=[];byPerson[d.person].push(d);});
+  const now=new Date();
+  const mes=now.toLocaleDateString('es-CL',{month:'long',year:'numeric'});
+  const mesLabel=mes.charAt(0).toUpperCase()+mes.slice(1);
+  let lines=[];
+  Object.entries(byPerson).forEach(([person,items])=>{
+    const total=items.reduce((s,i)=>s+i.deudaTotal,0);
+    lines.push('📋 Resumen '+mesLabel+' — '+person);
+    lines.push('─────────────────────');
+    items.sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(i=>{
+      const cuotaStr=i.cuotas>1?' ('+i.cuotas+' cuotas)':'';
+      const totalStr=i.cuotas>1?' de '+fmtCLP(i.totalAmount):'';
+      lines.push('• '+i.desc.toUpperCase()+' — '+fmtCLP(i.deudaTotal)+totalStr+cuotaStr);
+    });
+    lines.push('Total que me debes: '+fmtCLP(total));
+    lines.push('');
+  });
+  const text=lines.join('\n').trim();
+  if(navigator.share){
+    navigator.share({text}).catch(()=>{});
+  } else {
+    navigator.clipboard.writeText(text).then(()=>showToast('✅ Copiado al portapapeles')).catch(()=>showToast('No se pudo copiar','var(--yellow)'));
+  }
+}
 
 function markDebtPaid(id){
   const ds=getDeudas();
