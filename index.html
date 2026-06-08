@@ -367,7 +367,8 @@
   </div>
   <div class="settings-section"><h3>Datos</h3>
     <div class="settings-list">
-      <div class="settings-row" onclick="exportData()"><span class="row-label">📤 Exportar datos (JSON)</span><span class="row-val">→</span></div>
+      <div class="settings-row" onclick="exportData()"><span class="row-label">📤 Exportar respaldo (JSON)</span><span class="row-val">→</span></div>
+      <div class="settings-row" onclick="importData()"><span class="row-label">📥 Importar respaldo (JSON)</span><span class="row-val">→</span></div>
       <div class="settings-row" onclick="clearData()"><span class="row-label" style="color:var(--red)">🗑️ Borrar todos los gastos</span><span class="row-val">→</span></div>
     </div>
   </div>
@@ -2004,12 +2005,33 @@ function copyApiInfo(){
     .then(()=>showToast('Codigo copiado'));
 }
 function exportData(){
-  const blob=new Blob([JSON.stringify({credito:getC(),debito:getD(),sueldo:getSueldo()},null,2)],{type:'application/json'});
+  const backup={};
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);backup[k]=localStorage.getItem(k);}
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='misgastos_'+new Date().toISOString().slice(0,10)+'.json';
+  a.download='misgastos_backup_'+new Date().toISOString().slice(0,10)+'.json';
   a.click();
-  showToast('Datos exportados');
+  showToast('Respaldo completo exportado ✓');
+}
+function importData(){
+  const input=document.createElement('input');
+  input.type='file';input.accept='.json';
+  input.onchange=function(e){
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        const backup=JSON.parse(ev.target.result);
+        if(!confirm('Esto reemplazará todos tus datos actuales con el respaldo. ¿Continuar?'))return;
+        Object.keys(backup).forEach(k=>localStorage.setItem(k,backup[k]));
+        showToast('Respaldo restaurado ✓');
+        setTimeout(()=>location.reload(),1500);
+      }catch(err){showToast('Error al leer el archivo','var(--red)');}
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 function clearData(){
   if(
