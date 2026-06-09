@@ -561,7 +561,7 @@
     </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeSplitModal()">No dividir</button>
-      <button class="btn-save" onclick="confirmSplit()">Dividir 50/50</button>
+      <button class="btn-save" id="btn-confirm-split" onclick="confirmSplit()">Dividir</button>
     </div>
     <div id="split-import-actions" style="display:none;margin-top:10px;display:none">
       <div style="text-align:center;font-size:11px;color:var(--text2);margin-bottom:8px">Aplicar a todos los gastos restantes:</div>
@@ -1821,25 +1821,36 @@ function saveExpense(){
 }
 
 // ── Split modal logic ──────────────────────────────────────────────────────
-let _splitSelectedPerson=null;
+let _splitSelectedPersons=[];
 
-function openSplitModal(split){
-  _splitSelectedPerson=getPersonas()[0]||'Mi pareja';
-  // Preview
+function updateSplitPreview(){
+  if(!_pendingSplit) return;
+  const split=_pendingSplit;
   const esDebito=(split.type||'credito')==='debito';
   const cuotas=esDebito?1:Math.max(1,split.cuotas||1);
   const cuotaAmt=split.amount/cuotas;
-  const myShare=cuotaAmt/2;
-  const theirShare=cuotaAmt/2;
+  const n=_splitSelectedPersons.length;
+  const total=n+1;
+  const userShare=cuotaAmt/total;
+  const personShare=cuotaAmt/total;
   const tipoLabel=esDebito?'💳 Débito':'💳 Crédito';
+  const splitLabel=total===2?'50%':'1/'+total;
   document.getElementById('split-preview-box').innerHTML=`
     <div class="sp-row"><span class="sp-label">${tipoLabel}</span><span class="sp-val" style="font-size:0.8em;opacity:0.7">${split.desc}</span></div>
     <div class="sp-row"><span class="sp-label">Monto total</span><span class="sp-val">${fmtCLP(split.amount)}${!esDebito&&cuotas>1?' ('+cuotas+' cuotas)':''}</span></div>
     ${!esDebito&&cuotas>1?`<div class="sp-row"><span class="sp-label">Cuota mensual</span><span class="sp-val yellow">${fmtCLP(cuotaAmt)}</span></div>`:''}
-    <div class="sp-row"><span class="sp-label">Tu parte (50%)</span><span class="sp-val green">${fmtCLP(myShare)}</span></div>
-    <div class="sp-row"><span class="sp-label">Lo que te deben</span><span class="sp-val" style="color:var(--accent2)">${fmtCLP(theirShare)}</span></div>`;
-  // Person chips
+    <div class="sp-row"><span class="sp-label">Tu parte (${splitLabel})</span><span class="sp-val green">${fmtCLP(userShare)}</span></div>
+    ${n>0?`<div class="sp-row"><span class="sp-label">Cada persona debe${n>1?' (c/u)':''}</span><span class="sp-val" style="color:var(--accent2)">${fmtCLP(personShare)}</span></div>`:''}
+    ${n>1?`<div class="sp-row"><span class="sp-label">Total a cobrar (${n} personas)</span><span class="sp-val" style="color:var(--accent2)">${fmtCLP(personShare*n)}</span></div>`:''}`;
+  const btn=document.getElementById('btn-confirm-split');
+  if(btn) btn.textContent=n===0?'Dividir':total===2?'Dividir 50/50':'Dividir en '+total;
+}
+
+function openSplitModal(split){
+  const primero=getPersonas()[0]||'Mi pareja';
+  _splitSelectedPersons=[primero];
   renderPersonChips();
+  updateSplitPreview();
   document.getElementById('split-new-person').value='';
   // Mostrar botones "Aplicar a todos/ninguno" solo en modo importación y si hay más de 1 en cola
   const importActions=document.getElementById('split-import-actions');
@@ -1852,29 +1863,31 @@ function openSplitModal(split){
 }
 
 function splitApplyAll(){
-  // Dividir este + todos los restantes en la cola
   confirmSplit();
-  // Ahora dividir todos los que quedan en cola automáticamente con la misma persona
-  const persona=_splitSelectedPerson||getPersonas()[0];
+  const personas=_splitSelectedPersons.length?_splitSelectedPersons:[getPersonas()[0]||'Mi pareja'];
+  const totalParticipants=personas.length+1;
   while(_splitQueue.length>0){
     const item=_splitQueue.shift();
     const cuotasR=(item.type||'credito')==='debito'?1:Math.max(1,item.cuotas||1);
-    const deudaAmt=(item.amount/cuotasR)/2;
-    // Actualizar monto en crédito
+    const cuotaAmt=item.amount/cuotasR;
+    const personShare=cuotaAmt/totalParticipants;
+    const userTotal=(cuotaAmt/totalParticipants)*cuotasR;
     const credData=getC();
     const idx=credData.findIndex(t=>t.id===item.txId);
-    if(idx>=0){credData[idx].amount=item.amount/2;credData[idx].splitWith=persona;credData[idx].splitTotal=item.amount;saveC(credData);}
-    // Crear deuda
-    const deuda={id:'deu_'+Date.now()+'_'+item.txId,person:persona,txId:item.txId,desc:item.desc,
-      totalAmount:item.amount,cuotas:item.cuotas||1,deudaPerCuota:deudaAmt,
-      deudaTotal:deudaAmt*(item.cuotas||1),currency:item.currency||'CLP',
-      date:item.txDate||new Date().toISOString(),paid:false,paidDate:null};
-    const ds=getDeudas();ds.push(deuda);saveDeudas(ds);
+    if(idx>=0){credData[idx].amount=userTotal;credData[idx].splitWith=personas.join(', ');credData[idx].splitTotal=item.amount;saveC(credData);}
+    const ds=getDeudas();
+    personas.forEach(persona=>{
+      ds.push({id:'deu_'+Date.now()+'_'+Math.random().toString(36).slice(2),
+        person:persona,txId:item.txId,desc:item.desc,
+        type:(item.type||'credito'),totalAmount:item.amount,cuotas:cuotasR,
+        deudaPerCuota:personShare,deudaTotal:personShare*cuotasR,
+        currency:item.currency||'CLP',date:item.txDate||new Date().toISOString(),paid:false,paidDate:null});
+    });
+    saveDeudas(ds);
   }
-  _splitImportMode=false;
-  _splitQueue=[];
+  _splitImportMode=false;_splitQueue=[];
   renderDashboard();
-  showToast('✅ Todos los gastos divididos con '+persona);
+  showToast('✅ Todos los gastos divididos en '+(totalParticipants)+' con '+personas.join(' y '));
 }
 
 function splitApplyNone(){
@@ -1889,13 +1902,16 @@ function splitApplyNone(){
 function renderPersonChips(){
   const personas=getPersonas();
   document.getElementById('person-chips').innerHTML=personas.map(p=>
-    `<button class="person-chip ${p===_splitSelectedPerson?'active':''}" onclick="selectPerson('${p.replace(/'/g,"\\'")}')">👤 ${p}</button>`
+    `<button class="person-chip ${_splitSelectedPersons.includes(p)?'active':''}" onclick="selectPerson('${p.replace(/'/g,"\\'")}')">👤 ${p}</button>`
   ).join('');
 }
 
 function selectPerson(name){
-  _splitSelectedPerson=name;
+  const idx=_splitSelectedPersons.indexOf(name);
+  if(idx>=0) _splitSelectedPersons.splice(idx,1);
+  else _splitSelectedPersons.push(name);
   renderPersonChips();
+  updateSplitPreview();
 }
 
 function closeSplitModal(){
@@ -1913,64 +1929,58 @@ function closeSplitOutside(e){if(e.target===document.getElementById('split-modal
 
 function confirmSplit(){
   if(!_pendingSplit)return;
-  // Add new person if typed
   const newP=document.getElementById('split-new-person').value.trim();
   if(newP){
     const ps=getPersonas();
     if(!ps.includes(newP)){ps.push(newP);savePersonas(ps);}
-    _splitSelectedPerson=newP;
+    if(!_splitSelectedPersons.includes(newP)) _splitSelectedPersons.push(newP);
   }
-  if(!_splitSelectedPerson){showToast('Selecciona una persona','var(--yellow)');return}
+  if(!_splitSelectedPersons.length){showToast('Selecciona al menos una persona','var(--yellow)');return}
 
   const {txId,amount,desc,cuotas,currency,type,txDate}=_pendingSplit;
   const esDebito=(type||'credito')==='debito';
   const cuotasReal=esDebito?1:Math.max(1,cuotas||1);
+  const totalParticipants=_splitSelectedPersons.length+1;
   const cuotaAmt=amount/cuotasReal;
-  const deudaAmt=cuotaAmt/2; // their share per month
+  const userSharePerCuota=cuotaAmt/totalParticipants;
+  const personSharePerCuota=cuotaAmt/totalParticipants;
+  const userTotal=userSharePerCuota*cuotasReal;
 
-  // Update original transaction to only register user's 50%
+  // Actualizar monto del gasto original al share del usuario
   if(esDebito){
     const debitData=getD();
     const txIdx=debitData.findIndex(t=>t.id===txId);
-    if(txIdx>=0){
-      debitData[txIdx].amount=amount/2;
-      debitData[txIdx].splitWith=_splitSelectedPerson;
-      debitData[txIdx].splitTotal=amount;
-      saveD(debitData);
-    }
+    if(txIdx>=0){debitData[txIdx].amount=userTotal;debitData[txIdx].splitWith=_splitSelectedPersons.join(', ');debitData[txIdx].splitTotal=amount;saveD(debitData);}
   } else {
     const credData=getC();
     const txIdx=credData.findIndex(t=>t.id===txId);
-    if(txIdx>=0){
-      credData[txIdx].amount=amount/2; // user pays half
-      credData[txIdx].splitWith=_splitSelectedPerson;
-      credData[txIdx].splitTotal=amount;
-      saveC(credData);
-    }
+    if(txIdx>=0){credData[txIdx].amount=userTotal;credData[txIdx].splitWith=_splitSelectedPersons.join(', ');credData[txIdx].splitTotal=amount;saveC(credData);}
   }
 
-  // Register debt
-  const deuda={
-    id:'deu_'+Date.now(),
-    person:_splitSelectedPerson,
-    txId,
-    desc,
-    type:esDebito?'debito':'credito',
-    totalAmount:amount,
-    cuotas:cuotas||1,
-    deudaPerCuota:deudaAmt,
-    deudaTotal:deudaAmt*(cuotas||1),
-    currency:currency||'CLP',
-    date:txDate||new Date().toISOString(),
-    paid:false,
-    paidDate:null
-  };
-  const ds=getDeudas(); ds.push(deuda); saveDeudas(ds);
+  // Crear una deuda por cada persona
+  const ds=getDeudas();
+  _splitSelectedPersons.forEach(person=>{
+    ds.push({
+      id:'deu_'+Date.now()+'_'+Math.random().toString(36).slice(2),
+      person,txId,desc,
+      type:esDebito?'debito':'credito',
+      totalAmount:amount,
+      cuotas:cuotasReal,
+      deudaPerCuota:personSharePerCuota,
+      deudaTotal:personSharePerCuota*cuotasReal,
+      currency:currency||'CLP',
+      date:txDate||new Date().toISOString(),
+      paid:false,paidDate:null
+    });
+  });
+  saveDeudas(ds);
 
   document.getElementById('split-modal-overlay').classList.remove('open');
   _pendingSplit=null;
   renderDashboard();
-  showToast('💜 Dividido con '+_splitSelectedPerson+' — te deben '+fmtCLP(deudaAmt)+'/cuota');
+  const n=_splitSelectedPersons.length;
+  const names=_splitSelectedPersons.join(' y ');
+  showToast('💜 Dividido en '+(n+1)+' con '+names+' — '+fmtCLP(personSharePerCuota)+'/cuota c/u');
   // Procesar siguiente en cola si hay más
   if(_splitQueue.length>0){
     setTimeout(processSplitQueue, 800);
