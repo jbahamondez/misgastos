@@ -1801,7 +1801,7 @@ function saveExpense(){
     d.push({id:txId,cardId,amount,desc,cuotas,currency,date:txDate,source:'manual',catId});
     saveC(d);
     closeModal(); renderDashboard();
-    _pendingSplit={txId,amount,desc,cuotas,currency,cardId};
+    _pendingSplit={txId,amount,desc,cuotas,currency,cardId,txDate};
     openSplitModal(_pendingSplit);
   }else{
     const bank=document.getElementById('m-debit-bank').value;
@@ -1811,7 +1811,7 @@ function saveExpense(){
     d.push({id:txId,bank,amount,desc,currency:'CLP',date:txDate,source:'manual',catId});
     saveD(d);
     closeModal(); renderDashboard();
-    _pendingSplit={txId,amount,desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'};
+    _pendingSplit={txId,amount,desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito',txDate};
     openSplitModal(_pendingSplit);
   }
 }
@@ -1864,7 +1864,7 @@ function splitApplyAll(){
     const deuda={id:'deu_'+Date.now()+'_'+item.txId,person:persona,txId:item.txId,desc:item.desc,
       totalAmount:item.amount,cuotas:item.cuotas||1,deudaPerCuota:deudaAmt,
       deudaTotal:deudaAmt*(item.cuotas||1),currency:item.currency||'CLP',
-      date:new Date().toISOString(),paid:false,paidDate:null};
+      date:item.txDate||new Date().toISOString(),paid:false,paidDate:null};
     const ds=getDeudas();ds.push(deuda);saveDeudas(ds);
   }
   _splitImportMode=false;
@@ -1918,7 +1918,7 @@ function confirmSplit(){
   }
   if(!_splitSelectedPerson){showToast('Selecciona una persona','var(--yellow)');return}
 
-  const {txId,amount,desc,cuotas,currency,type}=_pendingSplit;
+  const {txId,amount,desc,cuotas,currency,type,txDate}=_pendingSplit;
   const esDebito=(type||'credito')==='debito';
   const cuotasReal=esDebito?1:Math.max(1,cuotas||1);
   const cuotaAmt=amount/cuotasReal;
@@ -1957,7 +1957,7 @@ function confirmSplit(){
     deudaPerCuota:deudaAmt,
     deudaTotal:deudaAmt*(cuotas||1),
     currency:currency||'CLP',
-    date:new Date().toISOString(),
+    date:txDate||new Date().toISOString(),
     paid:false,
     paidDate:null
   };
