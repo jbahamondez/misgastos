@@ -543,6 +543,7 @@
     <input type="number" id="edit-amount" placeholder="Ej: 52900" inputmode="decimal" />
     <label>Categoría</label>
     <select id="edit-cat" style="padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;width:100%"></select>
+    <div id="edit-split-section" style="margin:14px 0 0"></div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeEditModal()">Cancelar</button>
       <button class="btn-save" onclick="confirmEditTx()">Guardar</button>
@@ -1690,6 +1691,20 @@ function openEditModal(txId, txType){
   document.getElementById('edit-desc').value=tx.desc||'';
   document.getElementById('edit-amount').value=tx.amount||'';
   populateCatSelect('edit-cat', tx.catId||'');
+  const splitSection=document.getElementById('edit-split-section');
+  if(tx.splitWith){
+    splitSection.innerHTML=`
+      <div style="background:var(--bg3);border-radius:10px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:2px">Dividido con</div>
+          <div style="font-size:13px;font-weight:600">👤 ${tx.splitWith}</div>
+        </div>
+        <button onclick="revertSplit()" style="padding:7px 13px;border-radius:8px;border:1px solid var(--red);background:transparent;color:var(--red);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap">Revertir a mío</button>
+      </div>`;
+  } else {
+    splitSection.innerHTML=`
+      <button onclick="splitExistingTx()" style="width:100%;padding:11px;border-radius:10px;border:1px dashed var(--accent2);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Dividir este gasto</button>`;
+  }
   document.getElementById('edit-modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('edit-desc').focus(), 300);
 }
@@ -1725,6 +1740,31 @@ function confirmEditTx(){
   showToast('✅ Gasto actualizado');
 }
 
+function revertSplit(){
+  if(!confirm('¿Revertir la división? El gasto quedará a tu nombre completo y se eliminará la deuda asociada.')) return;
+  const txId=_editTxId, txType=_editTxType;
+  if(txType==='debito'){
+    const d=getD();
+    const idx=d.findIndex(t=>t.id===txId);
+    if(idx>=0){d[idx].amount=d[idx].splitTotal||d[idx].amount;delete d[idx].splitWith;delete d[idx].splitTotal;saveD(d);}
+  } else {
+    const c=getC();
+    const idx=c.findIndex(t=>t.id===txId);
+    if(idx>=0){c[idx].amount=c[idx].splitTotal||c[idx].amount;delete c[idx].splitWith;delete c[idx].splitTotal;saveC(c);}
+  }
+  saveDeudas(getDeudas().filter(d=>d.txId!==txId));
+  closeEditModal();
+  renderDashboard();renderDebito();renderHistorial();renderDeudas();
+  showToast('Gasto revertido a tu nombre ✓');
+}
+function splitExistingTx(){
+  const txId=_editTxId, txType=_editTxType;
+  const tx=txType==='debito'?getD().find(t=>t.id===txId):getC().find(t=>t.id===txId);
+  if(!tx) return;
+  closeEditModal();
+  _pendingSplit={txId,amount:tx.amount,desc:tx.desc,cuotas:tx.cuotas||1,currency:tx.currency||'CLP',cardId:txType==='debito'?tx.bank:tx.cardId,type:txType,txDate:tx.date};
+  openSplitModal(_pendingSplit);
+}
 // ── Eliminar tx ───────────────────────────────────────────────────────────
 function deleteTx(txId, txType){
   closeCtxMenu();
