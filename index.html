@@ -266,36 +266,13 @@
 <!-- DASHBOARD -->
 <div class="page active" id="page-dashboard">
   <div class="page-header"><h1>👋 Hola, Javier</h1><p id="dash-fecha"></p></div>
-  <div class="cards-scroll" id="cards-scroll"></div>
+  <div id="dash-main-widget" style="margin:16px 20px 0"></div>
+  <div id="dash-chips" style="margin:12px 20px 0;display:flex;gap:10px"></div>
   <div class="salud-box" id="salud-box"></div>
-  <div class="summary-box">
-    <h3>Resumen Crédito del Ciclo</h3>
-    <div class="summary-row"><span class="label" id="sum-gastado-label">Cargo al cierre / Cupo comprometido</span><span class="val red" id="sum-gastado">$0</span></div>
-    <div class="summary-row"><span class="label">Disponible combinado</span><span class="val green" id="sum-disponible">$0</span></div>
-    <div class="summary-row"><span class="label">Transacciones crédito</span><span class="val" id="sum-txs">0</span></div>
-    <div class="summary-row"><span class="label">Total débito este mes</span><span class="val blue" id="sum-debito">$0</span></div>
-  </div>
-  <div class="proyeccion-box">
-    <h3 id="proy-title">Proyección (Facturación)</h3>
-    <div class="days" id="proy-days"></div>
-    <div id="proy-list"></div>
-  </div>
-  <div class="ciclo-ant-box" id="ciclo-ant-box">
-    <div class="ciclo-ant-header" onclick="toggleCicloAnt()">
-      <h3 id="ciclo-ant-title">Ciclo anterior</h3>
-      <span class="chevron" id="ciclo-ant-chevron">▼</span>
-    </div>
-    <div class="ciclo-ant-body" id="ciclo-ant-body">
-      <div class="ciclo-ant-total" id="ciclo-ant-total"></div>
-      <div id="ciclo-ant-list"></div>
-    </div>
-  </div>
   <div style="margin:14px 20px 4px;text-align:right">
-    <button onclick="openAnalisisModal()" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:20px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
-      📊 Ver análisis de gastos
-    </button>
+    <button onclick="openAnalisisModal()" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:20px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">📊 Ver análisis</button>
   </div>
-  <div class="section-header"><h3>Últimos gastos</h3><button onclick="showPage('historial')">Ver todos</button></div>
+  <div class="section-header"><h3>Últimos movimientos</h3><button onclick="showPage('historial')">Ver todos</button></div>
   <div class="tx-list pb14" id="recent-list"></div>
 </div>
 
@@ -739,70 +716,60 @@ function renderCicloAnt(){
 
 function renderDashboard(){
   const now=new Date();
-  document.getElementById('dash-fecha').textContent=now.toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  document.getElementById('dash-fecha').textContent=now.toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'});
 
-  // Cards
-  const scroll=document.getElementById('cards-scroll');
-  scroll.innerHTML='';
-  let totCLP=0,totDisp=0,totCuota=0;
-  Object.values(CARDS).forEach(c=>{
-    const sCLP=spentCLP(c.id),sUSD=spentUSD(c.id),qCLP=cuotaCLP(c.id);
-    const disp=c.limitCLP-sCLP,pct=Math.min(100,sCLP/c.limitCLP*100);
-    totCLP+=sCLP; totDisp+=disp; totCuota+=qCLP;
-    const d=document.createElement('div');
-    d.className='card-item '+c.gradient;
-    d.innerHTML=`<div class="card-bank">${c.bank}</div><div class="card-num">${c.num}</div>
-      <div class="card-balance">${fmtCLP(sCLP)}</div><div class="card-balance-label">Cupo comprometido</div>
-      <div class="card-bar-wrap"><div class="card-bar" style="width:${pct}%"></div></div>
-      <div class="card-footer">
-        <div class="card-footer-item">Disponible<span>${fmtCLP(disp)}</span></div>
-        <div class="card-footer-item" style="text-align:center">Cargo al ${getBillingDay(c.id)}<span style="color:#fde68a">${fmtCLP(qCLP)}</span></div>
-        <div class="card-footer-item" style="text-align:right">Límite<span>${fmtCLP(c.limitCLP)}</span></div>
-      </div>
-      ${c.limitUSD>0?`<div style="margin-top:7px;font-size:10px;opacity:.7">USD: ${fmtUSD(sUSD)} / ${fmtUSD(c.limitUSD)}</div>`:''}`;
-    scroll.appendChild(d);
-  });
-
-  // Salud financiera usa cuota (lo que realmente pagarás este mes)
-  renderSalud(totCuota);
-
-  // Resumen
-  const{start,end}=getCycle('bci');
-  const cCount=getC().filter(t=>{const d=new Date(t.date);return d>=start&&d<=end}).length;
+  // Totales
+  let totCuota=0;
+  Object.values(CARDS).forEach(c=>{totCuota+=cuotaCLP(c.id);});
   const totDeb=debitoThisMonth().reduce((s,t)=>s+t.amount,0);
-  document.getElementById('sum-gastado').textContent=fmtCLP(totCuota)+' / '+fmtCLP(totCLP);
-  document.getElementById('sum-disponible').textContent=fmtCLP(totDisp);
-  document.getElementById('sum-txs').textContent=cCount;
-  document.getElementById('sum-debito').textContent=fmtCLP(totDeb);
-
-  // Proyeccion al 19: muestra cargo de cuota de este mes
-  const refDay=getBillingDay('bci');
+  const totGastado=totCuota+totDeb;
+  const sueldo=getSueldo();
+  const pct=sueldo>0?Math.min(100,totGastado/sueldo*100):0;
+  const barColor=pct>75?'var(--red)':pct>50?'var(--yellow)':'var(--green)';
   const days=daysToFact('bci');
-  document.getElementById('proy-title').textContent='Proyección al '+refDay+' (Facturación)';
-  document.getElementById('sum-gastado-label').textContent='Cargo al '+refDay+' / Cupo comprometido';
-  document.getElementById('proy-days').textContent=days===0?'¡Hoy es día de facturación!':'Faltan '+days+' días para el día '+refDay;
-  const pl=document.getElementById('proy-list');
-  pl.innerHTML='';
-  Object.values(CARDS).forEach(c=>{
-    const q=cuotaCLP(c.id), s=spentCLP(c.id);
-    const d=document.createElement('div');
-    d.className='proy-card';
-    d.innerHTML=`<div class="proy-dot" style="background:${c.color}"></div>
-      <span class="proy-name">${c.bank}</span>
-      <div style="text-align:right">
-        <div class="proy-amount" style="color:#fde68a">${fmtCLP(q)}</div>
-        <div style="font-size:10px;color:var(--text2)">cupo: ${fmtCLP(s)}</div>
-      </div>`;
-    pl.appendChild(d);
-  });
+  const billingDay=getBillingDay('bci');
+
+  // Widget principal
+  document.getElementById('dash-main-widget').innerHTML=`
+    <div style="background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border);padding:20px">
+      <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Total gastado este ciclo</div>
+      <div style="font-size:38px;font-weight:700;margin-bottom:${sueldo?'14px':'6px'}">${fmtCLP(totGastado)}</div>
+      ${sueldo?`
+        <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px">
+          <div style="width:${pct}%;background:${barColor};height:100%;border-radius:3px;transition:width .6s"></div>
+        </div>
+        <div style="font-size:12px;color:var(--text2)">${Math.round(pct)}% de tu sueldo · <span style="color:var(--green)">${fmtCLP(Math.max(0,sueldo-totGastado))}</span> libre</div>
+      `:''}
+      <div style="margin-top:10px;font-size:12px;color:var(--text2)">
+        ${days===0?'⚡ Hoy es día de facturación':'📅 Faltan <strong style="color:var(--text)">'+days+' días</strong> para el cierre (día '+billingDay+')'}
+      </div>
+    </div>`;
+
+  // 3 chips
+  const prev=getPrevCycle();
+  const deudasAnt=getDeudas().filter(d=>{const dt=new Date(d.date);return !d.paid&&dt>=prev.start&&dt<=prev.end;});
+  const totalDeudasAnt=deudasAnt.reduce((s,d)=>s+d.deudaTotal,0);
+  document.getElementById('dash-chips').innerHTML=`
+    <div style="flex:1;background:var(--bg2);border-radius:12px;border:1px solid var(--border);padding:12px;text-align:center">
+      <div style="font-size:10px;color:var(--text2);margin-bottom:5px">💳 Crédito</div>
+      <div style="font-size:16px;font-weight:700;color:var(--red)">${fmtCLP(totCuota)}</div>
+    </div>
+    <div style="flex:1;background:var(--bg2);border-radius:12px;border:1px solid var(--border);padding:12px;text-align:center">
+      <div style="font-size:10px;color:var(--text2);margin-bottom:5px">🏦 Débito</div>
+      <div style="font-size:16px;font-weight:700;color:var(--blue)">${fmtCLP(totDeb)}</div>
+    </div>
+    <div style="flex:1;background:${totalDeudasAnt>0?'rgba(139,92,246,.12)':'var(--bg2)'};border-radius:12px;border:1px solid ${totalDeudasAnt>0?'rgba(139,92,246,.4)':'var(--border)'};padding:12px;text-align:center">
+      <div style="font-size:10px;color:var(--text2);margin-bottom:5px">🤝 Por cobrar</div>
+      <div style="font-size:16px;font-weight:700;color:var(--accent2)">${totalDeudasAnt>0?fmtCLP(totalDeudasAnt):'—'}</div>
+    </div>`;
+
+  // Salud financiera
+  renderSalud(totCuota);
 
   // Recientes
   const recent=[...getC(),...getD().map(t=>({...t,_isDebit:true}))].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
   document.getElementById('recent-list').innerHTML=recent.length?recent.map(txHTML).join('')
     :'<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg><h3>Sin gastos aun</h3><p>Toca + para agregar tu primer gasto</p></div>';
-
-  // Ciclo anterior
-  renderCicloAnt();
 }
 
 function renderSalud(totCred){
