@@ -378,6 +378,8 @@
   <div style="padding:0 20px 14px">
     <button onclick="openAddRuleModal()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar regla</button>
   </div>
+  <div class="settings-section"><h3>👤 Personas para dividir gastos</h3></div>
+  <div style="padding:0 20px 14px" id="personas-list"></div>
   <div class="settings-section"><h3>Datos</h3>
     <div class="settings-list">
       <div class="settings-row" onclick="exportData()"><span class="row-label">📤 Exportar respaldo (JSON)</span><span class="row-val">→</span></div>
@@ -1392,6 +1394,7 @@ function saveBillingDates(d){localStorage.setItem('misgastos_billing_dates',JSON
 
 function renderAjustes(){
   document.getElementById('settings-cards-list').innerHTML=Object.values(CARDS).map(c=>`<div class="settings-row"><span class="row-label">${c.emoji} ${c.bank} ${c.num}</span><span class="row-val">${fmtCLP(c.limitCLP)}</span></div>`).join('');
+  renderPersonasAjustes();
   // Fechas de facturación
   const billing=getBillingDates();
   const tarjetas=[
@@ -1427,6 +1430,24 @@ function renderAjustes(){
 const CAT_COLORS=['#4CAF50','#FF9800','#F44336','#9C27B0','#E91E63','#795548','#00BCD4','#2196F3','#FF5722','#607D8B','#FFC107','#009688','#673AB7','#3F51B5','#CDDC39'];
 let _editCatId=null;
 
+function renderPersonasAjustes(){
+  const personas=getPersonas();
+  const el=document.getElementById('personas-list');
+  if(!el) return;
+  el.innerHTML=personas.map((p,i)=>`
+    <div class="settings-row" style="gap:10px">
+      <span class="row-label" style="flex:1">👤 ${p}</span>
+      <button onclick="deletePersona(${i})" style="padding:5px 12px;border-radius:8px;border:1px solid var(--red);background:transparent;color:var(--red);font-size:12px;font-weight:600;cursor:pointer">Eliminar</button>
+    </div>`).join('');
+}
+function deletePersona(idx){
+  const ps=getPersonas();
+  if(ps.length<=1){showToast('Debe quedar al menos una persona','var(--yellow)');return;}
+  ps.splice(idx,1);
+  savePersonas(ps);
+  renderPersonasAjustes();
+  showToast('Persona eliminada');
+}
 function renderCategoriasAjustes(){
   const cats=getCategorias();
   const rules=getCatRules();
