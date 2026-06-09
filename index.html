@@ -237,6 +237,16 @@
     .deuda-item-amount .da.paid{color:var(--green)}
     .btn-paid{padding:5px 11px;border-radius:8px;border:1px solid var(--green);background:rgba(52,211,153,.1);color:var(--green);font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
     .btn-paid.done{border-color:var(--yellow);background:rgba(251,191,36,.08);color:var(--yellow)}
+    .cycle-section{margin-top:6px}
+    .cycle-section-header{display:flex;align-items:center;justify-content:space-between;padding:8px 20px;margin-top:10px}
+    .cycle-label{font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+    .cycle-dates{font-size:11px;color:var(--text2);margin-left:6px;font-weight:400}
+    .cycle-total-badge{font-size:13px;font-weight:700;color:var(--accent2)}
+    .cycle-total-badge.paid{color:var(--green);font-size:12px}
+    .btn-mark-all-cycle{width:calc(100% - 40px);margin:6px 20px 2px;padding:11px;border-radius:var(--radius);border:1px solid var(--green);background:rgba(52,211,153,.1);color:var(--green);font-size:13px;font-weight:600;cursor:pointer;display:block}
+    .deuda-type-badge{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;vertical-align:middle;margin-left:4px}
+    .deuda-type-badge.credito{background:rgba(139,92,246,.15);color:#a78bfa}
+    .deuda-type-badge.debito{background:rgba(59,130,246,.15);color:#60a5fa}
     /* ── Historial filtros ───────────────────────────────────────── */
     .hist-search{margin:0 20px 0;position:relative}
     .hist-search input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 14px 10px 38px;color:var(--text);font-size:14px;outline:none}
@@ -1210,59 +1220,47 @@ function renderHistorial(){
 function setFilter(id){activeFilter=id;renderHistorial();}
 function setDateFilter(id){activeDateFilter=id;renderHistorial();}
 
-let activeDeudasDateFilter='todo', activeDeudasStatusFilter='pendiente';
+let activeDeudasStatusFilter='pendiente';
 
+function getDeudaType(d){
+  if(d.type) return d.type;
+  if(getD().find(t=>t.id===d.txId)) return 'debito';
+  return 'credito';
+}
+function markAllCyclePaid(){
+  const prev=getPrevCycle();
+  const ds=getDeudas();
+  let count=0;
+  ds.forEach(d=>{
+    const dt=new Date(d.date);
+    if(!d.paid&&dt>=prev.start&&dt<=prev.end){d.paid=true;d.paidDate=new Date().toISOString();count++;}
+  });
+  saveDeudas(ds);renderDeudas();
+  if(count) showToast(count+' deuda'+(count!==1?'s':'')+' cobrada'+(count!==1?'s':'')+' ✓');
+  else showToast('No hay deudas pendientes en este ciclo','var(--yellow)');
+}
 function renderDeudas(){
   const todasDeudas=getDeudas();
   const pendientes=todasDeudas.filter(d=>!d.paid);
   const totalPend=pendientes.reduce((s,d)=>s+d.deudaTotal,0);
 
-  // Summary siempre con totales reales
   document.getElementById('deudas-summary-box').innerHTML=`
     <div class="ds-label">Total pendiente</div>
     <div class="ds-amount">${fmtCLP(totalPend)}</div>
     <div style="font-size:12px;color:var(--text2)">${pendientes.length} deuda${pendientes.length!==1?'s':''} activa${pendientes.length!==1?'s':''}</div>`;
 
-  // Date filter chips
-  const dateFilters=[
-    {id:'todo',label:'Todo'},
-    {id:'ciclo',label:'Este ciclo'},
-    {id:'mes',label:'Este mes'},
-    {id:'mes-ant',label:'Mes anterior'},
-  ];
-  document.getElementById('deudas-date-filters').innerHTML=dateFilters.map(f=>
-    `<button class="hdf-chip ${activeDeudasDateFilter===f.id?'active':''}" onclick="setDeudasDateFilter('${f.id}')">${f.label}</button>`
-  ).join('');
+  document.getElementById('deudas-date-filters').innerHTML='';
 
-  // Status filter chips
-  const statusFilters=[
-    {id:'pendiente',label:'Pendientes'},
-    {id:'pagado',label:'Pagadas'},
-    {id:'all',label:'Todas'},
-  ];
+  const statusFilters=[{id:'pendiente',label:'Pendientes'},{id:'pagado',label:'Pagadas'},{id:'all',label:'Todas'}];
   document.getElementById('deudas-filter-row').innerHTML=statusFilters.map(f=>
     `<button class="filter-chip ${activeDeudasStatusFilter===f.id?'active':''}" onclick="setDeudasStatusFilter('${f.id}')">${f.label}</button>`
   ).join('');
 
-  // Date range
-  let dateStart=null, dateEnd=null;
-  const now=new Date();
-  if(activeDeudasDateFilter==='ciclo'){
-    const c=getCycle('bci'); dateStart=c.start; dateEnd=c.end;
-  } else if(activeDeudasDateFilter==='mes'){
-    dateStart=new Date(now.getFullYear(),now.getMonth(),1);
-    dateEnd=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);
-  } else if(activeDeudasDateFilter==='mes-ant'){
-    dateStart=new Date(now.getFullYear(),now.getMonth()-1,1);
-    dateEnd=new Date(now.getFullYear(),now.getMonth(),0,23,59,59);
-  }
-
-  // Search term
+  const curCycle=getCycle();
+  const prevCycle=getPrevCycle();
   const searchTerm=(document.getElementById('deudas-search-input')?.value||'').trim().toLowerCase();
 
-  // Apply filters
   let deudas=todasDeudas;
-  if(dateStart&&dateEnd) deudas=deudas.filter(d=>{const dt=new Date(d.date);return dt>=dateStart&&dt<=dateEnd;});
   if(activeDeudasStatusFilter==='pendiente') deudas=deudas.filter(d=>!d.paid);
   else if(activeDeudasStatusFilter==='pagado') deudas=deudas.filter(d=>d.paid);
   if(searchTerm) deudas=deudas.filter(d=>(d.desc||'').toLowerCase().includes(searchTerm));
@@ -1279,38 +1277,60 @@ function renderDeudas(){
     return;
   }
 
-  // Group by person
-  const byPerson={};
-  deudas.forEach(d=>{if(!byPerson[d.person])byPerson[d.person]=[];byPerson[d.person].push(d);});
+  const fmtD=d=>d.toLocaleDateString('es-CL',{day:'numeric',month:'short'});
 
-  content.innerHTML=Object.entries(byPerson).map(([person, items])=>{
-    const pendTotal=items.filter(i=>!i.paid).reduce((s,i)=>s+i.deudaTotal,0);
-    const itemsHTML=items.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(d=>{
-      const dateStr=new Date(d.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'numeric'});
-      const cuotaStr=d.cuotas>1?` · ${d.cuotas} cuotas · ${fmtCLP(d.deudaPerCuota)}/cuota`:'';
-      return `<div class="deuda-item ${d.paid?'paid':''}">
-        <div class="deuda-item-info">
-          <div class="deuda-item-desc">${d.desc}</div>
-          <div class="deuda-item-meta">${dateStr}${cuotaStr}${d.paid?' · ✅ Pagado el '+new Date(d.paidDate).toLocaleDateString('es-CL',{day:'2-digit',month:'short'}):''}</div>
-        </div>
-        <div class="deuda-item-amount">
-          <div class="da ${d.paid?'paid':''}">${fmtCLP(d.deudaTotal)}</div>
-          ${!d.paid
-            ?`<button class="btn-paid" onclick="markDebtPaid('${d.id}')">✓ Cobrado</button>`
-            :`<button class="btn-paid done" onclick="unmarkDebtPaid('${d.id}')">↩ Revertir</button>`}
-        </div>
+  function renderDeudaItem(d){
+    const tipo=getDeudaType(d);
+    const tipoBadge=`<span class="deuda-type-badge ${tipo}">${tipo==='debito'?'Débito':'Crédito'}</span>`;
+    const dateStr=new Date(d.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'numeric'});
+    const cuotaStr=d.cuotas>1?` · ${d.cuotas} cuotas · ${fmtCLP(d.deudaPerCuota)}/cuota`:'';
+    return `<div class="deuda-item ${d.paid?'paid':''}">
+      <div class="deuda-item-info">
+        <div class="deuda-item-desc">${d.desc} ${tipoBadge}</div>
+        <div class="deuda-item-meta">${dateStr}${cuotaStr}${d.paid?' · ✅ Cobrado el '+new Date(d.paidDate).toLocaleDateString('es-CL',{day:'2-digit',month:'short'}):''}</div>
+      </div>
+      <div class="deuda-item-amount">
+        <div class="da ${d.paid?'paid':''}">${fmtCLP(d.deudaTotal)}</div>
+        ${!d.paid?`<button class="btn-paid" onclick="markDebtPaid('${d.id}')">✓ Cobrado</button>`
+                 :`<button class="btn-paid done" onclick="unmarkDebtPaid('${d.id}')">↩ Revertir</button>`}
+      </div>
+    </div>`;
+  }
+
+  function renderSection(icon,title,dateRange,items,section){
+    if(!items.length) return '';
+    const byPerson={};
+    items.forEach(d=>{if(!byPerson[d.person])byPerson[d.person]=[];byPerson[d.person].push(d);});
+    const totalSec=items.filter(d=>!d.paid).reduce((s,d)=>s+d.deudaTotal,0);
+    const unpaidCount=items.filter(d=>!d.paid).length;
+    const markAllBtn=section==='anterior'&&unpaidCount>0
+      ?`<button class="btn-mark-all-cycle" onclick="markAllCyclePaid()">✓ Marcar todo cobrado (${unpaidCount})</button>`:'';
+    const cardsHTML=Object.entries(byPerson).map(([person,pItems])=>{
+      const pendTotal=pItems.filter(i=>!i.paid).reduce((s,i)=>s+i.deudaTotal,0);
+      return `<div class="deuda-person-card">
+        <div class="deuda-person-header"><h3>👤 ${person}</h3><span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span></div>
+        ${pItems.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(renderDeudaItem).join('')}
       </div>`;
     }).join('');
-    return `<div class="deuda-person-card">
-      <div class="deuda-person-header">
-        <h3>👤 ${person}</h3>
-        <span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span>
+    return `<div class="cycle-section">
+      <div class="cycle-section-header">
+        <div><span class="cycle-label">${icon} ${title}</span><span class="cycle-dates">${dateRange}</span></div>
+        ${totalSec>0?`<span class="cycle-total-badge">${fmtCLP(totalSec)}</span>`:'<span class="cycle-total-badge paid">Al día ✅</span>'}
       </div>
-      ${itemsHTML}
+      ${markAllBtn}${cardsHTML}
     </div>`;
-  }).join('');
+  }
+
+  const antiguas=deudas.filter(d=>new Date(d.date)<prevCycle.start);
+  const anterior=deudas.filter(d=>{const dt=new Date(d.date);return dt>=prevCycle.start&&dt<=prevCycle.end;});
+  const actual=deudas.filter(d=>new Date(d.date)>=curCycle.start);
+
+  content.innerHTML=[
+    renderSection('📦','Deudas anteriores','antes del '+fmtD(prevCycle.start),antiguas,'antiguas'),
+    renderSection('📅','Ciclo anterior',fmtD(prevCycle.start)+' – '+fmtD(prevCycle.end),anterior,'anterior'),
+    renderSection('🔄','Ciclo actual',fmtD(curCycle.start)+' – '+fmtD(curCycle.end),actual,'actual'),
+  ].join('');
 }
-function setDeudasDateFilter(id){activeDeudasDateFilter=id;renderDeudas();}
 function setDeudasStatusFilter(id){activeDeudasStatusFilter=id;renderDeudas();}
 function compartirResumenDeudas(){
   const todas=getDeudas();
@@ -1931,6 +1951,7 @@ function confirmSplit(){
     person:_splitSelectedPerson,
     txId,
     desc,
+    type:esDebito?'debito':'credito',
     totalAmount:amount,
     cuotas:cuotas||1,
     deudaPerCuota:deudaAmt,
