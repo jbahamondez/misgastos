@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>MisGastos — Documentación del Proyecto</title>
+<style>
+  @page { margin: 2cm 1.8cm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+    color: #1a1d23;
+    line-height: 1.55;
+    font-size: 13px;
+  }
+  h1 {
+    font-size: 26px;
+    margin-bottom: 4px;
+    color: #6c63ff;
+  }
+  .subtitle {
+    color: #666;
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+  h2 {
+    font-size: 18px;
+    margin-top: 28px;
+    border-bottom: 2px solid #6c63ff;
+    padding-bottom: 4px;
+    color: #2d2a4a;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 14.5px;
+    margin-top: 18px;
+    color: #4a4470;
+    page-break-after: avoid;
+  }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0; padding-left: 22px; }
+  li { margin: 2px 0; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+    font-size: 12px;
+  }
+  th, td {
+    border: 1px solid #ddd;
+    padding: 5px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #f1f0ff;
+    color: #2d2a4a;
+  }
+  code, .code {
+    font-family: 'Consolas', 'Courier New', monospace;
+    background: #f4f4f8;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11.5px;
+  }
+  pre {
+    background: #1a1d23;
+    color: #e8e8f0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .badge {
+    display: inline-block;
+    background: #eef0ff;
+    color: #6c63ff;
+    border-radius: 10px;
+    padding: 2px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 2px 4px 2px 0;
+  }
+  .cover {
+    text-align: center;
+    padding-top: 18%;
+    page-break-after: always;
+  }
+  .cover h1 { font-size: 38px; }
+  .cover .tagline { font-size: 16px; color: #555; margin-top: 8px; }
+  .cover .meta { margin-top: 60px; font-size: 12px; color: #888; }
+  .section-break { page-break-before: always; }
+  .note {
+    background: #fff8e6;
+    border-left: 4px solid #fbbf24;
+    padding: 8px 12px;
+    margin: 10px 0;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>MisGastos</h1>
+  <div class="tagline">Aplicación web progresiva (PWA) para control de gastos personales</div>
+  <div class="meta">
+    Documentación técnica y funcional<br>
+    Junio 2026
+  </div>
+</div>
+
+<h2>1. Resumen ejecutivo</h2>
+<p>
+<b>MisGastos</b> es una aplicación de control de finanzas personales construida como una
+<b>Progressive Web App (PWA) de archivo único</b>, sin backend propio ni proceso de build.
+Está pensada para uso individual: registrar y visualizar gastos de tarjetas de crédito
+y cuentas de débito, controlar ciclos de facturación, categorizar automáticamente los
+movimientos, dividir gastos con otras personas (splits) y recibir recordatorios de pago
+y cobro.
+</p>
+<p>
+La aplicación corre completamente en el navegador del usuario y persiste sus datos en
+<code>localStorage</code> del dispositivo. Se complementa con un proyecto externo de
+<b>Google Apps Script</b> que lee correos del banco BCI y entrega transacciones
+pendientes para sincronización automática.
+</p>
+
+<h3>¿A quién está dirigido?</h3>
+<ul>
+  <li><b>Uso personal / unifamiliar</b>: fue diseñada y es usada por una sola persona (el dueño del proyecto), instalada como PWA en su iPhone.</li>
+  <li><b>Perfil del usuario objetivo</b>: alguien que maneja tarjetas de crédito con cuotas y ciclos de facturación en Chile (bancos BCI, Banco Chile, Scotiabank/Cencosud), que comparte gastos con otras personas (familia/pareja) y necesita llevar el registro de "quién le debe a quién".</li>
+  <li><b>No está pensada (en su forma actual) para multiusuario ni multi-dispositivo</b>: no tiene autenticación ni sincronización entre dispositivos; cada instalación tiene sus propios datos locales.</li>
+</ul>
+
+<h2>2. Stack técnico</h2>
+<table>
+  <tr><th>Capa</th><th>Tecnología</th></tr>
+  <tr><td>Frontend</td><td>HTML5 + CSS3 + JavaScript vanilla (ES6+), sin frameworks (sin React/Vue/Angular)</td></tr>
+  <tr><td>Build</td><td>Ninguno — archivo único <code>index.html</code> servido tal cual</td></tr>
+  <tr><td>Librerías externas</td><td><span class="badge">SheetJS / XLSX v0.18.5</span> (CDN cdnjs) para leer archivos Excel/CSV de cartolas bancarias</td></tr>
+  <tr><td>Persistencia</td><td><code>localStorage</code> del navegador (sin base de datos)</td></tr>
+  <tr><td>PWA</td><td>Service worker propio (<code>sw.js</code>), meta tags <code>apple-mobile-web-app-*</code> para instalación en iOS</td></tr>
+  <tr><td>Hosting</td><td>Sitio estático (GitHub Pages) — repositorio <code>jbahamondez/misgastos</code></td></tr>
+  <tr><td>Integración externa</td><td>Google Apps Script (proyecto separado, fuera del repo) + Google Sheets como cola de mensajes</td></tr>
+</table>
+
+<h2>3. Arquitectura general</h2>
+<p>
+El proyecto está compuesto por solo dos archivos relevantes en el repositorio:
+</p>
+<ul>
+  <li><code>index.html</code> (~2.430 líneas / ~137 KB) — contiene <b>todo</b>: estilos, marcado HTML de las 6 vistas y los 7 modales, y la lógica JavaScript completa.</li>
+  <li><code>sw.js</code> (~32 líneas) — service worker con estrategia <b>network-first</b> (intenta red, si falla usa caché) para que la app cargue rápido y funcione offline en iOS.</li>
+</ul>
+
+<h3>Estructura interna de <code>index.html</code></h3>
+<ol>
+  <li><b>&lt;head&gt;</b>: metadatos PWA/iOS, viewport, y bloque <code>&lt;style&gt;</code> único con ~560 líneas de CSS (sistema de variables: colores, tipografía, espaciados, modo oscuro fijo).</li>
+  <li><b>&lt;body&gt;</b> — Markup de las pantallas:
+    <ul>
+      <li>Dashboard (inicio)</li>
+      <li>Tarjetas (detalle por tarjeta de crédito)</li>
+      <li>Débito (cuenta corriente)</li>
+      <li>Historial (listado filtrable global)</li>
+      <li>Deudas (splits / por cobrar)</li>
+      <li>Ajustes (tarjetas, personas, categorías, reglas, respaldo)</li>
+      <li>Bottom navigation bar fija + botón flotante (FAB) para nuevo gasto</li>
+      <li>7 modales: nuevo gasto, edición de transacción, división de compra (split), análisis de gastos, agregar/editar categoría, agregar regla de auto-categorización, importación de cartola</li>
+    </ul>
+  </li>
+  <li><b>&lt;script&gt;</b> final: toda la lógica de negocio en JavaScript plano, organizada en funciones top-level por área funcional (render de cada vista, CRUD de datos, cálculos de ciclos, sincronización, importación, etc.)</li>
+</ol>
+
+<h3>Modelo de despliegue</h3>
+<p>
+No hay pipeline de CI/CD ni archivos <code>.github/workflows</code>. El despliegue consiste en
+hacer push de <code>index.html</code> / <code>sw.js</code> al repositorio, y GitHub Pages sirve
+los archivos estáticos directamente. El usuario accede desde Safari en iPhone y la tiene
+instalada en pantalla de inicio como app standalone (<code>apple-mobile-web-app-capable</code>).
+</p>
+<div class="note">
+<b>Nota sobre el service worker:</b> usa estrategia network-first con fallback a caché
+(<code>misgastos-cache-v1</code>), y limpia versiones de caché antiguas en <code>activate</code>.
+Esto mitiga el cacheo agresivo de iOS que retrasaba la propagación de actualizaciones.
+</div>
+
+<div class="section-break"></div>
+<h2>4. Modelo de datos (persistencia en localStorage)</h2>
+<table>
+  <tr><th>Clave localStorage</th><th>Constante</th><th>Contenido</th></tr>
+  <tr><td><code>gastos_credito_v2</code></td><td>LS_C</td><td>Array de transacciones de tarjetas de crédito</td></tr>
+  <tr><td><code>gastos_debito_v2</code></td><td>LS_D</td><td>Array de transacciones de cuentas de débito</td></tr>
+  <tr><td><code>sueldo_mensual</code></td><td>LS_S</td><td>Sueldo/ingreso mensual del usuario</td></tr>
+  <tr><td><code>gastos_deudas_v1</code></td><td>LS_DEUDAS</td><td>Array de deudas/splits asociados a transacciones</td></tr>
+  <tr><td><code>deudas_personas_v1</code></td><td>LS_PERSONAS</td><td>Array de nombres de personas para dividir gastos</td></tr>
+  <tr><td><code>misgastos_categorias_v1</code></td><td>LS_CATS</td><td>Array de categorías (10 por defecto + personalizadas)</td></tr>
+  <tr><td><code>misgastos_cat_rules_v1</code></td><td>LS_CAT_RULES</td><td>Reglas de auto-categorización por palabra clave</td></tr>
+  <tr><td><code>misgastos_billing_dates</code></td><td>—</td><td>Día de cierre de facturación por tarjeta</td></tr>
+  <tr><td><code>misgastos_payment_dates</code></td><td>—</td><td>Fechas de pago registradas por tarjeta</td></tr>
+  <tr><td><code>misgastos_paid_flags</code></td><td>—</td><td>Flags de "ciclo pagado" por tarjeta/mes</td></tr>
+  <tr><td><code>misgastos_sync_last</code></td><td>—</td><td>Timestamp del último sync con Google Sheets (debounce)</td></tr>
+</table>
+
+<h3>Estructura de una transacción de crédito</h3>
+<pre>{
+  id: string,            // timestamp como id único
+  cardId: 'bci' | 'bchile' | 'scotia',
+  amount: number,        // monto total (puede ser negativo en anulaciones)
+  desc: string,
+  cuotas: number,        // 1, 3, 6, 12, 18, 24, 36, 48
+  currency: 'CLP' | 'USD',
+  date: string,          // ISO 8601, incluye hora
+  source: 'manual' | 'cartola' | 'email_auto' | 'shortcut',
+  catId: string,         // id de categoría (autocategorizada o manual)
+  split?: [...]          // referencias a deudas si fue dividida
+}</pre>
+
+<h3>Estructura de una transacción de débito</h3>
+<pre>{
+  id: string,
+  bank: 'bci' | 'bchile' | 'scotia',
+  amount: number,        // negativo = anulación / reversa
+  desc: string,
+  currency: 'CLP',
+  date: string,          // ISO 8601 con hora
+  source: string,
+  catId: string
+}</pre>
+
+<h3>Estructura de una deuda/split</h3>
+<pre>{
+  id: string,            // id único de la deuda
+  txId: string,          // referencia a la transacción original
+  person: string,
+  type: 'credito' | 'debito',
+  amount: number,        // monto total de la transacción original
+  deudaTotal: number,    // monto que debe esa persona
+  deudaPerCuota: number, // monto por cuota (si aplica)
+  desc: string,
+  date: string,
+  cuotas: number,
+  cardId: string,
+  paid: boolean,
+  paidDate?: string
+}</pre>
+
+<h3>Tarjetas de crédito configuradas (hardcodeadas)</h3>
+<table>
+  <tr><th>id</th><th>Banco</th><th>Cupo CLP</th><th>Cupo USD</th></tr>
+  <tr><td>bci</td><td>BCI</td><td>$9.519.000</td><td>USD 470,74</td></tr>
+  <tr><td>bchile</td><td>Banco de Chile</td><td>$9.519.000</td><td>USD 470,74</td></tr>
+  <tr><td>scotia</td><td>Scotiabank Cencosud</td><td>$1.470.000</td><td>—</td></tr>
+</table>
+
+<h3>Categorías por defecto</h3>
+<p>
+🛒 Super, 🍔 Comida, ⛽ Bencina, 🎬 Entretención, 💊 Salud, 🏠 Hogar, 👕 Ropa,
+📱 Tech, ✈️ Viajes, 💰 Otros — cada una con color asignado, totalmente editables/eliminables
+desde Ajustes.
+</p>
+
+<div class="section-break"></div>
+<h2>5. Funcionalidades principales</h2>
+
+<h3>5.1 Dashboard (Inicio)</h3>
+<ul>
+  <li>Widget central: monto a facturar próximo, días para el cierre, sueldo mensual (ocultable).</li>
+  <li>3 chips de resumen: total crédito, total débito, deudas "por cobrar" del ciclo anterior.</li>
+  <li>Indicador de "Salud financiera": gasto total, ahorro estimado, distribución crédito/débito vs. sueldo.</li>
+  <li>Sección expandible del ciclo anterior.</li>
+  <li>Listado de últimas transacciones recientes.</li>
+</ul>
+
+<h3>5.2 Tarjetas de crédito</h3>
+<ul>
+  <li>Vista por tarjeta (BCI, Banco de Chile, Scotiabank): cupo comprometido, cargo del próximo cierre, disponible en CLP/USD.</li>
+  <li>Barra de progreso de uso del cupo.</li>
+  <li>Configuración de día de cierre por tarjeta (por defecto día 19).</li>
+  <li>Cálculo de ciclos de facturación (ciclo actual y anterior) y prorrateo de cuotas.</li>
+</ul>
+
+<h3>5.3 Débito (cuenta corriente)</h3>
+<ul>
+  <li>Listado de movimientos de débito por banco.</li>
+  <li>Estadísticas: total del período, promedio, mayor gasto, cantidad de movimientos.</li>
+  <li>Soporte de montos negativos para anulaciones/reversas (se muestran en verde, descuentan del total).</li>
+</ul>
+
+<h3>5.4 Registro y edición de gastos</h3>
+<ul>
+  <li>Modal de "Nuevo gasto" con tabs Crédito / Débito.</li>
+  <li>Campos: tarjeta o banco, monto, descripción, fecha/hora, categoría, moneda (CLP/USD), número de cuotas (crédito).</li>
+  <li>Edición de cualquier transacción existente (modal de edición), incluida la posibilidad de modificar o eliminar su split.</li>
+  <li>Eliminación de transacciones con confirmación y menú contextual (mantener presionado).</li>
+</ul>
+
+<h3>5.5 Categorías y auto-categorización</h3>
+<ul>
+  <li>CRUD completo de categorías (nombre, emoji, color) desde Ajustes.</li>
+  <li>Reglas de auto-categorización por palabra clave: si la descripción contiene cierto texto, se asigna automáticamente una categoría.</li>
+  <li>La auto-categorización se aplica a transacciones manuales, importadas por cartola y sincronizadas automáticamente vía Google Sheets.</li>
+</ul>
+
+<h3>5.6 Deudas y división de gastos (Split)</h3>
+<ul>
+  <li>Al registrar o importar un gasto, se puede dividir entre una o varias personas (splits parciales o por cuota).</li>
+  <li>Gestión de personas (alta/baja) desde Ajustes.</li>
+  <li>Vista "Deudas": agrupadas por persona y por ciclo (actual, anterior, antiguas), con filtros pendientes/pagadas/todas.</li>
+  <li>Marcar deuda(s) como cobradas individualmente o por ciclo completo.</li>
+  <li>Generar un resumen de texto de deudas para compartir (WhatsApp, etc.).</li>
+  <li>Modificar o revertir un split ya aplicado a una transacción.</li>
+</ul>
+
+<h3>5.7 Recordatorios</h3>
+<ul>
+  <li><b>Recordatorio de pago</b>: se muestra un modal cuando se acerca la fecha de facturación, indicando el monto a pagar; permite marcar la tarjeta como pagada.</li>
+  <li><b>Recordatorio de cobro</b>: en los primeros 5 días del mes, muestra un modal con las deudas pendientes del ciclo anterior agrupadas por persona, con botón para marcar "Cobrado".</li>
+</ul>
+
+<h3>5.8 Importación de cartola bancaria</h3>
+<ul>
+  <li>Soporta archivos <code>.xls</code>, <code>.xlsx</code> y <code>.csv</code> de BCI, Banco de Chile y Scotiabank.</li>
+  <li>Detección automática de encabezados y parseo robusto de montos/fechas según formato de cada banco.</li>
+  <li>Limpieza automática de descripciones (elimina prefijos típicos de BCI como "SAN CC", "DP *", etc.).</li>
+  <li>Vista previa antes de confirmar la importación.</li>
+  <li>Tras importar, ofrece dividir (split) cada transacción importada.</li>
+</ul>
+
+<h3>5.9 Sincronización automática vía Google Sheets / Apps Script</h3>
+<ul>
+  <li>Un proyecto externo de Google Apps Script (no incluido en el repo) escanea correos de notificación de compra del banco BCI (crédito y débito), extrae monto, comercio, fecha y hora, y los deja en una hoja de cálculo como "pendientes".</li>
+  <li>La PWA consulta periódicamente (<code>action=getPending</code>, debounce de 15s) y crea automáticamente las transacciones correspondientes, aplicando auto-categorización.</li>
+  <li>Tras procesarlas, marca las filas como "hechas" (<code>action=markDone</code>) para no duplicarlas.</li>
+  <li>Soporta "anulaciones" (reversas de compra), registrándolas como montos negativos.</li>
+  <li>Se dispara al abrir la app y al volver a foreground (<code>visibilitychange</code>).</li>
+</ul>
+<div class="note">
+<b>Limitación conocida:</b> Banco de Chile y Scotiabank no envían correos de notificación de compra,
+por lo que esta sincronización automática solo aplica a BCI. Para los otros bancos se recomienda
+importación de cartola periódica o registro manual/rápido.
+</div>
+
+<h3>5.10 Registro rápido vía URL (iOS Shortcuts)</h3>
+<ul>
+  <li>La app acepta parámetros de URL (<code>amount</code>, <code>desc</code>, <code>type</code>, <code>bank</code>, <code>cuotas</code>, <code>currency</code>, <code>date</code>) para crear una transacción instantáneamente sin abrir modales.</li>
+  <li>Pensado para integrarse con la app "Atajos" (Shortcuts) de iOS y registrar gastos en segundos desde el celular.</li>
+</ul>
+
+<h3>5.11 Respaldo y restauración (JSON)</h3>
+<ul>
+  <li>Exportación de todos los datos (<code>localStorage</code>) a un archivo JSON descargable.</li>
+  <li>Importación de ese archivo para restaurar el estado completo (con confirmación, ya que sobrescribe los datos actuales).</li>
+  <li>Opción de borrar todos los datos locales con confirmación.</li>
+</ul>
+
+<h3>5.12 Historial y análisis</h3>
+<ul>
+  <li>Listado global de transacciones con filtros por tipo (todos / crédito / débito / banco específico) y por período (ciclo actual, mes actual, mes anterior, todo).</li>
+  <li>Búsqueda por texto en la descripción.</li>
+  <li>Modal de "Análisis": desglose de gastos por categoría con porcentajes, según período y tipo seleccionados.</li>
+</ul>
+
+<div class="section-break"></div>
+<h2>6. Integraciones externas</h2>
+<table>
+  <tr><th>Integración</th><th>Detalle</th></tr>
+  <tr>
+    <td>Google Apps Script ("MisGastosCola")</td>
+    <td>
+      Proyecto separado (gestionado fuera del repo en script.google.com). Lee correos de Gmail
+      con notificaciones de compra/anulación de BCI (crédito y débito), extrae monto, comercio,
+      fecha y hora mediante expresiones regulares, y los almacena en una hoja de Google Sheets
+      como cola de pendientes. Expone un endpoint web (<code>doGet</code>/<code>doPost</code>)
+      consumido por la PWA vía <code>action=getPending</code> y <code>action=markDone</code>.
+    </td>
+  </tr>
+  <tr>
+    <td>SheetJS (XLSX) v0.18.5</td>
+    <td>Cargado por CDN, usado solo para parsear archivos Excel de cartolas bancarias en el navegador.</td>
+  </tr>
+</table>
+
+<h2>7. Estado actual y evolución</h2>
+<p>
+La aplicación está en producción (uso diario real del dueño del proyecto) y se itera de forma
+incremental. Mejoras recientes incluyen: rediseño del dashboard, gestión completa de personas
+y splits desde Ajustes y desde el modal de edición, soporte de montos negativos (anulaciones),
+service worker para evitar problemas de caché en iOS, categorización automática también para
+transacciones sincronizadas, y recordatorio de cobro de deudas.
+</p>
+<p>
+Temas en evaluación para el futuro (no implementados aún):
+</p>
+<ul>
+  <li>Persistencia en una base de datos real (ej. Firebase/Supabase) o respaldo automático en la nube, manteniendo <code>localStorage</code> como almacenamiento principal por velocidad y soporte offline.</li>
+  <li>Captura de movimientos de débito de Banco de Chile/Scotiabank (que no envían correo) vía importación periódica de cartola o registro rápido por Atajos de iOS.</li>
+  <li>Actualización del ícono de la PWA en pantallas de inicio ya instaladas (limitación de iOS: requiere reinstalar el acceso directo).</li>
+</ul>
+
+<h2>8. Resumen de alcance</h2>
+<table>
+  <tr><th>Incluido</th><th>No incluido (fuera de alcance actual)</th></tr>
+  <tr>
+    <td>
+      <ul>
+        <li>Registro manual y semi-automático de gastos crédito/débito</li>
+        <li>Gestión de ciclos de facturación y cuotas</li>
+        <li>Categorización (manual y automática)</li>
+        <li>División de gastos entre personas y seguimiento de cobros</li>
+        <li>Importación de cartolas y sync automático (BCI)</li>
+        <li>Recordatorios de pago y cobro</li>
+        <li>Respaldo/restauración manual vía JSON</li>
+        <li>Funcionamiento offline como PWA instalable</li>
+      </ul>
+    </td>
+    <td>
+      <ul>
+        <li>Multiusuario / autenticación</li>
+        <li>Sincronización multi-dispositivo</li>
+        <li>Base de datos remota</li>
+        <li>Sync automático para Banco de Chile / Scotiabank</li>
+        <li>Notificaciones push propias</li>
+        <li>Reportes/exportación a Excel o PDF desde la app</li>
+      </ul>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
