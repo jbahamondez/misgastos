@@ -2174,13 +2174,13 @@ async function syncFromSheets(){
       if(type==='debito'){
         const d=getD();
         d.push({id:txId,bank,amount:parseFloat(amount),desc,currency:'CLP',
-          date:(date?new Date(date):new Date()).toISOString(),source:'email_auto'});
+          date:(date?new Date(date):new Date()).toISOString(),source:'email_auto',catId:autoCategorize(desc)||''});
         saveD(d);
         pendingSplits.push({txId,amount:parseFloat(amount),desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'});
       } else {
         const d=getC();
         d.push({id:txId,cardId:bank,amount:parseFloat(amount),desc,cuotas:parseInt(cuotas)||1,currency:'CLP',
-          date:(date?new Date(date):new Date()).toISOString(),source:'email_auto'});
+          date:(date?new Date(date):new Date()).toISOString(),source:'email_auto',catId:autoCategorize(desc)||''});
         saveC(d);
         pendingSplits.push({txId,amount:parseFloat(amount),desc,cuotas:parseInt(cuotas)||1,currency:'CLP',cardId:bank,type:'credito'});
       }
