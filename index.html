@@ -584,7 +584,7 @@ const ICONS = {
   FARMACIA:'💊',CRUZ:'💊',SALCOBRAND:'💊',
   RESTAURANT:'🍽️',DOMINO:'🍕',MCDONALD:'🍔',
   NETFLIX:'🎬',SPOTIFY:'🎵',AMAZON:'📦',APPLE:'🍎',
-  STEAM:'🎮',COPEC:'⛽',SHELL:'⛽',DEFAULT:'💳'
+  STEAM:'🎮',COPEC:'⛽',SHELL:'⛽',ANULACIÓN:'↩️',DEFAULT:'💳'
 };
 
 const LS_C='gastos_credito_v2', LS_D='gastos_debito_v2', LS_S='sueldo_mensual', LS_DEUDAS='gastos_deudas_v1', LS_PERSONAS='deudas_personas_v1', LS_CATS='misgastos_categorias_v1', LS_CAT_RULES='misgastos_cat_rules_v1';
@@ -624,7 +624,7 @@ function autoCategorize(desc){
   return null;
 }
 
-function fmtCLP(n){return '$'+Math.round(n).toLocaleString('es-CL')}
+function fmtCLP(n){const neg=n<0;return(neg?'-':'')+'$'+Math.round(Math.abs(n)).toLocaleString('es-CL')}
 function fmtUSD(n){return 'USD '+parseFloat(n).toFixed(2)}
 function fmtPct(n){return n.toFixed(1)+'%'}
 function getIcon(d){const u=(d||'').toUpperCase();for(const[k,v]of Object.entries(ICONS))if(u.includes(k))return v;return ICONS.DEFAULT}
@@ -1831,7 +1831,7 @@ function txHTML(t){
   return`<div class="tx-item ${isD?'debito':''}" oncontextmenu="openTxMenu(event,'${t.id}','${txType}')" ontouchstart="startTxHold(event,'${t.id}','${txType}')" ontouchend="cancelTxHold()" ontouchmove="cancelTxHold()">
     <div class="tx-icon" style="background:${color}22">${getIcon(t.desc)}</div>
     <div class="tx-info"><div class="tx-name">${t.desc||'Sin descripcion'}</div><div class="tx-meta">${bank} - ${date}</div></div>
-    <div class="tx-amount"><div class="amount" style="color:${isD?'var(--blue)':'var(--text)'}">${amt}</div><div class="cuotas">${cuota}</div></div>
+    <div class="tx-amount"><div class="amount" style="color:${t.amount<0?'var(--green)':(isD?'var(--blue)':'var(--text)')}">${amt}</div><div class="cuotas">${cuota}</div></div>
   </div>`;
 }
 
