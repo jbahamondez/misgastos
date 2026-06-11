@@ -509,6 +509,17 @@
   </div>
 </div>
 
+<!-- RECORDATORIO DE COBRO -->
+<div class="modal-overlay" id="cobro-reminder-overlay" onclick="closeCobroReminderOutside(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>🤝 Recordatorio de cobro</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Tienes deudas del ciclo anterior por cobrar.</p>
+    <div id="cobro-reminder-list"></div>
+    <button class="btn-cancel" style="width:100%;margin-top:8px" onclick="closeCobroReminder()">Cerrar</button>
+  </div>
+</div>
+
 <!-- EDIT TX MODAL -->
 <div class="edit-modal-overlay" id="edit-modal-overlay" onclick="closeEditModalOutside(event)">
   <div class="modal">
@@ -1596,9 +1607,46 @@ function markAsPaid(cardId,monthKey){
 }
 function closePaymentReminder(){
   document.getElementById('payment-reminder-overlay').classList.remove('open');
+  checkCobroReminder();
 }
 function closePaymentReminderOutside(e){
   if(e.target===document.getElementById('payment-reminder-overlay')) closePaymentReminder();
+}
+function checkCobroReminder(){
+  const day=new Date().getDate();
+  if(day>5) return;
+  const prev=getPrevCycle();
+  const pendientes=getDeudas().filter(d=>{
+    const dt=new Date(d.date);
+    return !d.paid&&dt>=prev.start&&dt<=prev.end;
+  });
+  if(!pendientes.length) return;
+  const byPerson={};
+  pendientes.forEach(d=>{byPerson[d.person]=(byPerson[d.person]||0)+d.deudaTotal;});
+  document.getElementById('cobro-reminder-list').innerHTML=Object.entries(byPerson).map(([person,total],i)=>
+    `<div class="payment-card-row"><div class="payment-card-info"><span class="payment-card-name">👤 ${person}</span><span class="payment-card-amount" style="color:var(--accent2)">${fmtCLP(total)}</span></div><button class="payment-paid-btn cobro-paid-btn" id="cobro-btn-${i}" onclick="markPersonCobrado('${person.replace(/'/g,"\\'")}',${i})">✓ Cobrado</button></div>`
+  ).join('');
+  document.getElementById('cobro-reminder-overlay').classList.add('open');
+}
+function markPersonCobrado(person,idx){
+  const prev=getPrevCycle();
+  const ds=getDeudas();
+  ds.forEach(d=>{
+    const dt=new Date(d.date);
+    if(!d.paid&&d.person===person&&dt>=prev.start&&dt<=prev.end){d.paid=true;d.paidDate=new Date().toISOString();}
+  });
+  saveDeudas(ds);
+  const btn=document.getElementById('cobro-btn-'+idx);
+  if(btn){btn.textContent='✓ Listo';btn.className='payment-paid-btn done';btn.disabled=true;}
+  const allDone=[...document.querySelectorAll('.cobro-paid-btn')].every(b=>b.disabled);
+  if(allDone) setTimeout(closeCobroReminder,800);
+  renderDeudas();renderDashboard();
+}
+function closeCobroReminder(){
+  document.getElementById('cobro-reminder-overlay').classList.remove('open');
+}
+function closeCobroReminderOutside(e){
+  if(e.target===document.getElementById('cobro-reminder-overlay')) closeCobroReminder();
 }
 
 // ── Menú contextual (long press / right click) ────────────────────────────
@@ -2368,7 +2416,10 @@ document.addEventListener('DOMContentLoaded',function(){
   document.addEventListener('visibilitychange',function(){
     if(document.visibilityState==='visible') syncFromSheets();
   });
-  setTimeout(checkPaymentReminder,1200);
+  setTimeout(function(){
+    checkPaymentReminder();
+    if(!document.getElementById('payment-reminder-overlay').classList.contains('open')) checkCobroReminder();
+  },1200);
 });
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
