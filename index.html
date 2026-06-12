@@ -188,9 +188,6 @@
     .empty h3{font-size:17px;color:var(--text);margin-bottom:6px}
     .empty p{font-size:13px}
     .toast{position:fixed;top:calc(var(--safe-top) + 8px);left:50%;transform:translateX(-50%) translateY(-80px);background:var(--green);color:#0f1117;padding:9px 18px;border-radius:20px;font-size:13px;font-weight:600;z-index:999;transition:transform .3s ease;white-space:nowrap}
-    .env-badge{position:fixed;bottom:calc(var(--safe-bottom) + 72px);right:14px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;z-index:998;pointer-events:none;letter-spacing:.4px}
-    .env-badge.qa{background:rgba(251,191,36,.15);color:var(--yellow);border:1px solid rgba(251,191,36,.3)}
-    .env-badge.pwa{background:rgba(52,211,153,.15);color:var(--green);border:1px solid rgba(52,211,153,.3)}
     .sync-badge{position:fixed;bottom:calc(var(--safe-bottom) + 72px);left:14px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;z-index:998;pointer-events:none;letter-spacing:.4px;display:none}
     .sync-badge.show{display:inline-block}
     .sync-badge.synced{background:rgba(52,211,153,.15);color:var(--green);border:1px solid rgba(52,211,153,.3)}
@@ -577,7 +574,6 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<div class="env-badge" id="env-badge"></div>
 <div class="sync-badge" id="sync-badge"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -2586,9 +2582,6 @@ document.addEventListener('DOMContentLoaded',function(){
   renderDashboard();renderAjustes();
   handleURLParams();
   syncFromSheets();
-  const badge=document.getElementById('env-badge');
-  if(navigator.standalone){badge.textContent='● PWA';badge.classList.add('pwa');}
-  else{badge.textContent='● QA Safari';badge.classList.add('qa');}
   document.addEventListener('visibilitychange',function(){
     if(document.visibilityState==='visible') syncFromSheets();
   });
