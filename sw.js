@@ -1,5 +1,5 @@
-const CACHE_NAME = 'misgastos-cache-v4';
-const ASSETS = ['./', './index.html', './manifest.json', './icon-180-v2.png', './icon-192-v2.png', './icon-512-v2.png'];
+const CACHE_NAME = 'misgastos-cache-v5';
+const ASSETS = ['./', './index.html', './manifest.json', './icon-180-v3.png', './icon-192-v3.png', './icon-512-v3.png'];
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
