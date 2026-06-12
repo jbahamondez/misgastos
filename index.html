@@ -187,6 +187,11 @@
     .env-badge{position:fixed;bottom:calc(var(--safe-bottom) + 72px);right:14px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;z-index:998;pointer-events:none;letter-spacing:.4px}
     .env-badge.qa{background:rgba(251,191,36,.15);color:var(--yellow);border:1px solid rgba(251,191,36,.3)}
     .env-badge.pwa{background:rgba(52,211,153,.15);color:var(--green);border:1px solid rgba(52,211,153,.3)}
+    .sync-badge{position:fixed;bottom:calc(var(--safe-bottom) + 72px);left:14px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;z-index:998;pointer-events:none;letter-spacing:.4px;display:none}
+    .sync-badge.show{display:inline-block}
+    .sync-badge.synced{background:rgba(52,211,153,.15);color:var(--green);border:1px solid rgba(52,211,153,.3)}
+    .sync-badge.syncing{background:rgba(251,191,36,.15);color:var(--yellow);border:1px solid rgba(251,191,36,.3)}
+    .sync-badge.off{background:rgba(148,163,184,.15);color:var(--text2);border:1px solid rgba(148,163,184,.3)}
     .toast.show{transform:translateX(-50%) translateY(0)}
     .pb14{padding-bottom:14px}
 
@@ -340,6 +345,8 @@
 <!-- AJUSTES -->
 <div class="page" id="page-ajustes">
   <div class="page-header"><h1>Ajustes</h1><p>Configuración y automatización</p></div>
+  <div class="settings-section"><h3>☁️ Sincronización en la nube</h3></div>
+  <div id="cloud-sync-section" style="padding:0 20px 14px"><span style="font-size:12px;color:var(--text2)">Cargando…</span></div>
   <div class="settings-section"><h3>Tarjetas de Crédito</h3><div class="settings-list" id="settings-cards-list"></div></div>
   <div class="settings-section"><h3>📅 Fecha de facturación por tarjeta</h3></div>
   <div style="padding:0 20px 14px" id="billing-dates-list"></div>
@@ -567,6 +574,7 @@
 
 <div class="toast" id="toast"></div>
 <div class="env-badge" id="env-badge"></div>
+<div class="sync-badge" id="sync-badge"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
@@ -591,14 +599,14 @@ const LS_C='gastos_credito_v2', LS_D='gastos_debito_v2', LS_S='sueldo_mensual', 
 
 function getC(){try{return JSON.parse(localStorage.getItem(LS_C)||'[]')}catch{return[]}}
 function getD(){try{return JSON.parse(localStorage.getItem(LS_D)||'[]')}catch{return[]}}
-function saveC(a){localStorage.setItem(LS_C,JSON.stringify(a))}
-function saveD(a){localStorage.setItem(LS_D,JSON.stringify(a))}
+function saveC(a){localStorage.setItem(LS_C,JSON.stringify(a));syncCollectionToCloud('transactions_credit',a)}
+function saveD(a){localStorage.setItem(LS_D,JSON.stringify(a));syncCollectionToCloud('transactions_debit',a)}
 function getSueldo(){return parseFloat(localStorage.getItem(LS_S)||'0')}
-function setSueldo(v){localStorage.setItem(LS_S,String(v))}
+function setSueldo(v){localStorage.setItem(LS_S,String(v));syncSettingsToCloud()}
 function getDeudas(){try{return JSON.parse(localStorage.getItem(LS_DEUDAS)||'[]')}catch{return[]}}
-function saveDeudas(a){localStorage.setItem(LS_DEUDAS,JSON.stringify(a))}
+function saveDeudas(a){localStorage.setItem(LS_DEUDAS,JSON.stringify(a));syncCollectionToCloud('debts',a)}
 function getPersonas(){try{return JSON.parse(localStorage.getItem(LS_PERSONAS)||'["🤍 Tamarindo"]')}catch{return['🤍 Tamarindo']}}
-function savePersonas(a){localStorage.setItem(LS_PERSONAS,JSON.stringify(a))}
+function savePersonas(a){localStorage.setItem(LS_PERSONAS,JSON.stringify(a));syncCollectionToCloud('people',a)}
 const DEFAULT_CATS=[
   {id:'super',name:'Supermercado',emoji:'🛒',color:'#4CAF50'},
   {id:'comida',name:'Comida',emoji:'🍔',color:'#FF9800'},
@@ -612,10 +620,158 @@ const DEFAULT_CATS=[
   {id:'otros',name:'Otros',emoji:'💰',color:'#607D8B'},
 ];
 function getCategorias(){try{const s=localStorage.getItem(LS_CATS);return s?JSON.parse(s):DEFAULT_CATS.map(c=>({...c}))}catch{return DEFAULT_CATS.map(c=>({...c}))}}
-function saveCategorias(a){localStorage.setItem(LS_CATS,JSON.stringify(a))}
+function saveCategorias(a){localStorage.setItem(LS_CATS,JSON.stringify(a));syncCollectionToCloud('categories',a)}
 function getCatById(id){return getCategorias().find(c=>c.id===id)||null}
 function getCatRules(){try{return JSON.parse(localStorage.getItem(LS_CAT_RULES)||'[]')}catch{return[]}}
-function saveCatRules(a){localStorage.setItem(LS_CAT_RULES,JSON.stringify(a))}
+function saveCatRules(a){localStorage.setItem(LS_CAT_RULES,JSON.stringify(a));syncCollectionToCloud('category_rules',a)}
+
+// ── Sync bidireccional con Firestore (cache local <-> nube) ────────────────
+// Helpers de escritura/borrado: replican (best-effort, sin bloquear ni romper
+// si falla/offline/no hay sesión) hacia Firestore.
+function cloudSet(collName,id,data){ if(window._fb&&window._fb.cloudSet) window._fb.cloudSet(collName,id,data); }
+function cloudDelete(collName,id){ if(window._fb&&window._fb.cloudDelete) window._fb.cloudDelete(collName,id); }
+
+function slugifyLocal(s){
+  return String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'item';
+}
+
+// Mapeo entre el formato local (localStorage) y el formato de documentos en Firestore
+// para cada colección, más la función que deriva el ID de documento estable.
+const CLOUD_MAP = {
+  transactions_credit:{ ls:LS_C, toCloud:a=>a, toLocal:a=>a, id:item=>item.id },
+  transactions_debit:{ ls:LS_D, toCloud:a=>a, toLocal:a=>a, id:item=>item.id },
+  debts:{ ls:LS_DEUDAS, toCloud:a=>a, toLocal:a=>a, id:item=>item.id },
+  people:{ ls:LS_PERSONAS, toCloud:a=>a.map(name=>({id:slugifyLocal(name),name})), toLocal:a=>a.map(i=>i.name), id:item=>item.id },
+  categories:{ ls:LS_CATS, toCloud:a=>a, toLocal:a=>a, id:item=>item.id },
+  category_rules:{ ls:LS_CAT_RULES, toCloud:a=>a.map(r=>({...r,id:slugifyLocal(r.keyword)+'_'+slugifyLocal(r.catId)})), toLocal:a=>a.map(({id,...r})=>r), id:item=>item.id }
+};
+
+// Sincroniza un array local completo hacia Firestore: crea/actualiza los items
+// nuevos o cambiados y borra en la nube los que ya no estén en el array.
+// No hace nada hasta que el cache de la colección esté hidratado (post-migración),
+// para no borrar todo en la nube antes de migrar.
+function syncCollectionToCloud(collName,localArray){
+  if(!window._fb||!window._fb.syncEnabled) return;
+  const cache=window._fb.cache[collName];
+  if(!cache) return;
+  const map=CLOUD_MAP[collName];
+  const cloudArray=map.toCloud(localArray);
+  const newIds=new Set();
+  cloudArray.forEach(item=>{
+    const id=String(map.id(item));
+    newIds.add(id);
+    const prev=cache.get(id);
+    if(!prev||JSON.stringify(prev)!==JSON.stringify(item)){
+      cloudSet(collName,id,item);
+      cache.set(id,item);
+    }
+  });
+  Array.from(cache.keys()).forEach(id=>{
+    if(!newIds.has(id)){ cloudDelete(collName,id); cache.delete(id); }
+  });
+}
+
+function syncSettingsToCloud(){
+  if(!window._fb||!window._fb.syncEnabled) return;
+  cloudSet('settings','main',{sueldo:getSueldo(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags()});
+}
+
+const LOCAL_GETTERS = {
+  transactions_credit:getC, transactions_debit:getD, debts:getDeudas,
+  people:getPersonas, categories:getCategorias, category_rules:getCatRules
+};
+
+// Llamado una sola vez por colección, en el primer snapshot tras activar el sync.
+// Empuja a la nube cualquier ítem local que aún no esté en el cache (ej. un gasto
+// agregado justo antes de que el listener se hidratara), sin borrar nada en la nube.
+// Así se evita que applyCloudCollection sobrescriba localStorage perdiendo ese ítem.
+window.reconcileFirstSync=function(collName){
+  const map=CLOUD_MAP[collName];
+  const cache=window._fb.cache[collName];
+  if(!map||!cache) return;
+  const cloudArray=map.toCloud(LOCAL_GETTERS[collName]());
+  cloudArray.forEach(item=>{
+    const id=String(map.id(item));
+    if(!cache.has(id)){
+      cloudSet(collName,id,item);
+      cache.set(id,item);
+    }
+  });
+};
+
+// Llamado desde Firebase (onSnapshot) cuando cambia una colección en la nube:
+// refleja el cambio en localStorage y refresca la pantalla activa.
+window.applyCloudCollection=function(collName,cloudArray){
+  const map=CLOUD_MAP[collName];
+  if(!map) return;
+  localStorage.setItem(map.ls,JSON.stringify(map.toLocal(cloudArray)));
+  refreshCurrentPage();
+};
+
+// Llamado desde Firebase (onSnapshot) cuando cambia el doc settings/main.
+window.applyCloudSettings=function(data){
+  if(data.sueldo!==undefined) localStorage.setItem(LS_S,String(data.sueldo));
+  if(data.billingDates) localStorage.setItem('misgastos_billing_dates',JSON.stringify(data.billingDates));
+  if(data.paymentDates) localStorage.setItem('misgastos_payment_dates',JSON.stringify(data.paymentDates));
+  if(data.paidFlags) localStorage.setItem('misgastos_paid_flags',JSON.stringify(data.paidFlags));
+  refreshCurrentPage();
+};
+
+// Indicador visual (esquina inferior izquierda) del estado de sincronización con la nube.
+window.updateSyncBadge=function(){
+  const el=document.getElementById('sync-badge');
+  if(!el||!window._fb) return;
+  if(!window._fb.user){ el.className='sync-badge'; return; }
+  if(!window._fb.syncEnabled){ el.className='sync-badge show off'; el.textContent='☁️ Sin sincronizar'; return; }
+  if(window._fb.pendingOps>0){ el.className='sync-badge show syncing'; el.textContent='🔄 Sincronizando…'; return; }
+  el.className='sync-badge show synced'; el.textContent='☁️ Sincronizado';
+};
+
+// ── dataStore: capa intermedia de persistencia ─────────────────────────────
+// Proxy 1:1 sobre localStorage (vía las funciones getX/saveX de arriba), las
+// cuales ya replican hacia Firestore mediante syncCollectionToCloud/syncSettingsToCloud.
+window.dataStore = {
+  // Transacciones de crédito
+  async getCreditTransactions(){ return getC(); },
+  async saveCreditTransaction(tx){ const a=getC(); a.push(tx); saveC(a); return tx; },
+  async updateCreditTransaction(id,patch){ const a=getC(); const i=a.findIndex(t=>t.id===id); if(i>=0){ a[i]=Object.assign({},a[i],patch); saveC(a); return a[i]; } return null; },
+  async deleteCreditTransaction(id){ saveC(getC().filter(t=>t.id!==id)); },
+
+  // Transacciones de débito
+  async getDebitTransactions(){ return getD(); },
+  async saveDebitTransaction(tx){ const a=getD(); a.push(tx); saveD(a); return tx; },
+  async updateDebitTransaction(id,patch){ const a=getD(); const i=a.findIndex(t=>t.id===id); if(i>=0){ a[i]=Object.assign({},a[i],patch); saveD(a); return a[i]; } return null; },
+  async deleteDebitTransaction(id){ saveD(getD().filter(t=>t.id!==id)); },
+
+  // Deudas / splits
+  async getDebts(){ return getDeudas(); },
+  async saveDebt(debt){ const a=getDeudas(); a.push(debt); saveDeudas(a); return debt; },
+  async updateDebt(id,patch){ const a=getDeudas(); const i=a.findIndex(d=>d.id===id); if(i>=0){ a[i]=Object.assign({},a[i],patch); saveDeudas(a); return a[i]; } return null; },
+  async deleteDebt(id){ saveDeudas(getDeudas().filter(d=>d.id!==id)); },
+
+  // Personas, categorías, reglas
+  async getPeople(){ return getPersonas(); },
+  async getCategories(){ return getCategorias(); },
+  async getCategoryRules(){ return getCatRules(); },
+
+  // Settings (sueldo, fechas de facturación/pago, flags de ciclos pagados)
+  async getSettings(){
+    return {
+      sueldo: getSueldo(),
+      billingDates: getBillingDates(),
+      paymentDates: getPaymentDates(),
+      paidFlags: getPaidFlags()
+    };
+  },
+  async updateSettings(patch){
+    if(patch.sueldo!==undefined) setSueldo(patch.sueldo);
+    if(patch.billingDates) saveBillingDates(Object.assign({},getBillingDates(),patch.billingDates));
+    if(patch.paymentDates) savePaymentDates(Object.assign({},getPaymentDates(),patch.paymentDates));
+    if(patch.paidFlags) savePaidFlags(Object.assign({},getPaidFlags(),patch.paidFlags));
+  }
+};
+
 function autoCategorize(desc){
   if(!desc) return null;
   const rules=getCatRules();
@@ -680,12 +836,22 @@ function debitoThisMonth(){
   return getD().filter(t=>{const d=new Date(t.date);return d>=start&&d<=end});
 }
 
+const PAGE_RENDERERS={dashboard:renderDashboard,tarjetas:renderTarjetas,debito:renderDebito,historial:renderHistorial,ajustes:renderAjustes,deudas:renderDeudas};
+
 function showPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   document.getElementById('nav-'+name).classList.add('active');
-  ({dashboard:renderDashboard,tarjetas:renderTarjetas,debito:renderDebito,historial:renderHistorial,ajustes:renderAjustes,deudas:renderDeudas})[name]?.();
+  PAGE_RENDERERS[name]?.();
+}
+
+// Re-renderiza la pantalla activa (usado cuando llegan cambios desde Firestore)
+function refreshCurrentPage(){
+  const active=document.querySelector('.page.active');
+  if(!active) return;
+  const name=active.id.replace('page-','');
+  PAGE_RENDERERS[name]?.();
 }
 
 let _cicloAntOpen=false;
@@ -1369,7 +1535,7 @@ function unmarkDebtPaid(id){
 }
 
 function getBillingDates(){try{return JSON.parse(localStorage.getItem('misgastos_billing_dates')||'{}')}catch{return{}}}
-function saveBillingDates(d){localStorage.setItem('misgastos_billing_dates',JSON.stringify(d))}
+function saveBillingDates(d){localStorage.setItem('misgastos_billing_dates',JSON.stringify(d));syncSettingsToCloud()}
 
 function renderAjustes(){
   document.getElementById('settings-cards-list').innerHTML=Object.values(CARDS).map(c=>`<div class="settings-row"><span class="row-label">${c.emoji} ${c.bank} ${c.num}</span><span class="row-val">${fmtCLP(c.limitCLP)}</span></div>`).join('');
@@ -1564,9 +1730,9 @@ function updateBillingDate(cardId, val){
 }
 
 function getPaymentDates(){try{return JSON.parse(localStorage.getItem('misgastos_payment_dates')||'{}')}catch{return{}}}
-function savePaymentDates(d){localStorage.setItem('misgastos_payment_dates',JSON.stringify(d))}
+function savePaymentDates(d){localStorage.setItem('misgastos_payment_dates',JSON.stringify(d));syncSettingsToCloud()}
 function getPaidFlags(){try{return JSON.parse(localStorage.getItem('misgastos_paid_flags')||'{}')}catch{return{}}}
-function savePaidFlags(d){localStorage.setItem('misgastos_paid_flags',JSON.stringify(d))}
+function savePaidFlags(d){localStorage.setItem('misgastos_paid_flags',JSON.stringify(d));syncSettingsToCloud()}
 function updatePaymentDate(cardId,val){
   const d=getPaymentDates();
   d[cardId]=Math.min(31,Math.max(1,parseInt(val)||1));
@@ -2172,6 +2338,12 @@ function importData(){
         const backup=JSON.parse(ev.target.result);
         if(!confirm('Esto reemplazará todos tus datos actuales con el respaldo. ¿Continuar?'))return;
         Object.keys(backup).forEach(k=>localStorage.setItem(k,backup[k]));
+        // Si hay sesión activa, sincroniza el respaldo restaurado hacia la nube
+        // (incluye borrados: lo que no esté en el respaldo se borra también en Firestore).
+        if(window._fb&&window._fb.syncEnabled){
+          Object.keys(CLOUD_MAP).forEach(collName=>syncCollectionToCloud(collName,LOCAL_GETTERS[collName]()));
+          syncSettingsToCloud();
+        }
         showToast('Respaldo restaurado ✓');
         setTimeout(()=>location.reload(),1500);
       }catch(err){showToast('Error al leer el archivo','var(--red)');}
@@ -2183,7 +2355,7 @@ function importData(){
 function clearData(){
   if(
 confirm('Borrar TODOS los gastos? No se puede deshacer.')){
-    localStorage.removeItem(LS_C);localStorage.removeItem(LS_D);
+    saveC([]);saveD([]);
     renderDashboard();showToast('Datos eliminados','var(--red)');
   }
 }
@@ -2426,6 +2598,235 @@ if('serviceWorker' in navigator){
     navigator.serviceWorker.register('./sw.js');
   });
 }
+</script>
+
+<!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {
+  initializeFirestore, persistentLocalCache, persistentSingleTabManager,
+  doc, getDoc, setDoc, deleteDoc, writeBatch, collection, onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDJRlWyrIBUM5f91JJ0OJKKKW54jQQ95Mw",
+  authDomain: "mis-gastos-81f60.firebaseapp.com",
+  projectId: "mis-gastos-81f60",
+  storageBucket: "mis-gastos-81f60.firebasestorage.app",
+  messagingSenderId: "323378339609",
+  appId: "1:323378339609:web:69f6ceca48198bc9a32f88"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const fbAuth = getAuth(fbApp);
+const fbDb = initializeFirestore(fbApp, {
+  localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() })
+});
+
+if(navigator.storage && navigator.storage.persist){ navigator.storage.persist().catch(()=>{}); }
+
+window._fb = { app: fbApp, auth: fbAuth, db: fbDb, user: null };
+
+// Escritura/borrado "fire and forget" hacia Firestore: si no hay sesión o falla
+// (ej. offline), no interrumpe el flujo local — Firestore reintenta solo cuando
+// vuelve la conexión gracias a la persistencia offline habilitada arriba.
+window._fb.pendingOps = 0;
+function trackPending(promise){
+  window._fb.pendingOps++;
+  window.updateSyncBadge&&window.updateSyncBadge();
+  return promise.finally(()=>{
+    window._fb.pendingOps--;
+    window.updateSyncBadge&&window.updateSyncBadge();
+  });
+}
+
+window._fb.cloudSet = async function(collName, id, data){
+  const user = window._fb.user;
+  if(!user) return;
+  try{ await trackPending(setDoc(doc(fbDb,'users',user.uid,collName,String(id)), data, {merge:true})); }
+  catch(err){ console.warn('cloudSet error',collName,id,err); }
+};
+window._fb.cloudDelete = async function(collName, id){
+  const user = window._fb.user;
+  if(!user) return;
+  try{ await trackPending(deleteDoc(doc(fbDb,'users',user.uid,collName,String(id)))); }
+  catch(err){ console.warn('cloudDelete error',collName,id,err); }
+};
+
+const SYNC_COLLECTIONS=['transactions_credit','transactions_debit','debts','people','categories','category_rules'];
+
+// Activa el cache local (window._fb.cache) hidratado desde Firestore vía onSnapshot.
+// Cada cambio en la nube se refleja en localStorage y refresca la pantalla activa
+// (window.applyCloudCollection / window.applyCloudSettings, definidos en index.html).
+function startCloudSync(uid){
+  stopCloudSync();
+  window._fb.cache={};
+  SYNC_COLLECTIONS.forEach(name=>{
+    window._fb.cache[name]=new Map();
+    let hydrated=false;
+    const unsub=onSnapshot(collection(fbDb,'users',uid,name), snap=>{
+      const map=new Map();
+      snap.forEach(d=>map.set(d.id,d.data()));
+      window._fb.cache[name]=map;
+      if(!hydrated){
+        hydrated=true;
+        window.reconcileFirstSync&&window.reconcileFirstSync(name);
+      }
+      window.applyCloudCollection&&window.applyCloudCollection(name, Array.from(window._fb.cache[name].values()));
+    });
+    window._fb.unsubscribers.push(unsub);
+  });
+  const unsubSettings=onSnapshot(doc(fbDb,'users',uid,'settings','main'), snap=>{
+    if(snap.exists()){
+      window._fb.cache.settings=snap.data();
+      window.applyCloudSettings&&window.applyCloudSettings(snap.data());
+    }
+  });
+  window._fb.unsubscribers.push(unsubSettings);
+  window._fb.syncEnabled=true;
+  window.updateSyncBadge&&window.updateSyncBadge();
+}
+
+function stopCloudSync(){
+  (window._fb.unsubscribers||[]).forEach(unsub=>unsub());
+  window._fb.unsubscribers=[];
+  window._fb.cache={};
+  window._fb.syncEnabled=false;
+}
+
+window._fb.unsubscribers=[];
+window._fb.cache={};
+window._fb.syncEnabled=false;
+
+onAuthStateChanged(fbAuth, async function(user){
+  window._fb.user = user;
+  stopCloudSync();
+  if(user){
+    try{
+      const migSnap=await getDoc(doc(fbDb,'users',user.uid,'settings','migration'));
+      if(migSnap.exists() && migSnap.data().localStorageMigrated){
+        startCloudSync(user.uid);
+      }
+    }catch(err){ console.warn('No se pudo verificar estado de migración para sync',err); }
+  }
+  window.updateSyncBadge&&window.updateSyncBadge();
+  renderCloudStatus();
+});
+
+window.cloudLogin = async function(){
+  const email = document.getElementById('cloud-email').value.trim();
+  const pass = document.getElementById('cloud-pass').value;
+  if(!email || !pass){ showToast('Ingresa email y contraseña','var(--red)'); return; }
+  try{
+    await signInWithEmailAndPassword(fbAuth, email, pass);
+    showToast('Sesión iniciada ✓');
+  }catch(err){
+    showToast('Error de login: '+err.code,'var(--red)');
+  }
+};
+
+window.cloudLogout = async function(){
+  await signOut(fbAuth);
+  showToast('Sesión cerrada');
+};
+
+// Convierte texto libre en un id de documento válido y estable (slug)
+function slugify(s){
+  return String(s).toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'') // quita tildes
+    .replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'') || 'item';
+}
+
+// Escribe un array de items en una colección, usando item.id (o un id derivado) como doc ID.
+// setDoc = idempotente: re-ejecutar la migración sobrescribe, no duplica.
+async function migrateCollection(uid, collName, items, idFn){
+  if(!items || !items.length) return 0;
+  const CHUNK=450;
+  for(let i=0;i<items.length;i+=CHUNK){
+    const batch=writeBatch(fbDb);
+    items.slice(i,i+CHUNK).forEach(item=>{
+      const id=String(idFn?idFn(item):item.id);
+      batch.set(doc(fbDb,'users',uid,collName,id), item);
+    });
+    await batch.commit();
+  }
+  return items.length;
+}
+
+window.cloudMigrate = async function(){
+  const user=window._fb.user;
+  if(!user){ showToast('Inicia sesión primero','var(--red)'); return; }
+  const uid=user.uid;
+  const migRef=doc(fbDb,'users',uid,'settings','migration');
+  try{
+    const migSnap=await getDoc(migRef);
+    if(migSnap.exists() && migSnap.data().localStorageMigrated){
+      const fecha=new Date(migSnap.data().migratedAt).toLocaleString('es-CL');
+      if(!confirm(`Ya migraste tus datos antes (${fecha}).\n\n¿Volver a migrar? Esto sobrescribirá en la nube los registros que coincidan por ID con tus datos locales actuales.`)) return;
+    } else {
+      if(!confirm('Esto copiará todos tus datos locales (transacciones, deudas, personas, categorías, reglas y configuración) a la nube.\n\nNo se borrará ni modificará nada en este dispositivo.\n\n¿Continuar?')) return;
+    }
+
+    showToast('Migrando datos a la nube...');
+    exportData(); // respaldo local descargable antes de migrar, por seguridad
+
+    const personas=getPersonas().map(name=>({id:slugify(name),name}));
+    const reglas=getCatRules().map(r=>({...r,id:slugify(r.keyword)+'_'+slugify(r.catId)}));
+
+    const counts={};
+    counts.credito=await migrateCollection(uid,'transactions_credit',getC());
+    counts.debito=await migrateCollection(uid,'transactions_debit',getD());
+    counts.deudas=await migrateCollection(uid,'debts',getDeudas());
+    counts.personas=await migrateCollection(uid,'people',personas);
+    counts.categorias=await migrateCollection(uid,'categories',getCategorias());
+    counts.reglas=await migrateCollection(uid,'category_rules',reglas);
+
+    const settings=await window.dataStore.getSettings();
+    await setDoc(doc(fbDb,'users',uid,'settings','main'), settings, {merge:true});
+
+    await setDoc(migRef, {localStorageMigrated:true, migratedAt:Date.now(), version:1});
+
+    startCloudSync(uid);
+
+    showToast('Migración completada ✓');
+    console.log('Migración completada:', counts);
+    renderCloudStatus();
+  }catch(err){
+    console.error('Error en migración:',err);
+    showToast('Error en migración: '+err.message,'var(--red)');
+  }
+};
+
+window.renderCloudStatus = async function(){
+  const el = document.getElementById('cloud-sync-section');
+  if(!el) return;
+  const user = window._fb.user;
+  if(user){
+    let migInfo='Sin migrar aún';
+    try{
+      const migSnap=await getDoc(doc(fbDb,'users',user.uid,'settings','migration'));
+      if(migSnap.exists() && migSnap.data().localStorageMigrated){
+        migInfo='Última migración: '+new Date(migSnap.data().migratedAt).toLocaleString('es-CL');
+      }
+    }catch(err){ migInfo='No se pudo verificar estado de migración'; }
+    el.innerHTML = `
+      <div class="settings-row" style="align-items:center">
+        <span class="row-label">☁️ Conectado como</span>
+        <span class="row-val" style="font-size:12px">${user.email}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text2);padding:4px 0 8px">${migInfo}</div>
+      <button onclick="cloudMigrate()" style="width:100%;padding:10px;border-radius:10px;border:none;background:var(--accent);color:white;font-size:14px;font-weight:600;cursor:pointer">📤 Migrar datos a la nube</button>
+      <button onclick="cloudLogout()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--red);font-size:14px;font-weight:600;cursor:pointer">Cerrar sesión</button>`;
+  } else {
+    el.innerHTML = `
+      <input id="cloud-email" type="email" placeholder="Email" autocomplete="username" style="width:100%;margin-bottom:8px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box">
+      <input id="cloud-pass" type="password" placeholder="Contraseña" autocomplete="current-password" style="width:100%;margin-bottom:8px;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box">
+      <button onclick="cloudLogin()" style="width:100%;padding:10px;border-radius:10px;border:none;background:var(--accent);color:white;font-size:14px;font-weight:600;cursor:pointer">Iniciar sesión</button>`;
+  }
+};
 </script>
 </body>
 </html>
