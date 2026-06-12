@@ -2767,11 +2767,10 @@ window.cloudMigrate = async function(){
       const fecha=new Date(migSnap.data().migratedAt).toLocaleString('es-CL');
       if(!confirm(`Ya migraste tus datos antes (${fecha}).\n\n¿Volver a migrar? Esto sobrescribirá en la nube los registros que coincidan por ID con tus datos locales actuales.`)) return;
     } else {
-      if(!confirm('Esto copiará todos tus datos locales (transacciones, deudas, personas, categorías, reglas y configuración) a la nube.\n\nNo se borrará ni modificará nada en este dispositivo.\n\n¿Continuar?')) return;
+      if(!confirm('Esto copiará todos tus datos locales (transacciones, deudas, personas, categorías, reglas y configuración) a la nube.\n\nNo se borrará ni modificará nada en este dispositivo.\n\nSi quieres un respaldo descargable, expórtalo desde Ajustes antes de continuar.\n\n¿Continuar?')) return;
     }
 
     showToast('Migrando datos a la nube...');
-    exportData(); // respaldo local descargable antes de migrar, por seguridad
 
     const personas=getPersonas().map(name=>({id:slugify(name),name}));
     const reglas=getCatRules().map(r=>({...r,id:slugify(r.keyword)+'_'+slugify(r.catId)}));
