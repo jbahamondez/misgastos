@@ -239,7 +239,8 @@
     .deuda-item:last-child{border-bottom:none}
     .deuda-item.paid{opacity:.45}
     .deuda-item-info{flex:1;min-width:0}
-    .deuda-item-desc{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .deuda-item-title{display:flex;align-items:center;gap:6px;min-width:0}
+    .deuda-item-desc{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
     .deuda-item-meta{font-size:11px;color:var(--text2);margin-top:2px}
     .deuda-item-amount{text-align:right;flex-shrink:0}
     .deuda-item-amount .da{font-size:14px;font-weight:700;color:var(--accent2)}
@@ -253,7 +254,7 @@
     .cycle-total-badge{font-size:13px;font-weight:700;color:var(--accent2)}
     .cycle-total-badge.paid{color:var(--green);font-size:12px}
     .btn-mark-all-cycle{width:calc(100% - 40px);margin:6px 20px 2px;padding:11px;border-radius:var(--radius);border:1px solid var(--green);background:rgba(52,211,153,.1);color:var(--green);font-size:13px;font-weight:600;cursor:pointer;display:block}
-    .deuda-type-badge{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;vertical-align:middle;margin-left:4px}
+    .deuda-type-badge{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;vertical-align:middle;flex-shrink:0;white-space:nowrap}
     .deuda-type-badge.credito{background:rgba(139,92,246,.15);color:#a78bfa}
     .deuda-type-badge.debito{background:rgba(59,130,246,.15);color:#60a5fa}
     /* ── Historial filtros ───────────────────────────────────────── */
@@ -1438,7 +1439,7 @@ function renderDeudas(){
     const cuotaStr=d.cuotas>1?` · ${d.cuotas} cuotas · ${fmtCLP(d.deudaPerCuota)}/cuota`:'';
     return `<div class="deuda-item ${d.paid?'paid':''}">
       <div class="deuda-item-info">
-        <div class="deuda-item-desc">${d.desc} ${tipoBadge}</div>
+        <div class="deuda-item-title">${tipoBadge}<span class="deuda-item-desc">${d.desc}</span></div>
         <div class="deuda-item-meta">${dateStr}${cuotaStr}${d.paid?' · ✅ Cobrado el '+new Date(d.paidDate).toLocaleDateString('es-CL',{day:'2-digit',month:'short'}):''}</div>
       </div>
       <div class="deuda-item-amount">
