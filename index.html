@@ -266,6 +266,45 @@
     .hist-date-filters::-webkit-scrollbar{display:none}
     .hdf-chip{flex-shrink:0;padding:6px 13px;border-radius:20px;font-size:12px;font-weight:500;border:1px solid var(--border);background:none;color:var(--text2);cursor:pointer;transition:all .2s}
     .hdf-chip.active{background:var(--accent2);border-color:var(--accent2);color:#0f1117}
+
+    /* ── Pulido visual ───────────────────────────────────────────── */
+    /* Cabecera sticky translúcida con blur (estilo iOS) */
+    .page-header{background:rgba(15,17,23,.82);backdrop-filter:saturate(160%) blur(14px);-webkit-backdrop-filter:saturate(160%) blur(14px)}
+    /* Profundidad sutil en tarjetas y cajas */
+    .card-item{box-shadow:0 8px 24px rgba(0,0,0,.35)}
+    .salud-box,.summary-box,.proyeccion-box,.ciclo-ant-box,.debit-summary,.deuda-summary-box,.tarjeta-detail,.settings-list,.import-box,.preview-box,.deuda-person-card{box-shadow:0 1px 3px rgba(0,0,0,.22)}
+    .modal,.split-modal{box-shadow:0 -8px 32px rgba(0,0,0,.45)}
+    .toast{box-shadow:0 6px 20px rgba(0,0,0,.4)}
+    /* Micro-interacciones: feedback táctil */
+    .tx-item{transition:transform .12s ease,border-color .15s ease}
+    .tx-item:active{transform:scale(.985)}
+    .btn-save{background:linear-gradient(135deg,var(--accent),#8b7cff);transition:transform .12s,filter .15s}
+    .btn-save:active{transform:scale(.97);filter:brightness(1.12)}
+    .btn-cancel,.filter-chip,.hdf-chip,.bank-chip,.person-chip,.modal-tab,.btn-paid,.btn-import,.btn-discard,.sueldo-edit-btn,.copy-btn{transition:all .15s ease}
+    .btn-cancel:active,.filter-chip:active,.hdf-chip:active,.bank-chip:active,.person-chip:active,.modal-tab:active,.btn-paid:active,.btn-import:active,.btn-discard:active,.sueldo-edit-btn:active,.copy-btn:active{transform:scale(.96)}
+    button[onclick="openAnalisisModal()"],button[onclick="compartirResumenDeudas()"]{transition:transform .12s ease}
+    button[onclick="openAnalisisModal()"]:active,button[onclick="compartirResumenDeudas()"]:active{transform:scale(.96)}
+    /* Indicador de pestaña activa + nav con blur */
+    .bottom-nav{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);background:rgba(26,29,39,.92)}
+    .nav-btn{position:relative}
+    .nav-btn.active::after{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:20px;height:3px;border-radius:0 0 3px 3px;background:var(--accent2)}
+    /* FAB con degradado de la marca */
+    .fab{background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 6px 22px rgba(108,99,255,.45)}
+    /* Foco consistente en formularios */
+    .modal input:focus,.modal select:focus,.hist-search input:focus,.sueldo-input-row input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(108,99,255,.18)}
+    /* Transición suave al cambiar de página */
+    @keyframes pageIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+    .page.active,.deudas-page.active{animation:pageIn .22s ease}
+
+    /* ── Desktop / pantallas anchas: marco móvil centrado ────────── */
+    @media (min-width:640px){
+      body{max-width:520px;margin:0 auto;box-shadow:0 0 0 1px var(--border),0 0 60px rgba(0,0,0,.55)}
+      .bottom-nav{left:50%;transform:translateX(-50%);width:100%;max-width:520px;border-left:1px solid var(--border);border-right:1px solid var(--border)}
+      .fab{right:calc(50% - 260px + 20px)}
+      .sync-badge{left:calc(50% - 260px + 14px)}
+      .modal,.split-modal{max-width:520px;margin:0 auto}
+      #analisis-overlay > div{max-width:520px;margin:0 auto}
+    }
   </style>
 </head>
 <body>
