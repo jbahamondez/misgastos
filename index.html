@@ -1352,8 +1352,8 @@ function renderHistorial(){
   let all=[];
   if(activeFilter==='all'||activeFilter==='credito'||CARDS[activeFilter])
     all=[...all,...getC().filter(t=>activeFilter==='all'||activeFilter==='credito'||t.cardId===activeFilter)];
-  if(activeFilter==='all'||activeFilter==='debito')
-    all=[...all,...getD().map(t=>({...t,_isDebit:true}))];
+  if(activeFilter==='all'||activeFilter==='debito'||CARDS[activeFilter])
+    all=[...all,...getD().filter(t=>activeFilter==='all'||activeFilter==='debito'||t.bank===activeFilter).map(t=>({...t,_isDebit:true}))];
 
   // Apply date filter
   if(dateStart&&dateEnd){
@@ -1541,6 +1541,7 @@ function saveBillingDates(d){localStorage.setItem('misgastos_billing_dates',JSON
 function renderAjustes(){
   document.getElementById('settings-cards-list').innerHTML=Object.values(CARDS).map(c=>`<div class="settings-row"><span class="row-label">${c.emoji} ${c.bank} ${c.num}</span><span class="row-val">${fmtCLP(c.limitCLP)}</span></div>`).join('');
   renderPersonasAjustes();
+  renderCategoriasAjustes();
   // Fechas de facturación
   const billing=getBillingDates();
   const tarjetas=[
@@ -1646,30 +1647,21 @@ function closeAddCatModal(e){
   document.getElementById('add-cat-overlay').classList.remove('open');
   _editCatId=null;
 }
+let _selectedCatColor=CAT_COLORS[0];
 function renderColorPicker(selected){
+  _selectedCatColor=selected;
   document.getElementById('cat-color-picker').innerHTML=CAT_COLORS.map(c=>`
-    <div onclick="selectCatColor('${c}')" style="width:26px;height:26px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${c===selected?'#fff':'transparent'};box-sizing:border-box" data-color="${c}"></div>
+    <div onclick="selectCatColor('${c}')" style="width:26px;height:26px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${c===selected?'#fff':'transparent'};box-sizing:border-box"></div>
   `).join('');
 }
 function selectCatColor(color){
   renderColorPicker(color);
 }
-function getSelectedColor(){
-  const sel=document.querySelector('#cat-color-picker div[style*="border: 3px solid rgb(255"]');
-  if(sel) return sel.getAttribute('data-color');
-  // fallback: find by white border
-  const divs=document.querySelectorAll('#cat-color-picker div');
-  for(const d of divs){if(d.style.border.includes('#fff')||d.style.borderColor==='white') return d.getAttribute('data-color');}
-  return CAT_COLORS[0];
-}
 function confirmSaveCat(){
   const emoji=document.getElementById('cat-emoji-input').value.trim()||'📦';
   const name=document.getElementById('cat-name-input').value.trim();
   if(!name){showToast('Ingresa un nombre','var(--yellow)');return;}
-  // find selected color
-  const colorDivs=document.querySelectorAll('#cat-color-picker div');
-  let color=CAT_COLORS[0];
-  colorDivs.forEach(d=>{if(d.style.border&&d.style.border.includes('rgb(255, 255, 255)')) color=d.getAttribute('data-color');});
+  const color=_selectedCatColor;
   const cats=getCategorias();
   if(_editCatId){
     const idx=cats.findIndex(c=>c.id===_editCatId);
@@ -1979,10 +1971,10 @@ function deleteTx(txId, txType){
     saveD(getD().filter(t=>t.id!==txId));
   } else {
     saveC(getC().filter(t=>t.id!==txId));
-    // También eliminar deuda asociada si existe
-    saveDeudas(getDeudas().filter(d=>d.txId!==txId));
   }
-  renderDashboard(); renderDebito(); renderHistorial();
+  // También eliminar deuda asociada si existe
+  saveDeudas(getDeudas().filter(d=>d.txId!==txId));
+  renderDashboard(); renderDebito(); renderHistorial(); renderDeudas();
   showToast('Gasto eliminado');
 }
 
@@ -2136,13 +2128,14 @@ function splitApplyAll(){
   const totalParticipants=personas.length+1;
   while(_splitQueue.length>0){
     const item=_splitQueue.shift();
-    const cuotasR=(item.type||'credito')==='debito'?1:Math.max(1,item.cuotas||1);
+    const esDebito=(item.type||'credito')==='debito';
+    const cuotasR=esDebito?1:Math.max(1,item.cuotas||1);
     const cuotaAmt=item.amount/cuotasR;
     const personShare=cuotaAmt/totalParticipants;
     const userTotal=(cuotaAmt/totalParticipants)*cuotasR;
-    const credData=getC();
-    const idx=credData.findIndex(t=>t.id===item.txId);
-    if(idx>=0){credData[idx].amount=userTotal;credData[idx].splitWith=personas.join(', ');credData[idx].splitTotal=item.amount;saveC(credData);}
+    const txData=esDebito?getD():getC();
+    const idx=txData.findIndex(t=>t.id===item.txId);
+    if(idx>=0){txData[idx].amount=userTotal;txData[idx].splitWith=personas.join(', ');txData[idx].splitTotal=item.amount;(esDebito?saveD:saveC)(txData);}
     const ds=getDeudas();
     personas.forEach(persona=>{
       ds.push({id:'deu_'+Date.now()+'_'+Math.random().toString(36).slice(2),
