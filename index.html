@@ -2386,9 +2386,9 @@ function importData(){
   input.click();
 }
 function clearData(){
-  if(confirm('¿Borrar TODOS tus gastos de crédito y débito?\n\nTus categorías, reglas, personas y configuración NO se borran.\n\nEsta acción no se puede deshacer.')){
-    saveC([]);saveD([]);
-    renderDashboard();renderDebito();renderHistorial();
+  if(confirm('¿Borrar TODOS tus gastos de crédito y débito?\n\nTambién se eliminarán las deudas/divisiones asociadas (dependen de esos gastos).\n\nTus categorías, reglas, personas y configuración NO se borran.\n\nEsta acción no se puede deshacer.')){
+    saveC([]);saveD([]);saveDeudas([]);
+    renderDashboard();renderDebito();renderHistorial();renderDeudas();
     showToast('Gastos eliminados','var(--red)');
   }
 }
