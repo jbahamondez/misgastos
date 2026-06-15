@@ -986,7 +986,7 @@ function renderDashboard(){
   // Recientes
   const recent=[...getC(),...getD().map(t=>({...t,_isDebit:true}))].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
   document.getElementById('recent-list').innerHTML=recent.length?recent.map(txHTML).join('')
-    :'<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg><h3>Sin gastos aun</h3><p>Toca + para agregar tu primer gasto</p></div>';
+    :'<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg><h3>Sin gastos aún</h3><p>Toca + para agregar tu primer gasto</p><button onclick="openModal()" style="margin-top:14px;padding:10px 20px;border-radius:20px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:14px;font-weight:600;cursor:pointer">+ Agregar gasto</button></div>';
 }
 
 function renderSalud(totCred){
@@ -1040,7 +1040,7 @@ function renderSalud(totCred){
       <div class="bar-section-item"><div class="bs-dot" style="background:var(--red)"></div>Credito ${fmtPct(pC)}</div>
       <div class="bar-section-item"><div class="bs-dot" style="background:var(--blue)"></div>Debito ${fmtPct(pD)}</div>
       <div class="bar-section-item"><div class="bs-dot" style="background:var(--green)"></div>Ahorro ${fmtPct(pA)}</div>
-    </div>`:'<p style="font-size:13px;color:var(--text2);text-align:center;padding:10px 0">Ingresa tu sueldo para ver metricas</p>'}`;
+    </div>`:'<p style="font-size:13px;color:var(--text2);text-align:center;padding:10px 0">Ingresa tu sueldo para ver métricas</p>'}`;
 }
 
 let _sueldoOculto=false;
@@ -1059,7 +1059,7 @@ function toggleSueldoInput(){
 }
 function guardarSueldo(){
   const v=parseFloat(document.getElementById('sueldo-input').value);
-  if(!v||v<=0){showToast('Ingresa un sueldo valido','var(--yellow)');return}
+  if(!v||v<=0){showToast('Ingresa un sueldo válido','var(--yellow)');return}
   setSueldo(v); renderDashboard(); showToast('Sueldo guardado');
 }
 
@@ -1407,7 +1407,7 @@ function renderHistorial(){
   all.sort((a,b)=>new Date(b.date)-new Date(a.date));
   document.getElementById('hist-subtitle').textContent=all.length+' movimiento'+(all.length!==1?'s':'');
   document.getElementById('hist-list').innerHTML=all.length?all.map(txHTML).join('')
-    :'<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><h3>Sin resultados</h3><p>Prueba con otro filtro o busqueda</p></div>';
+    :'<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><h3>Sin resultados</h3><p>Prueba con otro filtro o búsqueda</p></div>';
 }
 function setFilter(id){activeFilter=id;renderHistorial();}
 function setDateFilter(id){activeDateFilter=id;renderHistorial();}
@@ -2028,7 +2028,7 @@ function txHTML(t){
   const txType=isD?'debito':'credito';
   return`<div class="tx-item ${isD?'debito':''}" oncontextmenu="openTxMenu(event,'${t.id}','${txType}')" ontouchstart="startTxHold(event,'${t.id}','${txType}')" ontouchend="cancelTxHold()" ontouchmove="cancelTxHold()">
     <div class="tx-icon" style="background:${color}22">${getIcon(t.desc)}</div>
-    <div class="tx-info"><div class="tx-name">${t.desc||'Sin descripcion'}</div><div class="tx-meta">${bank} - ${date}</div></div>
+    <div class="tx-info"><div class="tx-name">${t.desc||'Sin descripción'}</div><div class="tx-meta">${bank} · ${date}</div></div>
     <div class="tx-amount"><div class="amount" style="color:${t.amount<0?'var(--green)':(isD?'var(--blue)':'var(--text)')}">${amt}</div><div class="cuotas">${cuota}</div></div>
   </div>`;
 }
@@ -2089,8 +2089,8 @@ const _origCloseSplit=window.closeSplitModal;
 
 function saveExpense(){
   const amount=parseFloat(document.getElementById('m-amount').value);
-  const desc=(document.getElementById('m-desc').value.trim())||'Sin descripcion';
-  if(!amount||amount<=0){showToast('Ingresa un monto valido','var(--yellow)');return}
+  const desc=(document.getElementById('m-desc').value.trim())||'Sin descripción';
+  if(!amount||amount<=0){showToast('Ingresa un monto válido','var(--yellow)');return}
   // Fecha: usar la del campo, o hoy si está vacío
   const dateVal=document.getElementById('m-date').value;
   const txDate=dateVal?new Date(dateVal+'T12:00:00').toISOString():new Date().toISOString();
@@ -2303,7 +2303,7 @@ function confirmSplit(){
 window.addExpenseFromShortcut=function(cardId,amount,desc,cuotas,currency){
   const d=getC();
   d.push({id:Date.now().toString(),cardId:cardId||'bci',amount:parseFloat(amount)||0,
-    desc:desc||'Gasto automatico',cuotas:parseInt(cuotas)||1,currency:currency||'CLP',
+    desc:desc||'Gasto automático',cuotas:parseInt(cuotas)||1,currency:currency||'CLP',
     date:new Date().toISOString(),source:'shortcut'});
   saveC(d); renderDashboard(); return'OK';
 };
@@ -2348,7 +2348,7 @@ function copyApiInfo(){
     '// Banco Chile Crédito\nwindow.parseEmailBancoChile(emailBody);\n\n'+
     '// Manual crédito\nwindow.addExpenseFromShortcut(\'bci\', 52900, \'COMERCIO\', 1, \'CLP\');'
   )
-    .then(()=>showToast('Codigo copiado'));
+    .then(()=>showToast('Código copiado'));
 }
 function exportData(){
   const backup={};
@@ -2386,10 +2386,10 @@ function importData(){
   input.click();
 }
 function clearData(){
-  if(
-confirm('Borrar TODOS los gastos? No se puede deshacer.')){
+  if(confirm('¿Borrar TODOS tus gastos de crédito y débito?\n\nTus categorías, reglas, personas y configuración NO se borran.\n\nEsta acción no se puede deshacer.')){
     saveC([]);saveD([]);
-    renderDashboard();showToast('Datos eliminados','var(--red)');
+    renderDashboard();renderDebito();renderHistorial();
+    showToast('Gastos eliminados','var(--red)');
   }
 }
 function showToast(msg,color){
@@ -2469,7 +2469,7 @@ function handleURLParams(){
   const p=new URLSearchParams(window.location.search);
   if(!p.has('amount')) return;
   const amount=parseFloat(p.get('amount')||0);
-  const desc=decodeURIComponent(p.get('desc')||'Gasto automatico');
+  const desc=decodeURIComponent(p.get('desc')||'Gasto automático');
   const type=p.get('type')||'credito';
   const bank=p.get('bank')||'bci';
   const cuotas=parseInt(p.get('cuotas')||1);
@@ -2754,7 +2754,16 @@ window.cloudLogin = async function(){
     await signInWithEmailAndPassword(fbAuth, email, pass);
     showToast('Sesión iniciada ✓');
   }catch(err){
-    showToast('Error de login: '+err.code,'var(--red)');
+    const msgs={
+      'auth/invalid-email':'El email no es válido',
+      'auth/invalid-credential':'Email o contraseña incorrectos',
+      'auth/wrong-password':'Email o contraseña incorrectos',
+      'auth/user-not-found':'Email o contraseña incorrectos',
+      'auth/user-disabled':'Esta cuenta está deshabilitada',
+      'auth/too-many-requests':'Demasiados intentos. Espera unos minutos',
+      'auth/network-request-failed':'Sin conexión. Revisa tu internet'
+    };
+    showToast(msgs[err.code]||'No se pudo iniciar sesión','var(--red)');
   }
 };
 
