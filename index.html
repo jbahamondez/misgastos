@@ -188,7 +188,7 @@
     .empty h3{font-size:17px;color:var(--text);margin-bottom:6px}
     .empty p{font-size:13px}
     .toast{position:fixed;top:calc(var(--safe-top) + 8px);left:50%;transform:translateX(-50%) translateY(-80px);background:var(--green);color:#0f1117;padding:9px 18px;border-radius:20px;font-size:13px;font-weight:600;z-index:999;transition:transform .3s ease;white-space:nowrap}
-    .sync-badge{position:fixed;bottom:calc(var(--safe-bottom) + 72px);left:14px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;z-index:998;pointer-events:none;letter-spacing:.4px;display:none}
+    .sync-badge{position:fixed;bottom:calc(var(--safe-bot) + 60px);left:14px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;z-index:998;pointer-events:none;letter-spacing:.4px;display:none}
     .sync-badge.show{display:inline-block}
     .sync-badge.synced{background:rgba(52,211,153,.15);color:var(--green);border:1px solid rgba(52,211,153,.3)}
     .sync-badge.syncing{background:rgba(251,191,36,.15);color:var(--yellow);border:1px solid rgba(251,191,36,.3)}
@@ -1592,9 +1592,9 @@ function renderAjustes(){
     <div class="settings-row" style="align-items:center;gap:10px">
       <span class="row-label" style="flex:1">${t.label}</span>
       <span style="font-size:12px;color:var(--text2)">Día de cierre:</span>
-      <input type="number" min="1" max="31" inputmode="numeric" pattern="[0-9]*" value="${billing[t.id]||1}"
+      <input type="number" min="1" max="31" inputmode="numeric" pattern="[0-9]*" value="${billing[t.id]||19}"
         style="width:52px;text-align:center;padding:6px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"
-        onblur="updateBillingDate('${t.id}',this.value||'1');this.value=getBillingDates()['${t.id}']||1"
+        onblur="updateBillingDate('${t.id}',this.value||'19');this.value=getBillingDates()['${t.id}']||19"
         onkeydown="if(event.key==='Enter'){this.blur()}"
       />
     </div>`).join('');
