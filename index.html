@@ -2084,9 +2084,6 @@ function processSplitQueue(){
   openSplitModal(next);
 }
 
-// Override closeSplitModal para procesar siguiente en cola
-const _origCloseSplit=window.closeSplitModal;
-
 function saveExpense(){
   const amount=parseFloat(document.getElementById('m-amount').value);
   const desc=(document.getElementById('m-desc').value.trim())||'Sin descripción';
