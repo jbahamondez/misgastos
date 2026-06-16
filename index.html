@@ -188,11 +188,12 @@
     .empty h3{font-size:17px;color:var(--text);margin-bottom:6px}
     .empty p{font-size:13px}
     .toast{position:fixed;top:calc(var(--safe-top) + 8px);left:50%;transform:translateX(-50%) translateY(-80px);background:var(--green);color:#0f1117;padding:9px 18px;border-radius:20px;font-size:13px;font-weight:600;z-index:999;transition:transform .3s ease;white-space:nowrap}
-    .sync-badge{position:fixed;bottom:calc(var(--safe-bot) + 60px);left:14px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;z-index:998;pointer-events:none;letter-spacing:.4px;display:none}
-    .sync-badge.show{display:inline-block}
-    .sync-badge.synced{background:rgba(52,211,153,.15);color:var(--green);border:1px solid rgba(52,211,153,.3)}
-    .sync-badge.syncing{background:rgba(251,191,36,.15);color:var(--yellow);border:1px solid rgba(251,191,36,.3)}
-    .sync-badge.off{background:rgba(148,163,184,.15);color:var(--text2);border:1px solid rgba(148,163,184,.3)}
+    .sync-badge{position:fixed;top:calc(var(--safe-top) + 12px);right:18px;width:30px;height:30px;border-radius:50%;display:none;align-items:center;justify-content:center;font-size:14px;z-index:60;pointer-events:none;border:1px solid transparent;transition:opacity .3s ease}
+    .sync-badge.show{display:flex}
+    .sync-badge.synced{background:rgba(52,211,153,.14);border-color:rgba(52,211,153,.32)}
+    .sync-badge.syncing{background:rgba(251,191,36,.14);border-color:rgba(251,191,36,.32);animation:syncPulse 1s ease-in-out infinite}
+    .sync-badge.off{background:rgba(148,163,184,.12);border-color:rgba(148,163,184,.28)}
+    @keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.45}}
     .toast.show{transform:translateX(-50%) translateY(0)}
     .pb14{padding-bottom:14px}
 
@@ -301,7 +302,7 @@
       body{max-width:520px;margin:0 auto;box-shadow:0 0 0 1px var(--border),0 0 60px rgba(0,0,0,.55)}
       .bottom-nav{left:50%;transform:translateX(-50%);width:100%;max-width:520px;border-left:1px solid var(--border);border-right:1px solid var(--border)}
       .fab{right:calc(50% - 260px + 20px)}
-      .sync-badge{left:calc(50% - 260px + 14px)}
+      .sync-badge{right:calc(50% - 260px + 18px)}
       .modal,.split-modal{max-width:520px;margin:0 auto}
       #analisis-overlay > div{max-width:520px;margin:0 auto}
     }
@@ -763,9 +764,9 @@ window.updateSyncBadge=function(){
   const el=document.getElementById('sync-badge');
   if(!el||!window._fb) return;
   if(!window._fb.user){ el.className='sync-badge'; return; }
-  if(!window._fb.syncEnabled){ el.className='sync-badge show off'; el.textContent='☁️ Sin sincronizar'; return; }
-  if(window._fb.pendingOps>0){ el.className='sync-badge show syncing'; el.textContent='🔄 Sincronizando…'; return; }
-  el.className='sync-badge show synced'; el.textContent='☁️ Sincronizado';
+  if(!window._fb.syncEnabled){ el.className='sync-badge show off'; el.textContent='☁️'; el.title='Sin sincronizar'; return; }
+  if(window._fb.pendingOps>0){ el.className='sync-badge show syncing'; el.textContent='🔄'; el.title='Sincronizando…'; return; }
+  el.className='sync-badge show synced'; el.textContent='☁️'; el.title='Sincronizado';
 };
 
 // ── dataStore: capa intermedia de persistencia ─────────────────────────────
