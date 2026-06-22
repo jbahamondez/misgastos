@@ -304,7 +304,7 @@
       .fab{right:calc(50% - 260px + 20px)}
       .sync-badge{right:calc(50% - 260px + 18px)}
       .modal,.split-modal{max-width:520px;margin:0 auto}
-      #analisis-overlay > div{max-width:520px;margin:0 auto}
+      #analisis-overlay > div,#quedebo-overlay > div{max-width:520px;margin:0 auto}
     }
   </style>
 </head>
@@ -316,7 +316,8 @@
   <div id="dash-main-widget" style="margin:16px 20px 0"></div>
   <div id="dash-chips" style="margin:12px 20px 0;display:flex;gap:10px"></div>
   <div class="salud-box" id="salud-box"></div>
-  <div style="margin:14px 20px 4px;text-align:right">
+  <div style="margin:14px 20px 4px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+    <button onclick="openQueDeboModal()" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:20px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">🧾 ¿Qué debo?</button>
     <button onclick="openAnalisisModal()" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:20px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">📊 Ver análisis</button>
   </div>
   <div class="section-header"><h3>Últimos movimientos</h3><button onclick="showPage('historial')">Ver todos</button></div>
@@ -477,6 +478,18 @@
     <div style="padding:14px 20px 0;display:flex;gap:8px;overflow-x:auto;padding-bottom:8px" id="analisis-period-filters"></div>
     <div style="padding:14px 20px 0" id="analisis-type-filters"></div>
     <div style="padding:14px 20px" id="analisis-content"></div>
+  </div>
+</div>
+
+<!-- MODAL: ¿Qué debo? (desglose de compras por pagar — solo lectura) -->
+<div class="modal-overlay" id="quedebo-overlay" onclick="closeQueDeboOutside(event)" style="align-items:flex-start;padding-top:0">
+  <div style="background:var(--bg);width:100%;max-height:92vh;overflow-y:auto;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom,20px)">
+    <div style="padding:16px 20px 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg);z-index:1;border-bottom:1px solid var(--border);padding-bottom:12px">
+      <h2 style="font-size:18px;font-weight:700">🧾 ¿Qué debo?</h2>
+      <button onclick="closeQueDeboModal()" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="padding:14px 20px 0;display:flex;gap:8px" id="quedebo-tabs"></div>
+    <div style="padding:14px 20px" id="quedebo-content"></div>
   </div>
 </div>
 
@@ -2607,6 +2620,92 @@ function renderAnalisis(){
   }).join('');
 
   document.getElementById('analisis-content').innerHTML=pieChart+breakdown;
+}
+
+// ── ¿Qué debo? — desglose de compras por pagar ────────────────────────────
+// Funcion nueva 100% de SOLO LECTURA: reutiliza getCycleTxs/getPrevCycleTxs y
+// la misma formula (monto/cuotas) que ya usa la app, asi el total cuadra con
+// el dashboard y el recordatorio de pago. No modifica datos ni vistas existentes.
+let _queDeboPeriod='cerrado'; // 'cerrado' = ciclo que ya cerro (a pagar) | 'actual' = ciclo en curso
+
+function openQueDeboModal(){
+  renderQueDebo();
+  document.getElementById('quedebo-overlay').classList.add('open');
+}
+function closeQueDeboModal(){
+  document.getElementById('quedebo-overlay').classList.remove('open');
+}
+function closeQueDeboOutside(e){
+  if(e.target===document.getElementById('quedebo-overlay')) closeQueDeboModal();
+}
+function setQueDeboPeriod(p){ _queDeboPeriod=p; renderQueDebo(); }
+
+function renderQueDebo(){
+  const period=_queDeboPeriod;
+  const tabs=[
+    {id:'cerrado',label:'Por pagar (ciclo cerrado)'},
+    {id:'actual',label:'Ciclo actual (en curso)'}
+  ];
+  document.getElementById('quedebo-tabs').innerHTML=tabs.map(t=>
+    `<button onclick="setQueDeboPeriod('${t.id}')" style="flex:1;padding:9px;border-radius:10px;border:1px solid ${period===t.id?'var(--accent2)':'var(--border)'};background:${period===t.id?'var(--accent2)':'transparent'};color:${period===t.id?'#fff':'var(--text2)'};font-size:12px;font-weight:600;cursor:pointer">${t.label}</button>`
+  ).join('');
+
+  // Recolecta las compras de todas las tarjetas para el ciclo elegido (misma logica que la app)
+  let items=[];
+  Object.values(CARDS).forEach(c=>{
+    const txs = period==='cerrado' ? getPrevCycleTxs(c.id) : getCycleTxs(c.id);
+    txs.forEach(t=>items.push({tx:t, card:c}));
+  });
+  items.sort((a,b)=>new Date(b.tx.date)-new Date(a.tx.date));
+
+  let totalCLP=0, totalUSD=0;
+  items.forEach(({tx})=>{
+    const cuota=tx.amount/Math.max(1,tx.cuotas||1);
+    if(tx.currency==='USD') totalUSD+=cuota; else totalCLP+=cuota;
+  });
+
+  const ref = period==='cerrado' ? getPrevCycle('bci') : getCycle('bci');
+  const rango = ref.start.toLocaleDateString('es-CL',{day:'2-digit',month:'short'})+' – '+ref.end.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
+  const explica = period==='cerrado'
+    ? 'Compras del ciclo que ya cerró: esto es lo que debes pagar al banco.'
+    : 'Compras del ciclo en curso: se facturarán en el próximo cierre.';
+
+  const cont=document.getElementById('quedebo-content');
+  if(!items.length){
+    cont.innerHTML=`<div style="text-align:center;padding:40px 0;color:var(--text2)"><div style="font-size:40px">${period==='cerrado'?'🎉':'🧾'}</div><p style="margin-top:8px">${period==='cerrado'?'No tienes nada por pagar de este ciclo':'Sin compras en el ciclo actual'}</p></div>`;
+    return;
+  }
+
+  const rows=items.map(({tx,card})=>{
+    const cuota=tx.amount/Math.max(1,tx.cuotas||1);
+    const esUSD=tx.currency==='USD';
+    const montoCuota=esUSD?fmtUSD(cuota):fmtCLP(cuota);
+    const nCuotas=tx.cuotas>1?`${tx.cuotas} cuotas`:'Contado';
+    const montoFull=tx.cuotas>1?` · total ${esUSD?fmtUSD(tx.amount):fmtCLP(tx.amount)}`:'';
+    const fecha=new Date(tx.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
+    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)">
+      <div style="width:10px;height:10px;border-radius:50%;background:${card.color};flex-shrink:0" title="${card.bank}"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tx.desc||'Sin descripción'}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">${card.bank} · ${fecha} · ${nCuotas}${montoFull}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:14px;font-weight:700">${montoCuota}</div>
+        ${tx.cuotas>1?'<div style="font-size:10px;color:var(--text2)">por cuota</div>':''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const totalLine=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:2px solid var(--border)">
+      <span style="font-size:14px;font-weight:600">Total a pagar</span>
+      <span style="font-size:18px;font-weight:700;color:var(--accent2)">${fmtCLP(totalCLP)}${totalUSD>0?' + '+fmtUSD(totalUSD):''}</span>
+    </div>`;
+
+  cont.innerHTML=`
+    <div style="font-size:12px;color:var(--text2);margin-bottom:4px">${explica}</div>
+    <div style="font-size:12px;color:var(--accent2);margin-bottom:14px">📅 ${rango} · ${items.length} compra${items.length!==1?'s':''}</div>
+    ${rows}
+    ${totalLine}`;
 }
 
 document.addEventListener('DOMContentLoaded',function(){
