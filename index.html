@@ -56,7 +56,7 @@
     .salud-sueldo-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
     .salud-sueldo-label{font-size:13px;color:var(--text2);flex:1}
     .sueldo-edit-btn{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 12px;color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer}
-    .sueldo-eye-btn{background:none;border:none;padding:4px 6px;cursor:pointer;color:var(--text2);font-size:16px;line-height:1;border-radius:6px}
+    .sueldo-eye-btn{background:none;border:none;padding:4px 6px;cursor:pointer;color:var(--text2);font-size:16px;line-height:1;border-radius:6px;display:flex;align-items:center}
     .sueldo-input-row{display:none;gap:8px;margin-bottom:12px}
     .sueldo-input-row.visible{display:flex}
     .sueldo-input-row input{flex:1;background:var(--bg3);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;color:var(--text);font-size:15px;outline:none}
@@ -1022,7 +1022,7 @@ function renderSalud(totCred){
     <div class="salud-header"><h3>Salud Financiera</h3><span class="salud-badge ${cls}">${badge}</span></div>
     <div class="salud-sueldo-row">
       <span class="salud-sueldo-label">Ingreso mensual: <strong style="color:var(--text)" id="sueldo-display">${sueldo?(_sueldoOculto?'••••••':fmtCLP(sueldo)):'No ingresado'}</strong></span>
-      ${sueldo?`<button class="sueldo-eye-btn" onclick="toggleSueldoVisibility()" title="Ocultar ingreso">${_sueldoOculto?'👁️‍🗨️':'👁️'}</button>`:''}
+      ${sueldo?`<button class="sueldo-eye-btn" onclick="toggleSueldoVisibility()" title="${_sueldoOculto?'Mostrar ingreso':'Ocultar ingreso'}">${sueldoEyeIcon(_sueldoOculto)}</button>`:''}
       <button class="sueldo-edit-btn" onclick="toggleSueldoInput()">${sueldo?'Editar':'+ Ingresar'}</button>
     </div>
     <div class="sueldo-input-row" id="sueldo-input-row">
@@ -1057,14 +1057,19 @@ function renderSalud(totCred){
     </div>`:'<p style="font-size:13px;color:var(--text2);text-align:center;padding:10px 0">Ingresa tu sueldo para ver métricas</p>'}`;
 }
 
-let _sueldoOculto=false;
+let _sueldoOculto=true; // el ingreso arranca oculto por defecto
+function sueldoEyeIcon(oculto){
+  return oculto
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;display:block"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px;display:block"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+}
 function toggleSueldoVisibility(){
   _sueldoOculto=!_sueldoOculto;
   const sueldo=getSueldo();
   const display=document.getElementById('sueldo-display');
-  const btn=display?.parentElement?.querySelector('.sueldo-eye-btn');
+  const btn=document.querySelector('.salud-sueldo-row .sueldo-eye-btn');
   if(display) display.textContent=_sueldoOculto?'••••••':fmtCLP(sueldo);
-  if(btn) btn.textContent=_sueldoOculto?'👁️‍🗨️':'👁️';
+  if(btn){ btn.innerHTML=sueldoEyeIcon(_sueldoOculto); btn.title=_sueldoOculto?'Mostrar ingreso':'Ocultar ingreso'; }
 }
 function toggleSueldoInput(){
   const r=document.getElementById('sueldo-input-row');
@@ -2696,16 +2701,27 @@ function renderQueDebo(){
     </div>`;
   }).join('');
 
-  const totalLine=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:2px solid var(--border)">
+  const totalStr=`${fmtCLP(totalCLP)}${totalUSD>0?' + '+fmtUSD(totalUSD):''}`;
+  // En listas largas, mostrar el total tambien arriba para no tener que bajar hasta el final
+  const topTotal = items.length>8
+    ? `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px">
+        <span style="font-size:13px;font-weight:600">Total a pagar</span>
+        <span style="font-size:18px;font-weight:700;color:var(--accent2)">${totalStr}</span>
+      </div>`
+    : '';
+  const bottomTotal=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:12px;border-top:2px solid var(--border)">
       <span style="font-size:14px;font-weight:600">Total a pagar</span>
-      <span style="font-size:18px;font-weight:700;color:var(--accent2)">${fmtCLP(totalCLP)}${totalUSD>0?' + '+fmtUSD(totalUSD):''}</span>
+      <span style="font-size:18px;font-weight:700;color:var(--accent2)">${totalStr}</span>
     </div>`;
+  const nota=`<div style="font-size:11px;color:var(--text2);line-height:1.5;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-top:14px">ℹ️ Aquí solo aparece el <strong style="color:var(--text)">crédito</strong>, que es lo que debes pagar al banco. El <strong style="color:var(--text)">débito</strong> no se incluye porque ya se pagó desde tu cuenta corriente al momento de la compra.</div>`;
 
   cont.innerHTML=`
     <div style="font-size:12px;color:var(--text2);margin-bottom:4px">${explica}</div>
     <div style="font-size:12px;color:var(--accent2);margin-bottom:14px">📅 ${rango} · ${items.length} compra${items.length!==1?'s':''}</div>
+    ${topTotal}
     ${rows}
-    ${totalLine}`;
+    ${bottomTotal}
+    ${nota}`;
 }
 
 document.addEventListener('DOMContentLoaded',function(){
