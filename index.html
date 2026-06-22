@@ -1763,7 +1763,26 @@ function confirmSaveRule(){
   saveCatRules(rules);
   document.getElementById('add-rule-overlay').classList.remove('open');
   renderCategoriasAjustes();
-  showToast('✅ Regla guardada');
+  // Ofrecer aplicar la regla recien creada a compras existentes SIN categoria que coincidan
+  const n=applyRuleToUncategorized(keyword,catId);
+  if(!n) showToast('✅ Regla guardada');
+}
+// Aplica una regla a las transacciones existentes que NO tienen categoria y cuya
+// descripcion coincide con la palabra clave. Pregunta antes y nunca sobrescribe
+// categorias ya asignadas manualmente. Devuelve cuantas clasifico (0 si ninguna).
+function applyRuleToUncategorized(keyword,catId){
+  const kw=keyword.toLowerCase();
+  const match=t=>!t.catId && (t.desc||'').toLowerCase().includes(kw);
+  const n=getC().filter(match).length+getD().filter(match).length;
+  if(n===0) return 0;
+  const cat=getCatById(catId);
+  const catName=cat?`${cat.emoji} ${cat.name}`:'esta categoría';
+  if(!confirm(`Encontré ${n} compra${n!==1?'s':''} sin categoría que coincide${n!==1?'n':''} con "${keyword}".\n\n¿Clasificarla${n!==1?'s':''} ahora como ${catName}?`)) return 0;
+  const c=getC(); c.forEach(t=>{ if(match(t)) t.catId=catId; }); saveC(c);
+  const d=getD(); d.forEach(t=>{ if(match(t)) t.catId=catId; }); saveD(d);
+  renderDashboard(); renderDebito(); renderHistorial();
+  showToast(`✅ ${n} gasto${n!==1?'s':''} clasificado${n!==1?'s':''} como ${catName}`);
+  return n;
 }
 function deleteRule(idx){
   const rules=getCatRules();
