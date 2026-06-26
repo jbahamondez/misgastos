@@ -2647,10 +2647,21 @@ function renderAnalisis(){
 }
 
 // ── ¿Qué debo? — desglose de compras por pagar ────────────────────────────
-// Funcion nueva 100% de SOLO LECTURA: reutiliza getCycleTxs/getPrevCycleTxs y
-// la misma formula (monto/cuotas) que ya usa la app, asi el total cuadra con
-// el dashboard y el recordatorio de pago. No modifica datos ni vistas existentes.
+// Funcion nueva 100% de SOLO LECTURA. A diferencia del dashboard, aqui las
+// compras en cuotas se "arrastran": cada cuota mensual aparece en el ciclo que
+// corresponde (cuota 1, 2, 3...), para reflejar lo que realmente se paga cada
+// mes. Por eso su total NO necesariamente coincide con el dashboard (que mide
+// lo comprado en el ciclo). No modifica datos, logica ni vistas existentes.
 let _queDeboPeriod='cerrado'; // 'cerrado' = ciclo que ya cerro (a pagar) | 'actual' = ciclo en curso
+
+// Indice monotonico del ciclo de facturacion al que pertenece una fecha, segun el
+// dia de cierre. Coincide con como getCycle asigna las fechas a ciclos.
+function queDeboCycleIndex(date, cutDay){
+  const d=new Date(date);
+  let m=d.getMonth();
+  if(d.getDate()>cutDay) m+=1; // si es despues del cierre, cae en el ciclo del mes siguiente
+  return d.getFullYear()*12 + m;
+}
 
 function openQueDeboModal(){
   renderQueDebo();
@@ -2674,38 +2685,47 @@ function renderQueDebo(){
     `<button onclick="setQueDeboPeriod('${t.id}')" style="flex:1;padding:9px;border-radius:10px;border:1px solid ${period===t.id?'var(--accent2)':'var(--border)'};background:${period===t.id?'var(--accent2)':'transparent'};color:${period===t.id?'#fff':'var(--text2)'};font-size:12px;font-weight:600;cursor:pointer">${t.label}</button>`
   ).join('');
 
-  // Recolecta las compras de todas las tarjetas para el ciclo elegido (misma logica que la app)
+  // Recolecta las cuotas que caen en el ciclo elegido. Cada compra en cuotas
+  // aporta su cuota mensual al ciclo correspondiente (cuota 1, 2, 3...), por eso
+  // una compra de meses anteriores sigue apareciendo mientras le queden cuotas.
   let items=[];
+  const allCredit=getC();
   Object.values(CARDS).forEach(c=>{
-    const txs = period==='cerrado' ? getPrevCycleTxs(c.id) : getCycleTxs(c.id);
-    txs.forEach(t=>items.push({tx:t, card:c}));
+    const cutDay=getBillingDay(c.id);
+    const curIdx=queDeboCycleIndex(new Date(), cutDay);
+    const targetIdx = period==='cerrado' ? curIdx-1 : curIdx;
+    allCredit.filter(t=>t.cardId===c.id).forEach(t=>{
+      const n=Math.max(1,t.cuotas||1);
+      const k=targetIdx - queDeboCycleIndex(t.date, cutDay); // cuota 0-indexada que cae en este ciclo
+      if(k>=0 && k<n){ items.push({tx:t, card:c, cuotaNum:k+1, cuotasTotal:n}); }
+    });
   });
   items.sort((a,b)=>new Date(b.tx.date)-new Date(a.tx.date));
 
   let totalCLP=0, totalUSD=0;
-  items.forEach(({tx})=>{
-    const cuota=tx.amount/Math.max(1,tx.cuotas||1);
+  items.forEach(({tx,cuotasTotal})=>{
+    const cuota=tx.amount/cuotasTotal;
     if(tx.currency==='USD') totalUSD+=cuota; else totalCLP+=cuota;
   });
 
   const ref = period==='cerrado' ? getPrevCycle('bci') : getCycle('bci');
   const rango = ref.start.toLocaleDateString('es-CL',{day:'2-digit',month:'short'})+' – '+ref.end.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
   const explica = period==='cerrado'
-    ? 'Compras del ciclo que ya cerró: esto es lo que debes pagar al banco.'
-    : 'Compras del ciclo en curso: se facturarán en el próximo cierre.';
+    ? 'Cuotas que te toca pagar del ciclo que ya cerró (incluye arrastres de compras en cuotas).'
+    : 'Cuotas que pagarás en el ciclo en curso (incluye arrastres de compras en cuotas).';
 
   const cont=document.getElementById('quedebo-content');
   if(!items.length){
-    cont.innerHTML=`<div style="text-align:center;padding:40px 0;color:var(--text2)"><div style="font-size:40px">${period==='cerrado'?'🎉':'🧾'}</div><p style="margin-top:8px">${period==='cerrado'?'No tienes nada por pagar de este ciclo':'Sin compras en el ciclo actual'}</p></div>`;
+    cont.innerHTML=`<div style="text-align:center;padding:40px 0;color:var(--text2)"><div style="font-size:40px">${period==='cerrado'?'🎉':'🧾'}</div><p style="margin-top:8px">${period==='cerrado'?'No tienes nada por pagar de este ciclo':'Sin cuotas por pagar en el ciclo actual'}</p></div>`;
     return;
   }
 
-  const rows=items.map(({tx,card})=>{
-    const cuota=tx.amount/Math.max(1,tx.cuotas||1);
+  const rows=items.map(({tx,card,cuotaNum,cuotasTotal})=>{
+    const cuota=tx.amount/cuotasTotal;
     const esUSD=tx.currency==='USD';
     const montoCuota=esUSD?fmtUSD(cuota):fmtCLP(cuota);
-    const nCuotas=tx.cuotas>1?`${tx.cuotas} cuotas`:'Contado';
-    const montoFull=tx.cuotas>1?` · total ${esUSD?fmtUSD(tx.amount):fmtCLP(tx.amount)}`:'';
+    const nCuotas=cuotasTotal>1?`cuota ${cuotaNum} de ${cuotasTotal}`:'Contado';
+    const montoFull=cuotasTotal>1?` · total ${esUSD?fmtUSD(tx.amount):fmtCLP(tx.amount)}`:'';
     const fecha=new Date(tx.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
     return `<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)">
       <div style="width:10px;height:10px;border-radius:50%;background:${card.color};flex-shrink:0" title="${card.bank}"></div>
@@ -2715,7 +2735,7 @@ function renderQueDebo(){
       </div>
       <div style="text-align:right;flex-shrink:0">
         <div style="font-size:14px;font-weight:700">${montoCuota}</div>
-        ${tx.cuotas>1?'<div style="font-size:10px;color:var(--text2)">por cuota</div>':''}
+        ${cuotasTotal>1?'<div style="font-size:10px;color:var(--text2)">por cuota</div>':''}
       </div>
     </div>`;
   }).join('');
@@ -2732,7 +2752,7 @@ function renderQueDebo(){
       <span style="font-size:14px;font-weight:600">Total a pagar</span>
       <span style="font-size:18px;font-weight:700;color:var(--accent2)">${totalStr}</span>
     </div>`;
-  const nota=`<div style="font-size:11px;color:var(--text2);line-height:1.5;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-top:14px">ℹ️ Aquí solo aparece el <strong style="color:var(--text)">crédito</strong>, que es lo que debes pagar al banco. El <strong style="color:var(--text)">débito</strong> no se incluye porque ya se pagó desde tu cuenta corriente al momento de la compra.</div>`;
+  const nota=`<div style="font-size:11px;color:var(--text2);line-height:1.5;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-top:14px">ℹ️ Es lo que pagas este ciclo: incluye las <strong style="color:var(--text)">cuotas que arrastras</strong> de compras de meses anteriores. Solo aparece el <strong style="color:var(--text)">crédito</strong> (el <strong style="color:var(--text)">débito</strong> no, porque ya se pagó desde tu cuenta corriente). Por eso el total puede no coincidir con el dashboard.</div>`;
 
   cont.innerHTML=`
     <div style="font-size:12px;color:var(--text2);margin-bottom:4px">${explica}</div>
