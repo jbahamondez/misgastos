@@ -876,9 +876,27 @@ function getCycleTxs(cardId){
 // Cupo comprometido: monto total (lo que bloquea el banco en tu cupo)
 function spentCLP(id){return getCycleTxs(id).filter(t=>t.currency==='CLP').reduce((s,t)=>s+t.amount,0)}
 function spentUSD(id){return getCycleTxs(id).filter(t=>t.currency==='USD').reduce((s,t)=>s+t.amount,0)}
-// Cargo al 19: solo la cuota de este mes (amount / cuotas)
-function cuotaCLP(id){return getCycleTxs(id).filter(t=>t.currency==='CLP').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0)}
-function cuotaUSD(id){return getCycleTxs(id).filter(t=>t.currency==='USD').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0)}
+// Cuotas que caen en un ciclo CON ARRASTRE: una compra en N cuotas aporta su
+// cuota mensual a cada ciclo desde el de la compra hasta agotar las N cuotas.
+// offset 0 = ciclo actual, -1 = ciclo anterior. Fuente unica usada por el
+// dashboard, Tarjetas, recordatorio de pago, caja "ciclo anterior" y "¿Que debo?".
+function cuotasActivasCiclo(cardId, offset){
+  const cutDay=getBillingDay(cardId);
+  const targetIdx=queDeboCycleIndex(new Date(), cutDay)+(offset||0);
+  const out=[];
+  getC().forEach(t=>{
+    if(t.cardId!==cardId) return;
+    const n=Math.max(1,t.cuotas||1);
+    const k=targetIdx - queDeboCycleIndex(t.date, cutDay); // cuota 0-indexada que cae en el ciclo
+    if(k>=0 && k<n) out.push({tx:t, cuotaNum:k+1, cuotasTotal:n, cuotaAmt:t.amount/n});
+  });
+  return out;
+}
+function cuotaCicloCLP(id, offset){return cuotasActivasCiclo(id,offset).filter(x=>x.tx.currency==='CLP').reduce((s,x)=>s+x.cuotaAmt,0)}
+function cuotaCicloUSD(id, offset){return cuotasActivasCiclo(id,offset).filter(x=>x.tx.currency==='USD').reduce((s,x)=>s+x.cuotaAmt,0)}
+// Cargo del ciclo actual (cuota mensual con arrastre)
+function cuotaCLP(id){return cuotaCicloCLP(id,0)}
+function cuotaUSD(id){return cuotaCicloUSD(id,0)}
 function daysToFact(cardId){
   const cutDay=getBillingDay(cardId);
   const now=new Date(),day=now.getDate();
@@ -918,30 +936,30 @@ function renderCicloAnt(){
   const cards=Object.values(CARDS);
   let totalAnt=0;
   const rows=cards.map(c=>{
-    const txs=getPrevCycleTxs(c.id);
-    const cuota=txs.filter(t=>t.currency==='CLP').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0);
-    const total=txs.filter(t=>t.currency==='CLP').reduce((s,t)=>s+t.amount,0);
+    const activas=cuotasActivasCiclo(c.id,-1).filter(x=>x.tx.currency==='CLP');
+    const cuota=activas.reduce((s,x)=>s+x.cuotaAmt,0);
+    const count=activas.length;
     totalAnt+=cuota;
     const{start,end}=getPrevCycle(c.id);
     const label=start.toLocaleDateString('es-CL',{day:'2-digit',month:'short'})+' – '+end.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
-    return{c,cuota,total,txs:txs.length,label};
+    return{c,cuota,count,label};
   });
   // Título con rango de fechas del ciclo anterior de BCI como referencia
   const{start,end}=getPrevCycle('bci');
   const rangeLabel=start.toLocaleDateString('es-CL',{day:'2-digit',month:'short'})+' – '+end.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
   document.getElementById('ciclo-ant-title').textContent='Ciclo anterior ('+rangeLabel+')';
-  document.getElementById('ciclo-ant-total').innerHTML=fmtCLP(totalAnt)+'<span>total facturado</span>';
-  document.getElementById('ciclo-ant-list').innerHTML=rows.map(r=>`
+  document.getElementById('ciclo-ant-total').innerHTML=fmtCLP(totalAnt)+'<span>total a pagar</span>';
+  document.getElementById('ciclo-ant-list').innerHTML=rows.filter(r=>r.cuota>0).map(r=>`
     <div class="proy-card">
       <div class="proy-dot" style="background:${r.c.color}"></div>
       <span class="proy-name">${r.c.bank}</span>
       <div style="text-align:right">
         <div class="proy-amount" style="color:#fde68a">${fmtCLP(r.cuota)}</div>
-        <div style="font-size:10px;color:var(--text2)">${r.txs} tx · cupo ${fmtCLP(r.total)}</div>
+        <div style="font-size:10px;color:var(--text2)">${r.count} cuota${r.count!==1?'s':''}</div>
       </div>
     </div>`).join('');
-  // Ocultar si no hay nada en ninguna tarjeta
-  const hayDatos=rows.some(r=>r.txs>0);
+  // Ocultar si no hay cuotas que pagar en ninguna tarjeta
+  const hayDatos=rows.some(r=>r.cuota>0);
   document.getElementById('ciclo-ant-box').style.display=hayDatos?'':'none';
 }
 
@@ -963,7 +981,7 @@ function renderDashboard(){
   // Widget principal
   document.getElementById('dash-main-widget').innerHTML=`
     <div style="background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border);padding:20px">
-      <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Total gastado este ciclo</div>
+      <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Total a pagar este ciclo</div>
       <div style="font-size:38px;font-weight:700;margin-bottom:${sueldo?'14px':'6px'}">${fmtCLP(totGastado)}</div>
       ${sueldo?`
         <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px">
@@ -1031,7 +1049,7 @@ function renderSalud(totCred){
     </div>
     ${sueldo?`
     <div class="metrics-grid">
-      <div class="metric-cell"><div class="metric-label">Total gastado</div>
+      <div class="metric-cell"><div class="metric-label">Total a pagar</div>
         <div class="metric-val" style="color:${pT>75?'var(--red)':pT>50?'var(--yellow)':'var(--text)'}">${fmtCLP(tot)}</div>
         <div class="metric-sub">${fmtPct(pT)} del sueldo</div></div>
       <div class="metric-cell"><div class="metric-label">Ahorro potencial</div>
@@ -1101,7 +1119,7 @@ function renderTarjetas(){
           <div style="font-size:10px;color:var(--text2);margin-top:3px">${Math.round(pct)}% del límite</div></div>
         <div class="stat-cell"><div class="stat-label">Cargo próximo al ${getBillingDay(c.id)}</div>
           <div class="stat-val" style="color:#fde68a">${fmtCLP(qCLP)}</div>
-          <div style="font-size:10px;color:var(--text2);margin-top:3px">solo cuotas de este ciclo</div></div>
+          <div style="font-size:10px;color:var(--text2);margin-top:3px">cuotas a pagar (incl. arrastres)</div></div>
         <div class="stat-cell"><div class="stat-label">Disponible CLP</div>
           <div class="stat-val" style="color:var(--green)">${fmtCLP(disp)}</div></div>
         <div class="stat-cell"><div class="stat-label">Transacciones</div><div class="stat-val">${txs.length}</div></div>
@@ -1817,15 +1835,13 @@ function checkPaymentReminder(){
     const payDay=payDates[c.id]||5;
     if(day>payDay) return false;
     if(paidFlags[c.id+'_'+monthKey]) return false;
-    const prevTxs=getPrevCycleTxs(c.id);
-    const saldo=prevTxs.filter(t=>t.currency==='CLP').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0);
+    const saldo=cuotaCicloCLP(c.id,-1); // cuotas a pagar del ciclo cerrado (con arrastre)
     return saldo>0;
   });
   if(!pendientes.length) return;
   const payDates2=getPaymentDates();
   document.getElementById('payment-reminder-list').innerHTML=pendientes.map(c=>{
-    const prevTxs=getPrevCycleTxs(c.id);
-    const saldo=prevTxs.filter(t=>t.currency==='CLP').reduce((s,t)=>s+(t.amount/Math.max(1,t.cuotas||1)),0);
+    const saldo=cuotaCicloCLP(c.id,-1);
     const payDay=payDates2[c.id]||5;
     const rowId='paid-btn-'+c.id;
     return `<div class="payment-card-row"><div class="payment-card-info"><span class="payment-card-name">${c.emoji} ${c.bank}</span><span class="payment-card-amount">${fmtCLP(saldo)} · vence día ${payDay}</span></div><button class="payment-paid-btn" id="${rowId}" onclick="markAsPaid('${c.id}','${monthKey}')">✓ Pagué</button></div>`;
@@ -2647,11 +2663,10 @@ function renderAnalisis(){
 }
 
 // ── ¿Qué debo? — desglose de compras por pagar ────────────────────────────
-// Funcion nueva 100% de SOLO LECTURA. A diferencia del dashboard, aqui las
-// compras en cuotas se "arrastran": cada cuota mensual aparece en el ciclo que
-// corresponde (cuota 1, 2, 3...), para reflejar lo que realmente se paga cada
-// mes. Por eso su total NO necesariamente coincide con el dashboard (que mide
-// lo comprado en el ciclo). No modifica datos, logica ni vistas existentes.
+// Vista de SOLO LECTURA. Las compras en cuotas se "arrastran": cada cuota
+// mensual aparece en el ciclo que corresponde (cuota 1, 2, 3...). Usa la misma
+// fuente (cuotasActivasCiclo) que el dashboard, Tarjetas y el recordatorio, asi
+// que el total de credito cuadra con esas vistas.
 let _queDeboPeriod='cerrado'; // 'cerrado' = ciclo que ya cerro (a pagar) | 'actual' = ciclo en curso
 
 // Indice monotonico del ciclo de facturacion al que pertenece una fecha, segun el
@@ -2685,20 +2700,13 @@ function renderQueDebo(){
     `<button onclick="setQueDeboPeriod('${t.id}')" style="flex:1;padding:9px;border-radius:10px;border:1px solid ${period===t.id?'var(--accent2)':'var(--border)'};background:${period===t.id?'var(--accent2)':'transparent'};color:${period===t.id?'#fff':'var(--text2)'};font-size:12px;font-weight:600;cursor:pointer">${t.label}</button>`
   ).join('');
 
-  // Recolecta las cuotas que caen en el ciclo elegido. Cada compra en cuotas
-  // aporta su cuota mensual al ciclo correspondiente (cuota 1, 2, 3...), por eso
-  // una compra de meses anteriores sigue apareciendo mientras le queden cuotas.
+  // Recolecta las cuotas que caen en el ciclo elegido, usando la misma fuente
+  // (cuotasActivasCiclo) que el dashboard, Tarjetas y el recordatorio de pago,
+  // para que los totales siempre cuadren entre todas las vistas.
+  const offset = period==='cerrado' ? -1 : 0;
   let items=[];
-  const allCredit=getC();
   Object.values(CARDS).forEach(c=>{
-    const cutDay=getBillingDay(c.id);
-    const curIdx=queDeboCycleIndex(new Date(), cutDay);
-    const targetIdx = period==='cerrado' ? curIdx-1 : curIdx;
-    allCredit.filter(t=>t.cardId===c.id).forEach(t=>{
-      const n=Math.max(1,t.cuotas||1);
-      const k=targetIdx - queDeboCycleIndex(t.date, cutDay); // cuota 0-indexada que cae en este ciclo
-      if(k>=0 && k<n){ items.push({tx:t, card:c, cuotaNum:k+1, cuotasTotal:n}); }
-    });
+    cuotasActivasCiclo(c.id, offset).forEach(x=>items.push({tx:x.tx, card:c, cuotaNum:x.cuotaNum, cuotasTotal:x.cuotasTotal}));
   });
   items.sort((a,b)=>new Date(b.tx.date)-new Date(a.tx.date));
 
@@ -2752,7 +2760,7 @@ function renderQueDebo(){
       <span style="font-size:14px;font-weight:600">Total a pagar</span>
       <span style="font-size:18px;font-weight:700;color:var(--accent2)">${totalStr}</span>
     </div>`;
-  const nota=`<div style="font-size:11px;color:var(--text2);line-height:1.5;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-top:14px">ℹ️ Es lo que pagas este ciclo: incluye las <strong style="color:var(--text)">cuotas que arrastras</strong> de compras de meses anteriores. Solo aparece el <strong style="color:var(--text)">crédito</strong> (el <strong style="color:var(--text)">débito</strong> no, porque ya se pagó desde tu cuenta corriente). Por eso el total puede no coincidir con el dashboard.</div>`;
+  const nota=`<div style="font-size:11px;color:var(--text2);line-height:1.5;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-top:14px">ℹ️ Es lo que pagas de <strong style="color:var(--text)">crédito</strong> este ciclo, incluyendo las <strong style="color:var(--text)">cuotas que arrastras</strong> de compras de meses anteriores. Coincide con el chip "Crédito" del inicio (el <strong style="color:var(--text)">débito</strong> no se incluye porque ya se pagó desde tu cuenta corriente).</div>`;
 
   cont.innerHTML=`
     <div style="font-size:12px;color:var(--text2);margin-bottom:4px">${explica}</div>
