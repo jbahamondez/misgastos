@@ -613,6 +613,10 @@
       <input type="text" id="split-new-person" placeholder="Agregar persona..." style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 13px;color:var(--text);font-size:14px;outline:none" onkeydown="if(event.key==='Enter')addPersonToSplit()" />
       <button onclick="addPersonToSplit()" style="padding:9px 14px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:18px;cursor:pointer;flex-shrink:0">+</button>
     </div>
+    <label id="split-lent-row" style="display:flex;align-items:flex-start;gap:8px;margin-bottom:14px;cursor:pointer;font-size:12px;color:var(--text2);line-height:1.4">
+      <input type="checkbox" id="split-lent" onchange="toggleSplitLent()" style="width:17px;height:17px;flex-shrink:0;margin-top:1px;accent-color:var(--accent)">
+      <span>🤝 No es para mí (presté mi tarjeta): el 100% queda como deuda de la persona y no cuenta como gasto tuyo.</span>
+    </label>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeSplitModal()">No dividir</button>
       <button class="btn-save" id="btn-confirm-split" onclick="confirmSplit()">Dividir</button>
@@ -873,9 +877,12 @@ function getCycleTxs(cardId){
   const{start,end}=getCycle(cardId);
   return getC().filter(t=>t.cardId===cardId&&new Date(t.date)>=start&&new Date(t.date)<=end);
 }
+// Compra "prestada": pagada con mi tarjeta pero que no es mia (presté la tarjeta).
+// No cuenta en NINGUN total mio; aparece marcada en las listas y como deuda por cobrar.
+function esPrestada(t){ return t && t.lent===true; }
 // Cupo comprometido: monto total (lo que bloquea el banco en tu cupo)
-function spentCLP(id){return getCycleTxs(id).filter(t=>t.currency==='CLP').reduce((s,t)=>s+t.amount,0)}
-function spentUSD(id){return getCycleTxs(id).filter(t=>t.currency==='USD').reduce((s,t)=>s+t.amount,0)}
+function spentCLP(id){return getCycleTxs(id).filter(t=>t.currency==='CLP'&&!esPrestada(t)).reduce((s,t)=>s+t.amount,0)}
+function spentUSD(id){return getCycleTxs(id).filter(t=>t.currency==='USD'&&!esPrestada(t)).reduce((s,t)=>s+t.amount,0)}
 // Cuotas que caen en un ciclo CON ARRASTRE: una compra en N cuotas aporta su
 // cuota mensual a cada ciclo desde el de la compra hasta agotar las N cuotas.
 // offset 0 = ciclo actual, -1 = ciclo anterior. Fuente unica usada por el
@@ -885,7 +892,7 @@ function cuotasActivasCiclo(cardId, offset){
   const targetIdx=queDeboCycleIndex(new Date(), cutDay)+(offset||0);
   const out=[];
   getC().forEach(t=>{
-    if(t.cardId!==cardId) return;
+    if(t.cardId!==cardId || esPrestada(t)) return; // las prestadas no son gasto mio
     const n=Math.max(1,t.cuotas||1);
     const k=targetIdx - queDeboCycleIndex(t.date, cutDay); // cuota 0-indexada que cae en el ciclo
     if(k>=0 && k<n) out.push({tx:t, cuotaNum:k+1, cuotasTotal:n, cuotaAmt:t.amount/n});
@@ -970,7 +977,7 @@ function renderDashboard(){
   // Totales
   let totCuota=0;
   Object.values(CARDS).forEach(c=>{totCuota+=cuotaCLP(c.id);});
-  const totDeb=debitoThisMonth().reduce((s,t)=>s+t.amount,0);
+  const totDeb=debitoThisMonth().filter(t=>!esPrestada(t)).reduce((s,t)=>s+t.amount,0);
   const totGastado=totCuota+totDeb;
   const sueldo=getSueldo();
   const pct=sueldo>0?Math.min(100,totGastado/sueldo*100):0;
@@ -1023,7 +1030,7 @@ function renderDashboard(){
 
 function renderSalud(totCred){
   const sueldo=getSueldo();
-  const deb=debitoThisMonth().reduce((s,t)=>s+t.amount,0);
+  const deb=debitoThisMonth().filter(t=>!esPrestada(t)).reduce((s,t)=>s+t.amount,0);
   const tot=totCred+deb;
   const ahorro=sueldo>0?Math.max(0,sueldo-tot):0;
   const pC=sueldo>0?Math.min(100,totCred/sueldo*100):0;
@@ -1140,8 +1147,10 @@ function renderTarjetas(){
 }
 
 function renderDebito(){
-  const txs=debitoThisMonth(),tot=txs.reduce((s,t)=>s+t.amount,0),n=txs.length;
-  const avg=n?tot/n:0,mx=n?Math.max(...txs.map(t=>t.amount)):0;
+  const txs=debitoThisMonth();
+  const propios=txs.filter(t=>!esPrestada(t)); // los totales excluyen las prestadas
+  const tot=propios.reduce((s,t)=>s+t.amount,0),n=propios.length;
+  const avg=n?tot/n:0,mx=n?Math.max(...propios.map(t=>t.amount)):0;
   document.getElementById('debit-summary').innerHTML=`
     <div class="ds-label">Debito este mes</div><div class="ds-amount">${fmtCLP(tot)}</div>
     <div class="ds-sub">${n} transacciones</div>
@@ -1149,7 +1158,7 @@ function renderDebito(){
       <div class="debit-stat"><div class="dl">Promedio por gasto</div><div class="dv">${fmtCLP(avg)}</div></div>
       <div class="debit-stat"><div class="dl">Mayor gasto</div><div class="dv">${fmtCLP(mx)}</div></div>
     </div>`;
-  document.getElementById('debit-count').textContent=n+' movimiento'+(n!==1?'s':'');
+  document.getElementById('debit-count').textContent=txs.length+' movimiento'+(txs.length!==1?'s':'');
   const list=document.getElementById('debit-list');
   const sorted=[...txs].sort((a,b)=>new Date(b.date)-new Date(a.date));
   list.innerHTML=sorted.length?sorted.map(t=>txHTML({...t,_isDebit:true})).join('')
@@ -1960,14 +1969,15 @@ function openEditModal(txId, txType){
   populateCatSelect('edit-cat', tx.catId||'');
   const splitSection=document.getElementById('edit-split-section');
   if(tx.splitWith){
+    const esPrest=esPrestada(tx);
     splitSection.innerHTML=`
       <div style="background:var(--bg3);border-radius:10px;padding:12px">
         <div style="margin-bottom:10px">
-          <div style="font-size:11px;color:var(--text2);margin-bottom:2px">Dividido con</div>
+          <div style="font-size:11px;color:var(--text2);margin-bottom:2px">${esPrest?'🤝 Prestada a (te lo deben)':'Dividido con'}</div>
           <div style="font-size:13px;font-weight:600">👤 ${tx.splitWith}</div>
         </div>
         <div style="display:flex;gap:8px">
-          <button onclick="modifySplit()" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--accent2);background:transparent;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer">✏️ Modificar split</button>
+          <button onclick="modifySplit()" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--accent2);background:transparent;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer">✏️ Modificar</button>
           <button onclick="revertSplit()" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--red);background:transparent;color:var(--red);font-size:12px;font-weight:600;cursor:pointer">Revertir a mío</button>
         </div>
       </div>`;
@@ -2016,11 +2026,11 @@ function revertSplit(){
   if(txType==='debito'){
     const d=getD();
     const idx=d.findIndex(t=>t.id===txId);
-    if(idx>=0){d[idx].amount=d[idx].splitTotal||d[idx].amount;delete d[idx].splitWith;delete d[idx].splitTotal;saveD(d);}
+    if(idx>=0){d[idx].amount=d[idx].splitTotal||d[idx].amount;delete d[idx].splitWith;delete d[idx].splitTotal;delete d[idx].lent;saveD(d);}
   } else {
     const c=getC();
     const idx=c.findIndex(t=>t.id===txId);
-    if(idx>=0){c[idx].amount=c[idx].splitTotal||c[idx].amount;delete c[idx].splitWith;delete c[idx].splitTotal;saveC(c);}
+    if(idx>=0){c[idx].amount=c[idx].splitTotal||c[idx].amount;delete c[idx].splitWith;delete c[idx].splitTotal;delete c[idx].lent;saveC(c);}
   }
   saveDeudas(getDeudas().filter(d=>d.txId!==txId));
   closeEditModal();
@@ -2043,12 +2053,12 @@ function modifySplit(){
     const d=getD();const idx=d.findIndex(t=>t.id===txId);
     if(idx<0) return;
     fullAmount=d[idx].splitTotal||d[idx].amount;
-    d[idx].amount=fullAmount;delete d[idx].splitWith;delete d[idx].splitTotal;saveD(d);
+    d[idx].amount=fullAmount;delete d[idx].splitWith;delete d[idx].splitTotal;delete d[idx].lent;saveD(d);
   } else {
     const c=getC();const idx=c.findIndex(t=>t.id===txId);
     if(idx<0) return;
     fullAmount=c[idx].splitTotal||c[idx].amount;
-    c[idx].amount=fullAmount;delete c[idx].splitWith;delete c[idx].splitTotal;saveC(c);
+    c[idx].amount=fullAmount;delete c[idx].splitWith;delete c[idx].splitTotal;delete c[idx].lent;saveC(c);
   }
   saveDeudas(getDeudas().filter(d=>d.txId!==txId));
   const tx=txType==='debito'?getD().find(t=>t.id===txId):getC().find(t=>t.id===txId);
@@ -2082,8 +2092,8 @@ function txHTML(t){
   const txType=isD?'debito':'credito';
   return`<div class="tx-item ${isD?'debito':''}" oncontextmenu="openTxMenu(event,'${t.id}','${txType}')" ontouchstart="startTxHold(event,'${t.id}','${txType}')" ontouchend="cancelTxHold()" ontouchmove="cancelTxHold()">
     <div class="tx-icon" style="background:${color}22">${getIcon(t.desc)}</div>
-    <div class="tx-info"><div class="tx-name">${t.desc||'Sin descripción'}</div><div class="tx-meta">${bank} · ${date}</div></div>
-    <div class="tx-amount"><div class="amount" style="color:${t.amount<0?'var(--green)':(isD?'var(--blue)':'var(--text)')}">${amt}</div><div class="cuotas">${cuota}</div></div>
+    <div class="tx-info"><div class="tx-name">${t.desc||'Sin descripción'}${esPrestada(t)?' <span style="font-size:9px;font-weight:700;color:var(--accent2);background:rgba(167,139,250,.15);padding:1px 6px;border-radius:6px;vertical-align:middle">🤝 PRESTADA</span>':''}</div><div class="tx-meta">${bank} · ${date}</div></div>
+    <div class="tx-amount"><div class="amount" style="color:${esPrestada(t)?'var(--text2)':(t.amount<0?'var(--green)':(isD?'var(--blue)':'var(--text)'))}">${amt}</div><div class="cuotas">${esPrestada(t)?'por cobrar':cuota}</div></div>
   </div>`;
 }
 
@@ -2172,6 +2182,8 @@ function saveExpense(){
 
 // ── Split modal logic ──────────────────────────────────────────────────────
 let _splitSelectedPersons=[];
+let _splitLent=false; // true = "presté mi tarjeta": el 100% es deuda de la persona, no gasto mio
+function toggleSplitLent(){ _splitLent=document.getElementById('split-lent').checked; updateSplitPreview(); }
 
 function updateSplitPreview(){
   if(!_pendingSplit) return;
@@ -2180,25 +2192,31 @@ function updateSplitPreview(){
   const cuotas=esDebito?1:Math.max(1,split.cuotas||1);
   const cuotaAmt=split.amount/cuotas;
   const n=_splitSelectedPersons.length;
-  const total=n+1;
-  const userShare=cuotaAmt/total;
-  const personShare=cuotaAmt/total;
+  const total=_splitLent?n:n+1;          // prestada: tu parte es $0, no cuentas en el reparto
+  const userShare=_splitLent?0:cuotaAmt/(n+1);
+  const personShare=(_splitLent?(n>0?cuotaAmt/n:0):cuotaAmt/(n+1));
   const tipoLabel=esDebito?'💳 Débito':'💳 Crédito';
-  const splitLabel=total===2?'50%':'1/'+total;
+  const splitLabel=_splitLent?'0%':(n+1===2?'50%':'1/'+(n+1));
   document.getElementById('split-preview-box').innerHTML=`
     <div class="sp-row"><span class="sp-label">${tipoLabel}</span><span class="sp-val" style="font-size:0.8em;opacity:0.7">${split.desc}</span></div>
     <div class="sp-row"><span class="sp-label">Monto total</span><span class="sp-val">${fmtCLP(split.amount)}${!esDebito&&cuotas>1?' ('+cuotas+' cuotas)':''}</span></div>
     ${!esDebito&&cuotas>1?`<div class="sp-row"><span class="sp-label">Cuota mensual</span><span class="sp-val yellow">${fmtCLP(cuotaAmt)}</span></div>`:''}
     <div class="sp-row"><span class="sp-label">Tu parte (${splitLabel})</span><span class="sp-val green">${fmtCLP(userShare)}</span></div>
     ${n>0?`<div class="sp-row"><span class="sp-label">Cada persona debe${n>1?' (c/u)':''}</span><span class="sp-val" style="color:var(--accent2)">${fmtCLP(personShare)}</span></div>`:''}
-    ${n>1?`<div class="sp-row"><span class="sp-label">Total a cobrar (${n} personas)</span><span class="sp-val" style="color:var(--accent2)">${fmtCLP(personShare*n)}</span></div>`:''}`;
+    ${n>1?`<div class="sp-row"><span class="sp-label">Total a cobrar (${n} personas)</span><span class="sp-val" style="color:var(--accent2)">${fmtCLP(personShare*n)}</span></div>`:''}
+    ${_splitLent&&n===0?`<div class="sp-row"><span class="sp-label" style="color:var(--yellow)">Selecciona la persona a la que prestaste</span></div>`:''}`;
   const btn=document.getElementById('btn-confirm-split');
-  if(btn) btn.textContent=n===0?'Dividir':total===2?'Dividir 50/50':'Dividir en '+total;
+  if(btn) btn.textContent=_splitLent?(n===1?'Asignar 100% a '+_splitSelectedPersons[0]:'Asignar 100% ('+n+' personas)'):(n===0?'Dividir':total===2?'Dividir 50/50':'Dividir en '+total);
 }
 
 function openSplitModal(split){
   const primero=getPersonas()[0]||'Mi pareja';
   _splitSelectedPersons=[primero];
+  // Resetear el modo "presté mi tarjeta" cada vez que se abre
+  _splitLent=false;
+  const lentChk=document.getElementById('split-lent'); if(lentChk) lentChk.checked=false;
+  // Ocultar el toggle en modo importación (no aplica a una cartola completa)
+  const lentRow=document.getElementById('split-lent-row'); if(lentRow) lentRow.style.display=_splitImportMode?'none':'flex';
   renderPersonChips();
   updateSplitPreview();
   document.getElementById('split-new-person').value='';
@@ -2302,21 +2320,22 @@ function confirmSplit(){
   const {txId,amount,desc,cuotas,currency,type,txDate}=_pendingSplit;
   const esDebito=(type||'credito')==='debito';
   const cuotasReal=esDebito?1:Math.max(1,cuotas||1);
-  const totalParticipants=_splitSelectedPersons.length+1;
+  const esPrestado=_splitLent;
+  // En "prestada" tu parte es $0: el reparto es solo entre las personas.
+  const totalParticipants=esPrestado?_splitSelectedPersons.length:_splitSelectedPersons.length+1;
   const cuotaAmt=amount/cuotasReal;
-  const userSharePerCuota=cuotaAmt/totalParticipants;
   const personSharePerCuota=cuotaAmt/totalParticipants;
-  const userTotal=userSharePerCuota*cuotasReal;
+  const userTotal=esPrestado?amount:(cuotaAmt/totalParticipants)*cuotasReal; // prestada: la tx mantiene su monto completo
 
-  // Actualizar monto del gasto original al share del usuario
+  // Actualizar el gasto original. Si es prestada, NO se reduce el monto y se marca lent=true.
   if(esDebito){
     const debitData=getD();
     const txIdx=debitData.findIndex(t=>t.id===txId);
-    if(txIdx>=0){debitData[txIdx].amount=userTotal;debitData[txIdx].splitWith=_splitSelectedPersons.join(', ');debitData[txIdx].splitTotal=amount;saveD(debitData);}
+    if(txIdx>=0){debitData[txIdx].amount=userTotal;debitData[txIdx].splitWith=_splitSelectedPersons.join(', ');debitData[txIdx].splitTotal=amount;if(esPrestado)debitData[txIdx].lent=true;else delete debitData[txIdx].lent;saveD(debitData);}
   } else {
     const credData=getC();
     const txIdx=credData.findIndex(t=>t.id===txId);
-    if(txIdx>=0){credData[txIdx].amount=userTotal;credData[txIdx].splitWith=_splitSelectedPersons.join(', ');credData[txIdx].splitTotal=amount;saveC(credData);}
+    if(txIdx>=0){credData[txIdx].amount=userTotal;credData[txIdx].splitWith=_splitSelectedPersons.join(', ');credData[txIdx].splitTotal=amount;if(esPrestado)credData[txIdx].lent=true;else delete credData[txIdx].lent;saveC(credData);}
   }
 
   // Crear una deuda por cada persona
@@ -2342,7 +2361,7 @@ function confirmSplit(){
   renderDashboard();
   const n=_splitSelectedPersons.length;
   const names=_splitSelectedPersons.join(' y ');
-  showToast('💜 Dividido en '+(n+1)+' con '+names+' — '+fmtCLP(personSharePerCuota)+'/cuota c/u');
+  showToast(esPrestado?'🤝 Prestada a '+names+' — te deben '+fmtCLP(amount):'💜 Dividido en '+(n+1)+' con '+names+' — '+fmtCLP(personSharePerCuota)+'/cuota c/u');
   // Procesar siguiente en cola si hay más
   if(_splitQueue.length>0){
     setTimeout(processSplitQueue, 800);
@@ -2590,12 +2609,12 @@ function renderAnalisis(){
   // Collect transactions
   let txs=[];
   if(_analisisTxType!=='debito'){
-    let c=getC();
+    let c=getC().filter(t=>!esPrestada(t));
     if(dateStart) c=c.filter(t=>{const d=new Date(t.date);return d>=dateStart&&d<=dateEnd;});
     txs=txs.concat(c.map(t=>({...t,_tipo:'credito',_monto:t.currency==='CLP'?t.amount/Math.max(1,t.cuotas||1):0})));
   }
   if(_analisisTxType!=='credito'){
-    let d=getD();
+    let d=getD().filter(t=>!esPrestada(t));
     if(dateStart) d=d.filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;});
     txs=txs.concat(d.map(t=>({...t,_tipo:'debito',_monto:t.amount||0})));
   }
