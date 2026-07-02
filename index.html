@@ -431,8 +431,8 @@
     <div class="deuda-summary-box" id="deudas-summary-box"></div>
   </div>
   <div style="margin:10px 20px 0;text-align:right">
-    <button onclick="compartirResumenDeudas()" style="background:var(--accent2);color:#fff;border:none;border-radius:20px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
-      📤 Compartir resumen
+    <button onclick="compartirResumenDeudas()" style="background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:20px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+      📤 Compartir todo
     </button>
   </div>
   <div id="deudas-content" style="padding-bottom:14px"></div>
@@ -1545,8 +1545,9 @@ function renderDeudas(){
       ?`<button class="btn-mark-all-cycle" onclick="markAllCyclePaid()">✓ Marcar todo cobrado (${unpaidCount})</button>`:'';
     const cardsHTML=Object.entries(byPerson).map(([person,pItems])=>{
       const pendTotal=pItems.filter(i=>!i.paid).reduce((s,i)=>s+i.deudaTotal,0);
+      const shareBtn=pendTotal>0?`<button onclick="compartirDeuda('${person.replace(/'/g,"\\'")}','${section}')" title="Compartir deudas de ${person}" style="background:var(--accent2);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;padding:5px 11px;cursor:pointer;flex-shrink:0">📤 Compartir</button>`:'';
       return `<div class="deuda-person-card">
-        <div class="deuda-person-header"><h3>👤 ${person}</h3><span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span></div>
+        <div class="deuda-person-header"><h3>👤 ${person}</h3><div style="display:flex;align-items:center;gap:10px"><span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span>${shareBtn}</div></div>
         ${pItems.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(renderDeudaItem).join('')}
       </div>`;
     }).join('');
@@ -1599,6 +1600,28 @@ function compartirResumenDeudas(){
   } else {
     navigator.clipboard.writeText(text).then(()=>showToast('✅ Copiado al portapapeles')).catch(()=>showToast('No se pudo copiar','var(--yellow)'));
   }
+}
+
+// Comparte las deudas PENDIENTES de UNA persona en UN ciclo (section: antiguas|anterior|actual)
+function compartirDeuda(person, section){
+  const cur=getCycle(), prev=getPrevCycle();
+  let items=getDeudas().filter(d=>!d.paid && d.person===person);
+  if(section==='antiguas') items=items.filter(d=>new Date(d.date)<prev.start);
+  else if(section==='anterior') items=items.filter(d=>{const dt=new Date(d.date);return dt>=prev.start&&dt<=prev.end;});
+  else if(section==='actual') items=items.filter(d=>new Date(d.date)>=cur.start);
+  if(!items.length){showToast('Sin deudas pendientes','var(--yellow)');return;}
+  const secLabel=section==='anterior'?'Ciclo anterior':section==='actual'?'Ciclo actual':'Deudas anteriores';
+  const total=items.reduce((s,i)=>s+i.deudaTotal,0);
+  const lines=['📋 '+person+' — '+secLabel,'─────────────────────'];
+  items.sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(i=>{
+    const cuotaStr=i.cuotas>1?' ('+i.cuotas+' cuotas)':'';
+    const totalStr=i.cuotas>1?' de '+fmtCLP(i.totalAmount):'';
+    lines.push('• '+i.desc.toUpperCase()+' — '+fmtCLP(i.deudaTotal)+totalStr+cuotaStr);
+  });
+  lines.push('Total que me debes: '+fmtCLP(total));
+  const text=lines.join('\n').trim();
+  if(navigator.share){ navigator.share({text}).catch(()=>{}); }
+  else { navigator.clipboard.writeText(text).then(()=>showToast('✅ Copiado al portapapeles')).catch(()=>showToast('No se pudo copiar','var(--yellow)')); }
 }
 
 function markDebtPaid(id){
