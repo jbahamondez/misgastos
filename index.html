@@ -1002,9 +1002,7 @@ function renderDashboard(){
     </div>`;
 
   // 3 chips
-  const prev=getPrevCycle();
-  const deudasAnt=getDeudas().filter(d=>{const dt=new Date(d.date);return !d.paid&&dt>=prev.start&&dt<=prev.end;});
-  const totalDeudasAnt=deudasAnt.reduce((s,d)=>s+d.deudaTotal,0);
+  const totalDeudasAnt=deudaInstallments().filter(i=>i.section==='anterior'&&!i.paid).reduce((s,i)=>s+i.amt,0);
   document.getElementById('dash-chips').innerHTML=`
     <div style="flex:1;background:var(--bg2);border-radius:12px;border:1px solid var(--border);padding:12px;text-align:center">
       <div style="font-size:10px;color:var(--text2);margin-bottom:5px">💳 Crédito</div>
@@ -1465,27 +1463,63 @@ function getDeudaType(d){
   if(getD().find(t=>t.id===d.txId)) return 'debito';
   return 'credito';
 }
-function markAllCyclePaid(){
-  const prev=getPrevCycle();
+// ── Deudas por cuota (arrastre estilo "¿Qué debo?") ────────────────────────
+// Estado de pago por cuota. Compatibilidad con deudas viejas (solo tenian d.paid).
+function cuotaPagada(d,k){ return Array.isArray(d.paidCuotas)?d.paidCuotas.includes(k):!!d.paid; }
+function toggleCuotaPagada(debtId,k,val){
   const ds=getDeudas();
-  let count=0;
-  ds.forEach(d=>{
-    const dt=new Date(d.date);
-    if(!d.paid&&dt>=prev.start&&dt<=prev.end){d.paid=true;d.paidDate=new Date().toISOString();count++;}
+  const d=ds.find(x=>x.id===debtId);
+  if(!d) return;
+  const n=Math.max(1,d.cuotas||1);
+  // inicializa paidCuotas desde el estado legacy (d.paid = todas / ninguna)
+  let set=Array.isArray(d.paidCuotas)?d.paidCuotas.slice():(d.paid?Array.from({length:n},(_,i)=>i+1):[]);
+  set=set.filter(x=>x!==k);
+  if(val) set.push(k);
+  set.sort((a,b)=>a-b);
+  d.paidCuotas=set;
+  d.paid=set.length>=n;                 // "pagada" = todas las cuotas cobradas
+  d.paidDate=d.paid?new Date().toISOString():null;
+  saveDeudas(ds);
+}
+// Expande cada deuda en sus cuotas VENCIDAS (hasta el ciclo actual), con nro de
+// cuota y a que ciclo pertenece. Misma logica de ciclos que "¿Que debo?".
+function deudaInstallments(){
+  const cutDay=getBillingDay();
+  const curIdx=queDeboCycleIndex(new Date(), cutDay);
+  const out=[];
+  getDeudas().forEach(d=>{
+    const n=Math.max(1,d.cuotas||1);
+    const base=queDeboCycleIndex(d.date, cutDay);
+    const per=(d.deudaPerCuota!=null?d.deudaPerCuota:(d.deudaTotal||0)/n);
+    for(let k=1;k<=n;k++){
+      const idx=base+(k-1);
+      if(idx>curIdx) break;             // cuota futura, aun no vencida
+      const section=idx===curIdx?'actual':(idx===curIdx-1?'anterior':'antiguas');
+      out.push({d, k, n, amt:per, idx, section, paid:cuotaPagada(d,k)});
+    }
   });
-  saveDeudas(ds);renderDeudas();
-  if(count) showToast(count+' deuda'+(count!==1?'s':'')+' cobrada'+(count!==1?'s':'')+' ✓');
-  else showToast('No hay deudas pendientes en este ciclo','var(--yellow)');
+  return out;
+}
+function marcarCuotaCobrada(debtId,k){ toggleCuotaPagada(debtId,k,true); renderDeudas(); renderDashboard(); showToast('✅ Cuota cobrada'); }
+function revertirCuotaCobrada(debtId,k){ toggleCuotaPagada(debtId,k,false); renderDeudas(); renderDashboard(); showToast('↩️ Cuota revertida','var(--yellow)'); }
+
+function markAllCyclePaid(){
+  const pend=deudaInstallments().filter(i=>i.section==='anterior'&&!i.paid);
+  pend.forEach(i=>toggleCuotaPagada(i.d.id,i.k,true));
+  renderDeudas();renderDashboard();
+  if(pend.length) showToast(pend.length+' cuota'+(pend.length!==1?'s':'')+' cobrada'+(pend.length!==1?'s':'')+' ✓');
+  else showToast('No hay cuotas pendientes en este ciclo','var(--yellow)');
 }
 function renderDeudas(){
   const todasDeudas=getDeudas();
-  const pendientes=todasDeudas.filter(d=>!d.paid);
-  const totalPend=pendientes.reduce((s,d)=>s+d.deudaTotal,0);
+  const allInst=deudaInstallments();
+  const pendInst=allInst.filter(i=>!i.paid);
+  const totalPend=pendInst.reduce((s,i)=>s+i.amt,0);
 
   document.getElementById('deudas-summary-box').innerHTML=`
-    <div class="ds-label">Total pendiente</div>
+    <div class="ds-label">Total por cobrar</div>
     <div class="ds-amount">${fmtCLP(totalPend)}</div>
-    <div style="font-size:12px;color:var(--text2)">${pendientes.length} deuda${pendientes.length!==1?'s':''} activa${pendientes.length!==1?'s':''}</div>`;
+    <div style="font-size:12px;color:var(--text2)">${pendInst.length} cuota${pendInst.length!==1?'s':''} por cobrar</div>`;
 
   document.getElementById('deudas-date-filters').innerHTML='';
 
@@ -1498,39 +1532,40 @@ function renderDeudas(){
   const prevCycle=getPrevCycle();
   const searchTerm=(document.getElementById('deudas-search-input')?.value||'').trim().toLowerCase();
 
-  let deudas=todasDeudas;
-  if(activeDeudasStatusFilter==='pendiente') deudas=deudas.filter(d=>!d.paid);
-  else if(activeDeudasStatusFilter==='pagado') deudas=deudas.filter(d=>d.paid);
-  if(searchTerm) deudas=deudas.filter(d=>(d.desc||'').toLowerCase().includes(searchTerm));
+  let inst=allInst;
+  if(activeDeudasStatusFilter==='pendiente') inst=inst.filter(i=>!i.paid);
+  else if(activeDeudasStatusFilter==='pagado') inst=inst.filter(i=>i.paid);
+  if(searchTerm) inst=inst.filter(i=>(i.d.desc||'').toLowerCase().includes(searchTerm));
 
-  document.getElementById('deudas-subtitle').textContent=deudas.length+' registro'+(deudas.length!==1?'s':'');
+  document.getElementById('deudas-subtitle').textContent=inst.length+' cuota'+(inst.length!==1?'s':'');
 
   const content=document.getElementById('deudas-content');
   if(!todasDeudas.length){
     content.innerHTML='<div class="empty" style="margin-top:30px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><h3>Sin deudas</h3><p>Cuando dividas una compra aparecerá aquí</p></div>';
     return;
   }
-  if(!deudas.length){
+  if(!inst.length){
     content.innerHTML='<div class="empty" style="margin-top:20px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><h3>Sin resultados</h3><p>Prueba con otro filtro o búsqueda</p></div>';
     return;
   }
 
   const fmtD=d=>d.toLocaleDateString('es-CL',{day:'numeric',month:'short'});
 
-  function renderDeudaItem(d){
+  function renderInstItem(it){
+    const d=it.d;
     const tipo=getDeudaType(d);
     const tipoBadge=`<span class="deuda-type-badge ${tipo}">${tipo==='debito'?'Débito':'Crédito'}</span>`;
     const dateStr=new Date(d.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'numeric'});
-    const cuotaStr=d.cuotas>1?` · ${d.cuotas} cuotas · ${fmtCLP(d.deudaPerCuota)}/cuota`:'';
-    return `<div class="deuda-item ${d.paid?'paid':''}">
+    const cuotaStr=it.n>1?` · cuota ${it.k}/${it.n}`:'';
+    return `<div class="deuda-item ${it.paid?'paid':''}">
       <div class="deuda-item-info">
         <div class="deuda-item-title">${tipoBadge}<span class="deuda-item-desc">${d.desc}</span></div>
-        <div class="deuda-item-meta">${dateStr}${cuotaStr}${d.paid?' · ✅ Cobrado el '+new Date(d.paidDate).toLocaleDateString('es-CL',{day:'2-digit',month:'short'}):''}</div>
+        <div class="deuda-item-meta">${dateStr}${cuotaStr}${it.paid?' · ✅ Cobrada':''}</div>
       </div>
       <div class="deuda-item-amount">
-        <div class="da ${d.paid?'paid':''}">${fmtCLP(d.deudaTotal)}</div>
-        ${!d.paid?`<button class="btn-paid" onclick="markDebtPaid('${d.id}')">✓ Cobrado</button>`
-                 :`<button class="btn-paid done" onclick="unmarkDebtPaid('${d.id}')">↩ Revertir</button>`}
+        <div class="da ${it.paid?'paid':''}">${fmtCLP(it.amt)}</div>
+        ${!it.paid?`<button class="btn-paid" onclick="marcarCuotaCobrada('${d.id}',${it.k})">✓ Cobrado</button>`
+                 :`<button class="btn-paid done" onclick="revertirCuotaCobrada('${d.id}',${it.k})">↩ Revertir</button>`}
       </div>
     </div>`;
   }
@@ -1538,17 +1573,17 @@ function renderDeudas(){
   function renderSection(icon,title,dateRange,items,section){
     if(!items.length) return '';
     const byPerson={};
-    items.forEach(d=>{if(!byPerson[d.person])byPerson[d.person]=[];byPerson[d.person].push(d);});
-    const totalSec=items.filter(d=>!d.paid).reduce((s,d)=>s+d.deudaTotal,0);
-    const unpaidCount=items.filter(d=>!d.paid).length;
+    items.forEach(it=>{if(!byPerson[it.d.person])byPerson[it.d.person]=[];byPerson[it.d.person].push(it);});
+    const totalSec=items.filter(it=>!it.paid).reduce((s,it)=>s+it.amt,0);
+    const unpaidCount=items.filter(it=>!it.paid).length;
     const markAllBtn=section==='anterior'&&unpaidCount>0
       ?`<button class="btn-mark-all-cycle" onclick="markAllCyclePaid()">✓ Marcar todo cobrado (${unpaidCount})</button>`:'';
     const cardsHTML=Object.entries(byPerson).map(([person,pItems])=>{
-      const pendTotal=pItems.filter(i=>!i.paid).reduce((s,i)=>s+i.deudaTotal,0);
+      const pendTotal=pItems.filter(i=>!i.paid).reduce((s,i)=>s+i.amt,0);
       const shareBtn=pendTotal>0?`<button onclick="compartirDeuda('${person.replace(/'/g,"\\'")}','${section}')" title="Compartir deudas de ${person}" style="background:var(--accent2);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;padding:5px 11px;cursor:pointer;flex-shrink:0">📤 Compartir</button>`:'';
       return `<div class="deuda-person-card">
         <div class="deuda-person-header"><h3>👤 ${person}</h3><div style="display:flex;align-items:center;gap:10px"><span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span>${shareBtn}</div></div>
-        ${pItems.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(renderDeudaItem).join('')}
+        ${pItems.sort((a,b)=>(new Date(b.d.date)-new Date(a.d.date))||a.k-b.k).map(renderInstItem).join('')}
       </div>`;
     }).join('');
     return `<div class="cycle-section">
@@ -1560,36 +1595,33 @@ function renderDeudas(){
     </div>`;
   }
 
-  const antiguas=deudas.filter(d=>new Date(d.date)<prevCycle.start);
-  const anterior=deudas.filter(d=>{const dt=new Date(d.date);return dt>=prevCycle.start&&dt<=prevCycle.end;});
-  const actual=deudas.filter(d=>new Date(d.date)>=curCycle.start);
+  const antiguas=inst.filter(i=>i.section==='antiguas');
+  const anterior=inst.filter(i=>i.section==='anterior');
+  const actual=inst.filter(i=>i.section==='actual');
 
   content.innerHTML=[
-    renderSection('📦','Deudas anteriores','antes del '+fmtD(prevCycle.start),antiguas,'antiguas'),
+    renderSection('📦','Cuotas anteriores','antes del '+fmtD(prevCycle.start),antiguas,'antiguas'),
     renderSection('📅','Ciclo anterior',fmtD(prevCycle.start)+' – '+fmtD(prevCycle.end),anterior,'anterior'),
     renderSection('🔄','Ciclo actual',fmtD(curCycle.start)+' – '+fmtD(curCycle.end),actual,'actual'),
   ].join('');
 }
 function setDeudasStatusFilter(id){activeDeudasStatusFilter=id;renderDeudas();}
 function compartirResumenDeudas(){
-  const todas=getDeudas();
-  const pendientes=todas.filter(d=>!d.paid);
-  if(!pendientes.length){showToast('No hay deudas pendientes','var(--yellow)');return;}
-  // Group by person
+  const pend=deudaInstallments().filter(i=>!i.paid);
+  if(!pend.length){showToast('No hay cuotas por cobrar','var(--yellow)');return;}
   const byPerson={};
-  pendientes.forEach(d=>{if(!byPerson[d.person])byPerson[d.person]=[];byPerson[d.person].push(d);});
+  pend.forEach(i=>{if(!byPerson[i.d.person])byPerson[i.d.person]=[];byPerson[i.d.person].push(i);});
   const now=new Date();
   const mes=now.toLocaleDateString('es-CL',{month:'long',year:'numeric'});
   const mesLabel=mes.charAt(0).toUpperCase()+mes.slice(1);
   let lines=[];
   Object.entries(byPerson).forEach(([person,items])=>{
-    const total=items.reduce((s,i)=>s+i.deudaTotal,0);
+    const total=items.reduce((s,i)=>s+i.amt,0);
     lines.push('📋 Resumen '+mesLabel+' — '+person);
     lines.push('─────────────────────');
-    items.sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(i=>{
-      const cuotaStr=i.cuotas>1?' ('+i.cuotas+' cuotas)':'';
-      const totalStr=i.cuotas>1?' de '+fmtCLP(i.totalAmount):'';
-      lines.push('• '+i.desc.toUpperCase()+' — '+fmtCLP(i.deudaTotal)+totalStr+cuotaStr);
+    items.sort((a,b)=>(new Date(b.d.date)-new Date(a.d.date))||a.k-b.k).forEach(i=>{
+      const cuotaStr=i.n>1?' (cuota '+i.k+'/'+i.n+')':'';
+      lines.push('• '+i.d.desc.toUpperCase()+' — '+fmtCLP(i.amt)+cuotaStr);
     });
     lines.push('Total que me debes: '+fmtCLP(total));
     lines.push('');
@@ -1602,21 +1634,16 @@ function compartirResumenDeudas(){
   }
 }
 
-// Comparte las deudas PENDIENTES de UNA persona en UN ciclo (section: antiguas|anterior|actual)
+// Comparte las cuotas PENDIENTES de UNA persona en UN ciclo (section: antiguas|anterior|actual)
 function compartirDeuda(person, section){
-  const cur=getCycle(), prev=getPrevCycle();
-  let items=getDeudas().filter(d=>!d.paid && d.person===person);
-  if(section==='antiguas') items=items.filter(d=>new Date(d.date)<prev.start);
-  else if(section==='anterior') items=items.filter(d=>{const dt=new Date(d.date);return dt>=prev.start&&dt<=prev.end;});
-  else if(section==='actual') items=items.filter(d=>new Date(d.date)>=cur.start);
-  if(!items.length){showToast('Sin deudas pendientes','var(--yellow)');return;}
-  const secLabel=section==='anterior'?'Ciclo anterior':section==='actual'?'Ciclo actual':'Deudas anteriores';
-  const total=items.reduce((s,i)=>s+i.deudaTotal,0);
+  const items=deudaInstallments().filter(i=>i.section===section&&!i.paid&&i.d.person===person);
+  if(!items.length){showToast('Sin cuotas por cobrar','var(--yellow)');return;}
+  const secLabel=section==='anterior'?'Ciclo anterior':section==='actual'?'Ciclo actual':'Cuotas anteriores';
+  const total=items.reduce((s,i)=>s+i.amt,0);
   const lines=['📋 '+person+' — '+secLabel,'─────────────────────'];
-  items.sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(i=>{
-    const cuotaStr=i.cuotas>1?' ('+i.cuotas+' cuotas)':'';
-    const totalStr=i.cuotas>1?' de '+fmtCLP(i.totalAmount):'';
-    lines.push('• '+i.desc.toUpperCase()+' — '+fmtCLP(i.deudaTotal)+totalStr+cuotaStr);
+  items.sort((a,b)=>(new Date(b.d.date)-new Date(a.d.date))||a.k-b.k).forEach(i=>{
+    const cuotaStr=i.n>1?' (cuota '+i.k+'/'+i.n+')':'';
+    lines.push('• '+i.d.desc.toUpperCase()+' — '+fmtCLP(i.amt)+cuotaStr);
   });
   lines.push('Total que me debes: '+fmtCLP(total));
   const text=lines.join('\n').trim();
@@ -1899,27 +1926,18 @@ function closePaymentReminderOutside(e){
 function checkCobroReminder(){
   const day=new Date().getDate();
   if(day>5) return;
-  const prev=getPrevCycle();
-  const pendientes=getDeudas().filter(d=>{
-    const dt=new Date(d.date);
-    return !d.paid&&dt>=prev.start&&dt<=prev.end;
-  });
-  if(!pendientes.length) return;
+  const pend=deudaInstallments().filter(i=>i.section==='anterior'&&!i.paid);
+  if(!pend.length) return;
   const byPerson={};
-  pendientes.forEach(d=>{byPerson[d.person]=(byPerson[d.person]||0)+d.deudaTotal;});
+  pend.forEach(i=>{byPerson[i.d.person]=(byPerson[i.d.person]||0)+i.amt;});
   document.getElementById('cobro-reminder-list').innerHTML=Object.entries(byPerson).map(([person,total],i)=>
     `<div class="payment-card-row"><div class="payment-card-info"><span class="payment-card-name">👤 ${person}</span><span class="payment-card-amount" style="color:var(--accent2)">${fmtCLP(total)}</span></div><button class="payment-paid-btn cobro-paid-btn" id="cobro-btn-${i}" onclick="markPersonCobrado('${person.replace(/'/g,"\\'")}',${i})">✓ Cobrado</button></div>`
   ).join('');
   document.getElementById('cobro-reminder-overlay').classList.add('open');
 }
 function markPersonCobrado(person,idx){
-  const prev=getPrevCycle();
-  const ds=getDeudas();
-  ds.forEach(d=>{
-    const dt=new Date(d.date);
-    if(!d.paid&&d.person===person&&dt>=prev.start&&dt<=prev.end){d.paid=true;d.paidDate=new Date().toISOString();}
-  });
-  saveDeudas(ds);
+  const pend=deudaInstallments().filter(i=>i.section==='anterior'&&!i.paid&&i.d.person===person);
+  pend.forEach(i=>toggleCuotaPagada(i.d.id,i.k,true));
   const btn=document.getElementById('cobro-btn-'+idx);
   if(btn){btn.textContent='✓ Listo';btn.className='payment-paid-btn done';btn.disabled=true;}
   const allDone=[...document.querySelectorAll('.cobro-paid-btn')].every(b=>b.disabled);
