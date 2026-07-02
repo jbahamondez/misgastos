@@ -894,7 +894,9 @@ function cuotasActivasCiclo(cardId, offset){
   getC().forEach(t=>{
     if(t.cardId!==cardId || esPrestada(t)) return; // las prestadas no son gasto mio
     const n=Math.max(1,t.cuotas||1);
-    const k=targetIdx - queDeboCycleIndex(t.date, cutDay); // cuota 0-indexada que cae en el ciclo
+    // cycleOffset: "aplazar" corre toda la serie de cuotas hacia adelante (banco aun no factura)
+    const base=queDeboCycleIndex(t.date, cutDay)+(t.cycleOffset||0);
+    const k=targetIdx - base; // cuota 0-indexada que cae en el ciclo
     if(k>=0 && k<n) out.push({tx:t, cuotaNum:k+1, cuotasTotal:n, cuotaAmt:t.amount/n});
   });
   return out;
@@ -1490,7 +1492,7 @@ function deudaInstallments(){
   const out=[];
   getDeudas().forEach(d=>{
     const n=Math.max(1,d.cuotas||1);
-    const base=queDeboCycleIndex(d.date, cutDay);
+    const base=queDeboCycleIndex(d.date, cutDay)+(d.cycleOffset||0); // "aplazar" corre la deuda de ciclo
     const per=(d.deudaPerCuota!=null?d.deudaPerCuota:(d.deudaTotal||0)/n);
     for(let k=1;k<=n;k++){
       const idx=base+(k-1);
@@ -1503,6 +1505,39 @@ function deudaInstallments(){
 }
 function marcarCuotaCobrada(debtId,k){ toggleCuotaPagada(debtId,k,true); renderDeudas(); renderDashboard(); showToast('✅ Cuota cobrada'); }
 function revertirCuotaCobrada(debtId,k){ toggleCuotaPagada(debtId,k,false); renderDeudas(); renderDashboard(); showToast('↩️ Cuota revertida','var(--yellow)'); }
+
+// ── Aplazar compra a otro ciclo (el banco aun no la factura) ───────────────
+// Corre la compra de credito Y sus deudas asociadas un ciclo hacia adelante
+// (delta +1) o hacia atras (delta -1). Se pueden aplazar varias veces.
+function cycleOffsetDeTx(txId){
+  const t=getC().find(x=>x.id===txId);
+  if(t) return t.cycleOffset||0;
+  const d=getDeudas().find(x=>x.txId===txId);
+  return d?(d.cycleOffset||0):0;
+}
+function aplazarCompra(txId, delta){
+  let refreshed=false;
+  const c=getC(); let cc=false;
+  c.forEach(t=>{ if(t.id===txId){ t.cycleOffset=Math.max(0,(t.cycleOffset||0)+delta); cc=true; } });
+  if(cc) saveC(c);
+  const ds=getDeudas(); let dc=false;
+  ds.forEach(d=>{ if(d.txId===txId){ d.cycleOffset=Math.max(0,(d.cycleOffset||0)+delta); dc=true; } });
+  if(dc) saveDeudas(ds);
+  if(!cc && !dc){ return; }
+  renderDashboard(); renderDebito(); renderHistorial(); renderDeudas();
+  const qd=document.getElementById('quedebo-overlay');
+  if(qd && qd.classList.contains('open')) renderQueDebo();
+  const off=cycleOffsetDeTx(txId);
+  showToast(delta>0?('⏳ Aplazada '+(off>1?'('+off+' ciclos)':'al próximo ciclo')):(off>0?'↩️ Traída un ciclo atrás':'↩️ Reactivada en su ciclo'));
+}
+// Etiqueta "APLAZADA" para las listas
+function aplazadaTag(off){ return off>0?` <span style="font-size:9px;font-weight:700;color:#eab308;background:rgba(251,191,36,.15);padding:1px 5px;border-radius:5px;vertical-align:middle">⏳ APLAZADA${off>1?' '+off+'x':''}</span>`:''; }
+// Botones de aplazar/reactivar (para ¿Qué debo? y Deudas)
+function aplazarControlHTML(txId, off){
+  const b='font-size:10px;font-weight:600;padding:3px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer';
+  if(off>0) return `<button onclick="aplazarCompra('${txId}',1)" style="${b}">⏳ Aplazar +1</button><button onclick="aplazarCompra('${txId}',-1)" style="${b};color:var(--accent2);border-color:var(--accent2)">↩ Reactivar</button>`;
+  return `<button onclick="aplazarCompra('${txId}',1)" style="${b}">⏳ Aún no facturada · Aplazar</button>`;
+}
 
 function markAllCyclePaid(){
   const pend=deudaInstallments().filter(i=>i.section==='anterior'&&!i.paid);
@@ -1558,9 +1593,12 @@ function renderDeudas(){
     const tipoBadge=`<span class="deuda-type-badge ${tipo}">${tipo==='debito'?'Débito':'Crédito'}</span>`;
     const dateStr=new Date(d.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'numeric'});
     const cuotaStr=it.n>1?` · cuota ${it.k}/${it.n}`:'';
-    return `<div class="deuda-item ${it.paid?'paid':''}">
+    const off=d.cycleOffset||0;
+    // Aplazar solo aplica a credito (el debito ya esta pagado al instante)
+    const aplazarLine=(tipo==='credito'&&!it.paid)?`<div style="flex-basis:100%;display:flex;gap:6px;margin-top:8px">${aplazarControlHTML(d.txId, off)}</div>`:'';
+    return `<div class="deuda-item ${it.paid?'paid':''}" style="flex-wrap:wrap">
       <div class="deuda-item-info">
-        <div class="deuda-item-title">${tipoBadge}<span class="deuda-item-desc">${d.desc}</span></div>
+        <div class="deuda-item-title">${tipoBadge}<span class="deuda-item-desc">${d.desc}</span>${aplazadaTag(off)}</div>
         <div class="deuda-item-meta">${dateStr}${cuotaStr}${it.paid?' · ✅ Cobrada':''}</div>
       </div>
       <div class="deuda-item-amount">
@@ -1568,6 +1606,7 @@ function renderDeudas(){
         ${!it.paid?`<button class="btn-paid" onclick="marcarCuotaCobrada('${d.id}',${it.k})">✓ Cobrado</button>`
                  :`<button class="btn-paid done" onclick="revertirCuotaCobrada('${d.id}',${it.k})">↩ Revertir</button>`}
       </div>
+      ${aplazarLine}
     </div>`;
   }
 
@@ -2049,23 +2088,31 @@ function openTxMenu(e, txId, txType){
   closeCtxMenu();
   const menu=document.createElement('div');
   menu.className='tx-ctx-menu';
+  // Aplazar solo para credito (el debito ya esta pagado)
+  const off=(txType!=='debito')?((getC().find(t=>t.id===txId)||{}).cycleOffset||0):0;
+  const aplazarBtns=(txType!=='debito')
+    ? `<button class="tx-ctx-btn" data-act="aplazar">⏳ ${off>0?'Aplazar +1 ciclo':'Aplazar al próximo ciclo'}</button>${off>0?'<button class="tx-ctx-btn" data-act="reactivar">↩️ Reactivar (1 ciclo atrás)</button>':''}`
+    : '';
   menu.innerHTML=`
-    <button class="tx-ctx-btn">✏️ Editar</button>
-    <button class="tx-ctx-btn danger">🗑️ Eliminar</button>`;
-  // Posicionar el menú cerca del toque
+    <button class="tx-ctx-btn" data-act="editar">✏️ Editar</button>
+    ${aplazarBtns}
+    <button class="tx-ctx-btn danger" data-act="eliminar">🗑️ Eliminar</button>`;
   const x=Math.min(e.clientX, window.innerWidth-200);
-  const y=Math.min(e.clientY, window.innerHeight-100);
+  const y=Math.min(e.clientY, window.innerHeight-190);
   menu.style.cssText=`left:${x}px;top:${y}px`;
   document.body.appendChild(menu);
   _ctxMenu=menu;
-  // Usar touchend para evitar conflicto con el listener de cierre
-  const btns=menu.querySelectorAll('.tx-ctx-btn');
-  btns[0].addEventListener('touchend', (ev)=>{ev.preventDefault();ev.stopPropagation();closeCtxMenu();openEditModal(txId,txType);});
-  btns[1].addEventListener('touchend', (ev)=>{ev.preventDefault();ev.stopPropagation();closeCtxMenu();deleteTx(txId,txType);});
-  // Fallback click para desktop
-  btns[0].addEventListener('click', (ev)=>{ev.stopPropagation();closeCtxMenu();openEditModal(txId,txType);});
-  btns[1].addEventListener('click', (ev)=>{ev.stopPropagation();closeCtxMenu();deleteTx(txId,txType);});
-  // Cerrar al tocar fuera
+  const act=a=>{ closeCtxMenu();
+    if(a==='editar') openEditModal(txId,txType);
+    else if(a==='eliminar') deleteTx(txId,txType);
+    else if(a==='aplazar') aplazarCompra(txId,1);
+    else if(a==='reactivar') aplazarCompra(txId,-1);
+  };
+  menu.querySelectorAll('.tx-ctx-btn').forEach(b=>{
+    const a=b.getAttribute('data-act');
+    b.addEventListener('touchend',(ev)=>{ev.preventDefault();ev.stopPropagation();act(a);});
+    b.addEventListener('click',(ev)=>{ev.stopPropagation();act(a);});
+  });
   setTimeout(()=>{
     document.addEventListener('touchstart', closeCtxMenu, {once:true});
     document.addEventListener('click', closeCtxMenu, {once:true});
@@ -2210,7 +2257,7 @@ function txHTML(t){
   const txType=isD?'debito':'credito';
   return`<div class="tx-item ${isD?'debito':''}" oncontextmenu="openTxMenu(event,'${t.id}','${txType}')" ontouchstart="startTxHold(event,'${t.id}','${txType}')" ontouchend="cancelTxHold()" ontouchmove="cancelTxHold()">
     <div class="tx-icon" style="background:${color}22">${getIcon(t.desc)}</div>
-    <div class="tx-info"><div class="tx-name">${t.desc||'Sin descripción'}${esPrestada(t)?' <span style="font-size:9px;font-weight:700;color:var(--accent2);background:rgba(167,139,250,.15);padding:1px 6px;border-radius:6px;vertical-align:middle">🤝 PRESTADA</span>':''}</div><div class="tx-meta">${bank} · ${date}</div></div>
+    <div class="tx-info"><div class="tx-name">${t.desc||'Sin descripción'}${esPrestada(t)?' <span style="font-size:9px;font-weight:700;color:var(--accent2);background:rgba(167,139,250,.15);padding:1px 6px;border-radius:6px;vertical-align:middle">🤝 PRESTADA</span>':''}${!isD?aplazadaTag(t.cycleOffset||0):''}</div><div class="tx-meta">${bank} · ${date}</div></div>
     <div class="tx-amount"><div class="amount" style="color:${esPrestada(t)?'var(--text2)':(t.amount<0?'var(--green)':(isD?'var(--blue)':'var(--text)'))}">${amt}</div><div class="cuotas">${esPrestada(t)?'por cobrar':cuota}</div></div>
   </div>`;
 }
@@ -2872,16 +2919,20 @@ function renderQueDebo(){
     const nCuotas=cuotasTotal>1?`cuota ${cuotaNum} de ${cuotasTotal}`:'Contado';
     const montoFull=cuotasTotal>1?` · total ${esUSD?fmtUSD(tx.amount):fmtCLP(tx.amount)}`:'';
     const fecha=new Date(tx.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
-    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--border)">
-      <div style="width:10px;height:10px;border-radius:50%;background:${card.color};flex-shrink:0" title="${card.bank}"></div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tx.desc||'Sin descripción'}</div>
-        <div style="font-size:11px;color:var(--text2);margin-top:2px">${card.bank} · ${fecha} · ${nCuotas}${montoFull}</div>
+    const off=tx.cycleOffset||0;
+    return `<div style="padding:11px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="width:10px;height:10px;border-radius:50%;background:${card.color};flex-shrink:0" title="${card.bank}"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tx.desc||'Sin descripción'}${aplazadaTag(off)}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">${card.bank} · ${fecha} · ${nCuotas}${montoFull}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:14px;font-weight:700">${montoCuota}</div>
+          ${cuotasTotal>1?'<div style="font-size:10px;color:var(--text2)">por cuota</div>':''}
+        </div>
       </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:14px;font-weight:700">${montoCuota}</div>
-        ${cuotasTotal>1?'<div style="font-size:10px;color:var(--text2)">por cuota</div>':''}
-      </div>
+      <div style="display:flex;gap:6px;margin-top:6px;margin-left:20px">${aplazarControlHTML(tx.id, off)}</div>
     </div>`;
   }).join('');
 
