@@ -1606,49 +1606,105 @@ function renderDeudas(){
   ].join('');
 }
 function setDeudasStatusFilter(id){activeDeudasStatusFilter=id;renderDeudas();}
+// ── Compartir como PDF (libreria cargada bajo demanda, no afecta el arranque) ──
+let _jspdfPromise=null;
+function loadJsPDF(){
+  if(window.jspdf&&window.jspdf.jsPDF) return Promise.resolve();
+  if(!_jspdfPromise){
+    _jspdfPromise=new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload=res; s.onerror=rej;
+      document.head.appendChild(s);
+    });
+  }
+  return _jspdfPromise;
+}
+// jsPDF (fuentes estandar) no dibuja emojis; deja acentos latinos y quita el resto.
+function pdfSafe(s){ return String(s==null?'':s).replace(/[^\x20-\xFF]/g,'').replace(/\s+/g,' ').trim(); }
+function bloquesATexto(tituloDoc,bloques){
+  const L=[pdfSafe(tituloDoc),''];
+  bloques.forEach(b=>{
+    L.push(pdfSafe(b.titulo)+(b.subtitulo?' — '+pdfSafe(b.subtitulo):''));
+    L.push('─────────────────────');
+    b.rows.forEach(r=>L.push('• '+pdfSafe(r.desc)+' — '+r.monto));
+    L.push(pdfSafe(b.total.label)+': '+b.total.value);
+    L.push('');
+  });
+  return L.join('\n').trim();
+}
+async function compartirPDF(filename,tituloDoc,bloques){
+  let ready=false;
+  try{ await loadJsPDF(); ready=!!(window.jspdf&&window.jspdf.jsPDF); }catch(e){ ready=false; }
+  if(!ready){ // sin libreria (offline): vuelve a texto como antes
+    const text=bloquesATexto(tituloDoc,bloques);
+    if(navigator.share) navigator.share({text}).catch(()=>{});
+    else navigator.clipboard.writeText(text).then(()=>showToast('✅ Copiado al portapapeles')).catch(()=>showToast('No se pudo copiar','var(--yellow)'));
+    return;
+  }
+  const { jsPDF }=window.jspdf;
+  const doc=new jsPDF({unit:'pt',format:'a4'});
+  const W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight(), M=40;
+  let y=56;
+  const nl=h=>{ if(y+h>H-40){ doc.addPage(); y=56; } };
+  doc.setFont('helvetica','bold'); doc.setFontSize(17); doc.text(pdfSafe(tituloDoc),M,y); y+=28;
+  bloques.forEach(b=>{
+    nl(72);
+    doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.text(pdfSafe(b.titulo),M,y); y+=16;
+    if(b.subtitulo){ doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(130); doc.text(pdfSafe(b.subtitulo),M,y); doc.setTextColor(0); y+=14; }
+    doc.setDrawColor(210); doc.line(M,y,W-M,y); y+=16;
+    doc.setFont('helvetica','normal'); doc.setFontSize(11);
+    b.rows.forEach(r=>{ nl(18); doc.text(pdfSafe(r.desc),M,y); doc.text(String(r.monto),W-M,y,{align:'right'}); y+=18; });
+    y+=4; doc.setDrawColor(210); doc.line(M,y,W-M,y); y+=17;
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text(pdfSafe(b.total.label),M,y); doc.text(String(b.total.value),W-M,y,{align:'right'}); y+=30;
+  });
+  const blob=doc.output('blob');
+  const file=new File([blob],filename,{type:'application/pdf'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file],title:pdfSafe(tituloDoc)}); }
+    catch(e){ if(!e||e.name!=='AbortError') showToast('No se pudo compartir el PDF','var(--yellow)'); }
+    return;
+  }
+  // Sin soporte para compartir archivos (ej. escritorio): descargar
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+  showToast('PDF generado ✓');
+}
+function _rowsDeInstallments(items){
+  return items.sort((a,b)=>(new Date(b.d.date)-new Date(a.d.date))||a.k-b.k).map(i=>({
+    desc:i.d.desc+(i.n>1?' (cuota '+i.k+'/'+i.n+')':''),
+    monto:fmtCLP(i.amt)
+  }));
+}
+function _slugPersona(p){ return p.replace(/[^a-z0-9]+/gi,'_').replace(/^_+|_+$/g,'').toLowerCase()||'persona'; }
+
 function compartirResumenDeudas(){
   const pend=deudaInstallments().filter(i=>!i.paid);
   if(!pend.length){showToast('No hay cuotas por cobrar','var(--yellow)');return;}
   const byPerson={};
   pend.forEach(i=>{if(!byPerson[i.d.person])byPerson[i.d.person]=[];byPerson[i.d.person].push(i);});
-  const now=new Date();
-  const mes=now.toLocaleDateString('es-CL',{month:'long',year:'numeric'});
-  const mesLabel=mes.charAt(0).toUpperCase()+mes.slice(1);
-  let lines=[];
-  Object.entries(byPerson).forEach(([person,items])=>{
-    const total=items.reduce((s,i)=>s+i.amt,0);
-    lines.push('📋 Resumen '+mesLabel+' — '+person);
-    lines.push('─────────────────────');
-    items.sort((a,b)=>(new Date(b.d.date)-new Date(a.d.date))||a.k-b.k).forEach(i=>{
-      const cuotaStr=i.n>1?' (cuota '+i.k+'/'+i.n+')':'';
-      lines.push('• '+i.d.desc.toUpperCase()+' — '+fmtCLP(i.amt)+cuotaStr);
-    });
-    lines.push('Total que me debes: '+fmtCLP(total));
-    lines.push('');
-  });
-  const text=lines.join('\n').trim();
-  if(navigator.share){
-    navigator.share({text}).catch(()=>{});
-  } else {
-    navigator.clipboard.writeText(text).then(()=>showToast('✅ Copiado al portapapeles')).catch(()=>showToast('No se pudo copiar','var(--yellow)'));
-  }
+  const mes=new Date().toLocaleDateString('es-CL',{month:'long',year:'numeric'});
+  const bloques=Object.entries(byPerson).map(([person,items])=>({
+    titulo:person,
+    rows:_rowsDeInstallments(items),
+    total:{label:'Total que me debes',value:fmtCLP(items.reduce((s,i)=>s+i.amt,0))}
+  }));
+  compartirPDF('deudas_resumen.pdf','Resumen de deudas — '+(mes.charAt(0).toUpperCase()+mes.slice(1)),bloques);
 }
 
-// Comparte las cuotas PENDIENTES de UNA persona en UN ciclo (section: antiguas|anterior|actual)
+// Comparte (PDF) las cuotas PENDIENTES de UNA persona en UN ciclo (section: antiguas|anterior|actual)
 function compartirDeuda(person, section){
   const items=deudaInstallments().filter(i=>i.section===section&&!i.paid&&i.d.person===person);
   if(!items.length){showToast('Sin cuotas por cobrar','var(--yellow)');return;}
   const secLabel=section==='anterior'?'Ciclo anterior':section==='actual'?'Ciclo actual':'Cuotas anteriores';
-  const total=items.reduce((s,i)=>s+i.amt,0);
-  const lines=['📋 '+person+' — '+secLabel,'─────────────────────'];
-  items.sort((a,b)=>(new Date(b.d.date)-new Date(a.d.date))||a.k-b.k).forEach(i=>{
-    const cuotaStr=i.n>1?' (cuota '+i.k+'/'+i.n+')':'';
-    lines.push('• '+i.d.desc.toUpperCase()+' — '+fmtCLP(i.amt)+cuotaStr);
-  });
-  lines.push('Total que me debes: '+fmtCLP(total));
-  const text=lines.join('\n').trim();
-  if(navigator.share){ navigator.share({text}).catch(()=>{}); }
-  else { navigator.clipboard.writeText(text).then(()=>showToast('✅ Copiado al portapapeles')).catch(()=>showToast('No se pudo copiar','var(--yellow)')); }
+  const bloque={
+    titulo:person,
+    subtitulo:secLabel+' · '+new Date().toLocaleDateString('es-CL'),
+    rows:_rowsDeInstallments(items),
+    total:{label:'Total que me debes',value:fmtCLP(items.reduce((s,i)=>s+i.amt,0))}
+  };
+  compartirPDF('deuda_'+_slugPersona(person)+'_'+section+'.pdf','Resumen de deuda',[bloque]);
 }
 
 function markDebtPaid(id){
