@@ -978,9 +978,10 @@ function renderDashboard(){
   let totCuota=0;
   Object.values(CARDS).forEach(c=>{totCuota+=cuotaCLP(c.id);});
   const totDeb=debitoThisMonth().filter(t=>!esPrestada(t)).reduce((s,t)=>s+t.amount,0);
-  const totGastado=totCuota+totDeb;
   const sueldo=getSueldo();
-  const pct=sueldo>0?Math.min(100,totGastado/sueldo*100):0;
+  // El widget "Total a pagar" es SOLO credito (deuda al banco). El debito ya esta
+  // pagado: vive en su chip y en la Salud Financiera como consumo, no aqui.
+  const pct=sueldo>0?Math.min(100,totCuota/sueldo*100):0;
   const barColor=pct>75?'var(--red)':pct>50?'var(--yellow)':'var(--green)';
   const days=daysToFact('bci');
   const billingDay=getBillingDay('bci');
@@ -989,12 +990,12 @@ function renderDashboard(){
   document.getElementById('dash-main-widget').innerHTML=`
     <div style="background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border);padding:20px">
       <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Total a pagar este ciclo</div>
-      <div style="font-size:38px;font-weight:700;margin-bottom:${sueldo?'14px':'6px'}">${fmtCLP(totGastado)}</div>
+      <div style="font-size:38px;font-weight:700;margin-bottom:${sueldo?'14px':'6px'}">${fmtCLP(totCuota)}</div>
       ${sueldo?`
         <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:8px">
           <div style="width:${pct}%;background:${barColor};height:100%;border-radius:3px;transition:width .6s"></div>
         </div>
-        <div style="font-size:12px;color:var(--text2)">${Math.round(pct)}% de tu sueldo · <span style="color:var(--green)">${fmtCLP(Math.max(0,sueldo-totGastado))}</span> libre</div>
+        <div style="font-size:12px;color:var(--text2)">Equivale al ${Math.round(pct)}% de tu sueldo</div>
       `:''}
       <div style="margin-top:10px;font-size:12px;color:var(--text2)">
         ${days===0?'⚡ Hoy es día de facturación':'📅 Faltan <strong style="color:var(--text)">'+days+' días</strong> para el cierre (día '+billingDay+')'}
@@ -1054,7 +1055,7 @@ function renderSalud(totCred){
     </div>
     ${sueldo?`
     <div class="metrics-grid">
-      <div class="metric-cell"><div class="metric-label">Total a pagar</div>
+      <div class="metric-cell"><div class="metric-label">Total gastado</div>
         <div class="metric-val" style="color:${pT>75?'var(--red)':pT>50?'var(--yellow)':'var(--text)'}">${fmtCLP(tot)}</div>
         <div class="metric-sub">${fmtPct(pT)} del sueldo</div></div>
       <div class="metric-cell"><div class="metric-label">Ahorro potencial</div>
