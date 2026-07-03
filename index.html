@@ -304,7 +304,7 @@
       .fab{right:calc(50% - 260px + 20px)}
       .sync-badge{right:calc(50% - 260px + 18px)}
       .modal,.split-modal{max-width:520px;margin:0 auto}
-      #analisis-overlay > div,#quedebo-overlay > div{max-width:520px;margin:0 auto}
+      #analisis-overlay > div,#quedebo-overlay > div,#concilia-overlay > div{max-width:520px;margin:0 auto}
     }
   </style>
 </head>
@@ -407,6 +407,11 @@
   </div>
   <div class="settings-section"><h3>👤 Personas para dividir gastos</h3></div>
   <div style="padding:0 20px 14px" id="personas-list"></div>
+  <div class="settings-section"><h3>🧾 Conciliación</h3>
+    <div class="settings-list">
+      <div class="settings-row" onclick="openConciliaModal()"><span class="row-label">🧾 Conciliar cartola de crédito</span><span class="row-val">→</span></div>
+    </div>
+  </div>
   <div class="settings-section"><h3>Datos</h3>
     <div class="settings-list">
       <div class="settings-row" onclick="exportData()"><span class="row-label">📤 Exportar respaldo (JSON)</span><span class="row-val">→</span></div>
@@ -490,6 +495,17 @@
     </div>
     <div style="padding:14px 20px 0;display:flex;gap:8px" id="quedebo-tabs"></div>
     <div style="padding:14px 20px" id="quedebo-content"></div>
+  </div>
+</div>
+
+<!-- MODAL: Conciliar cartola (match app vs estado de cuenta del banco) -->
+<div class="modal-overlay" id="concilia-overlay" onclick="closeConciliaOutside(event)" style="align-items:flex-start;padding-top:0">
+  <div style="background:var(--bg);width:100%;max-height:92vh;overflow-y:auto;border-radius:20px 20px 0 0;padding-bottom:env(safe-area-inset-bottom,20px)">
+    <div style="padding:16px 20px 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg);z-index:1;border-bottom:1px solid var(--border);padding-bottom:12px">
+      <h2 style="font-size:18px;font-weight:700">🧾 Conciliar cartola</h2>
+      <button onclick="closeConciliaModal()" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="padding:14px 20px" id="concilia-content"></div>
   </div>
 </div>
 
@@ -2957,6 +2973,180 @@ function renderQueDebo(){
     ${rows}
     ${bottomTotal}
     ${nota}`;
+}
+
+// ── Conciliar cartola: match app vs estado de cuenta del banco ─────────────
+// Flujo: elegir tarjeta + ciclo -> subir cartola (CSV/Excel) -> match por
+// MONTO (tolerancia minima) con FECHA como desempate -> pantalla de revision
+// -> confirmar (aplaza las no facturadas y registra las que faltan, si quieres).
+let _conciliaCard='bci', _conciliaPeriod='cerrado', _conciliaData=null;
+
+function openConciliaModal(){
+  _conciliaData=null;
+  renderConciliaSetup();
+  document.getElementById('concilia-overlay').classList.add('open');
+}
+function closeConciliaModal(){ document.getElementById('concilia-overlay').classList.remove('open'); _conciliaData=null; }
+function closeConciliaOutside(e){ if(e.target===document.getElementById('concilia-overlay')) closeConciliaModal(); }
+function setConciliaCard(id){ _conciliaCard=id; renderConciliaSetup(); }
+function setConciliaPeriod(p){ _conciliaPeriod=p; renderConciliaSetup(); }
+
+function renderConciliaSetup(){
+  const cards=Object.values(CARDS);
+  const offset=_conciliaPeriod==='cerrado'?-1:0;
+  const ref=offset===-1?getPrevCycle(_conciliaCard):getCycle(_conciliaCard);
+  const rango=ref.start.toLocaleDateString('es-CL',{day:'2-digit',month:'short'})+' – '+ref.end.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
+  const nEsperadas=conciliaEsperadas(_conciliaCard,offset).length;
+  document.getElementById('concilia-content').innerHTML=`
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Compara lo que la app cree que te facturaron con la cartola real del banco. Las compras que no aparezcan podrás aplazarlas; las que falten, registrarlas.</div>
+    <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Tarjeta</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      ${cards.map(c=>`<button onclick="setConciliaCard('${c.id}')" style="flex:1;padding:8px;border-radius:10px;border:1px solid ${_conciliaCard===c.id?'var(--accent2)':'var(--border)'};background:${_conciliaCard===c.id?'var(--accent2)':'transparent'};color:${_conciliaCard===c.id?'#fff':'var(--text2)'};font-size:12px;font-weight:600;cursor:pointer">${c.bank}</button>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Ciclo a conciliar</div>
+    <div style="display:flex;gap:8px;margin-bottom:6px">
+      <button onclick="setConciliaPeriod('cerrado')" style="flex:1;padding:8px;border-radius:10px;border:1px solid ${_conciliaPeriod==='cerrado'?'var(--accent2)':'var(--border)'};background:${_conciliaPeriod==='cerrado'?'var(--accent2)':'transparent'};color:${_conciliaPeriod==='cerrado'?'#fff':'var(--text2)'};font-size:12px;font-weight:600;cursor:pointer">Ciclo cerrado</button>
+      <button onclick="setConciliaPeriod('actual')" style="flex:1;padding:8px;border-radius:10px;border:1px solid ${_conciliaPeriod==='actual'?'var(--accent2)':'var(--border)'};background:${_conciliaPeriod==='actual'?'var(--accent2)':'transparent'};color:${_conciliaPeriod==='actual'?'#fff':'var(--text2)'};font-size:12px;font-weight:600;cursor:pointer">Ciclo actual</button>
+    </div>
+    <div style="font-size:11px;color:var(--accent2);margin-bottom:14px">📅 ${rango} · la app espera ${nEsperadas} cargo${nEsperadas!==1?'s':''}</div>
+    <div class="import-box" style="margin:0" onclick="document.getElementById('concilia-file').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <h4>Subir cartola del banco</h4>
+      <p>CSV o Excel (.xls / .xlsx) — PDF no soportado aún</p>
+      <input type="file" id="concilia-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="conciliaFile(event)" />
+    </div>`;
+}
+
+// Cargos que la app ESPERA en la cartola de ese ciclo. A diferencia de
+// cuotasActivasCiclo, incluye prestadas (el banco igual las cobra) y usa el
+// monto que cobro el banco: en divididas/prestadas es el total (splitTotal).
+function conciliaEsperadas(cardId, offset){
+  const cutDay=getBillingDay(cardId);
+  const targetIdx=queDeboCycleIndex(new Date(),cutDay)+(offset||0);
+  const out=[];
+  getC().forEach(t=>{
+    if(t.cardId!==cardId || t.currency==='USD') return;
+    const n=Math.max(1,t.cuotas||1);
+    const base=queDeboCycleIndex(t.date,cutDay)+(t.cycleOffset||0);
+    const k=targetIdx-base;
+    if(k>=0&&k<n) out.push({tx:t, cuotaNum:k+1, cuotasTotal:n, bankAmt:(t.splitTotal||t.amount)/n});
+  });
+  return out;
+}
+
+function conciliaFile(evt){
+  const file=evt.target.files[0];
+  if(!file) return;
+  const isCSV=file.name.toLowerCase().endsWith('.csv');
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      let rows;
+      if(isCSV){ rows=parseCSV(e.target.result); }
+      else{
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
+      }
+      const parsed=parseCartola(rows,_conciliaCard);
+      if(!parsed.length){ showToast('No se encontraron movimientos en el archivo','var(--yellow)'); return; }
+      conciliaMatch(parsed);
+    }catch(err){ console.error('concilia:',err); showToast('Error al leer el archivo: '+err.message,'var(--red)'); }
+  };
+  if(isCSV) reader.readAsText(file,'UTF-8'); else reader.readAsArrayBuffer(file);
+  evt.target.value='';
+}
+
+// Match: el monto debe calzar (tolerancia +-5 CLP, por redondeos de cuotas del
+// banco) y entre candidatos con el mismo monto gana la fecha mas cercana.
+function conciliaMatch(rows){
+  const offset=_conciliaPeriod==='cerrado'?-1:0;
+  const esperadas=conciliaEsperadas(_conciliaCard,offset);
+  const used=new Array(rows.length).fill(false);
+  const TOL=5;
+  esperadas.forEach(e=>{
+    let best=-1,bestDias=Infinity;
+    rows.forEach((r,i)=>{
+      if(used[i]) return;
+      if(Math.abs(r.amount-e.bankAmt)>TOL) return;
+      const dias=Math.abs(new Date(r.date)-new Date(e.tx.date))/86400000;
+      if(dias<bestDias){ bestDias=dias; best=i; }
+    });
+    if(best>=0){ used[best]=true; e.match=rows[best]; }
+  });
+  _conciliaData={esperadas, extras:rows.filter((r,i)=>!used[i])};
+  renderConciliaReview();
+}
+
+function renderConciliaReview(){
+  const {esperadas,extras}=_conciliaData;
+  const ok=esperadas.filter(e=>e.match);
+  const sinFacturar=esperadas.filter(e=>!e.match);
+  const fila=(inner)=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border)">${inner}</div>`;
+  const fmtF=d=>new Date(d).toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
+  const sec=(titulo,color,cuerpo)=>`<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${titulo}</div>${cuerpo}</div>`;
+
+  const okHTML=ok.length?ok.map(e=>fila(`
+    <span style="color:var(--green);flex-shrink:0">✅</span>
+    <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.tx.desc}</div>
+    <div style="font-size:11px;color:var(--text2)">${fmtF(e.tx.date)}${e.cuotasTotal>1?' · cuota '+e.cuotaNum+'/'+e.cuotasTotal:''} · en cartola: "${(e.match.rawDesc||e.match.desc||'').slice(0,28)}"</div></div>
+    <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(e.bankAmt)}</span>`)).join('')
+    :'<div style="font-size:12px;color:var(--text2);padding:6px 0">Ninguna coincidencia</div>';
+
+  const sfHTML=sinFacturar.length?sinFacturar.map((e,i)=>fila(`
+    <input type="checkbox" class="concilia-aplazar" data-txid="${e.tx.id}" checked style="width:17px;height:17px;flex-shrink:0;accent-color:var(--yellow)">
+    <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.tx.desc}</div>
+    <div style="font-size:11px;color:var(--text2)">${fmtF(e.tx.date)}${e.cuotasTotal>1?' · cuota '+e.cuotaNum+'/'+e.cuotasTotal:''} · no aparece en la cartola</div></div>
+    <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(e.bankAmt)}</span>`)).join('')
+    :'<div style="font-size:12px;color:var(--text2);padding:6px 0">Todo lo esperado aparece en la cartola 🎉</div>';
+
+  const exHTML=extras.length?extras.map((r,i)=>fila(`
+    <input type="checkbox" class="concilia-registrar" data-idx="${i}" style="width:17px;height:17px;flex-shrink:0;accent-color:var(--accent)">
+    <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.desc}</div>
+    <div style="font-size:11px;color:var(--text2)">${fmtF(r.date)}${r.cuotas>1?' · '+r.cuotas+' cuotas':''} · está en la cartola, no en la app</div></div>
+    <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(r.amount)}</span>`)).join('')
+    :'<div style="font-size:12px;color:var(--text2);padding:6px 0">Nada sin registrar</div>';
+
+  document.getElementById('concilia-content').innerHTML=`
+    <button onclick="renderConciliaSetup()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-bottom:12px">← Volver</button>
+    ${sec('✅ Facturadas ('+ok.length+')','var(--green)',okHTML)}
+    ${sec('⏳ No aparecen en la cartola — aplazar al próximo ciclo ('+sinFacturar.length+')','var(--yellow)',sfHTML)}
+    ${sec('➕ En la cartola sin registrar — ¿registrar como gasto? ('+extras.length+')','var(--accent2)',exHTML)}
+    <button onclick="conciliaConfirm()" class="btn-save" style="width:100%;margin-top:6px">Aplicar conciliación</button>
+    <div style="font-size:11px;color:var(--text2);margin-top:10px;line-height:1.5">ℹ️ Marca/desmarca lo que corresponda. Las aplazadas se mueven (compra + deuda) al ciclo siguiente; las registradas se agregan como gasto de ${CARDS[_conciliaCard].bank}.</div>`;
+}
+
+function conciliaConfirm(){
+  if(!_conciliaData) return;
+  const aplazarIds=[...document.querySelectorAll('.concilia-aplazar:checked')].map(ch=>ch.getAttribute('data-txid'));
+  const regIdx=[...document.querySelectorAll('.concilia-registrar:checked')].map(ch=>parseInt(ch.getAttribute('data-idx')));
+  // 1) Aplazar en lote: compra + deudas juntas, un ciclo adelante
+  if(aplazarIds.length){
+    const c=getC();
+    c.forEach(t=>{ if(aplazarIds.includes(t.id)) t.cycleOffset=(t.cycleOffset||0)+1; });
+    saveC(c);
+    const ds=getDeudas();
+    let dc=false;
+    ds.forEach(d=>{ if(aplazarIds.includes(d.txId)){ d.cycleOffset=(d.cycleOffset||0)+1; dc=true; } });
+    if(dc) saveDeudas(ds);
+  }
+  // 2) Registrar los cargos de la cartola que faltaban en la app
+  if(regIdx.length){
+    const c2=getC();
+    regIdx.forEach(i=>{
+      const r=_conciliaData.extras[i];
+      if(!r) return;
+      c2.push({id:'imp_'+Date.now()+'_'+Math.random().toString(36).slice(2), cardId:_conciliaCard,
+        amount:r.amount, desc:r.desc, cuotas:r.cuotas||1, currency:'CLP', date:r.date,
+        source:'cartola_concilia', catId:autoCategorize(r.desc)||''});
+    });
+    saveC(c2);
+  }
+  closeConciliaModal();
+  renderDashboard(); renderDebito(); renderHistorial(); renderDeudas();
+  const partes=[];
+  if(aplazarIds.length) partes.push(aplazarIds.length+' aplazada'+(aplazarIds.length!==1?'s':''));
+  if(regIdx.length) partes.push(regIdx.length+' registrada'+(regIdx.length!==1?'s':''));
+  showToast(partes.length?('✅ Conciliación aplicada: '+partes.join(' · ')):'Conciliación revisada: sin cambios');
 }
 
 document.addEventListener('DOMContentLoaded',function(){
