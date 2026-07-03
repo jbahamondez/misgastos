@@ -632,6 +632,20 @@
   </div>
 </div>
 
+<!-- RECORDATORIO DE GASTOS SIN CLASIFICAR -->
+<div class="modal-overlay" id="sinclasificar-reminder-overlay" onclick="closeSinClasificarReminderOutside(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>🏷️ Gastos sin clasificar</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Tienes <span id="sinclasificar-count">0</span> sin categoría. Elige una para los que quieras (puedes dejar el resto para después).</p>
+    <div id="sinclasificar-reminder-list" style="max-height:48vh;overflow-y:auto"></div>
+    <div class="modal-btns" style="margin-top:14px">
+      <button class="btn-cancel" onclick="closeSinClasificarReminder()">Cerrar</button>
+      <button class="btn-save" onclick="confirmClasificarPendientes()">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- EDIT TX MODAL -->
 <div class="edit-modal-overlay" id="edit-modal-overlay" onclick="closeEditModalOutside(event)">
   <div class="modal">
@@ -2231,9 +2245,67 @@ function markServicioPagado(id,monthKey){
 }
 function closeServiciosReminder(){
   document.getElementById('servicios-reminder-overlay').classList.remove('open');
+  checkSinClasificarReminder();
 }
 function closeServiciosReminderOutside(e){
   if(e.target===document.getElementById('servicios-reminder-overlay')) closeServiciosReminder();
+}
+
+// ── Recordatorio: gastos sin clasificar (credito + debito, cualquier fecha) ──
+function checkSinClasificarReminder(){
+  const pend=[...getC().map(t=>({...t,_tipo:'credito'})),...getD().map(t=>({...t,_tipo:'debito'}))]
+    .filter(t=>!t.catId)
+    .sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if(!pend.length) return;
+  const cats=getCategorias();
+  const opts=cats.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
+  document.getElementById('sinclasificar-reminder-list').innerHTML=pend.map((t,i)=>{
+    const fecha=new Date(t.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
+    const monto=t.currency==='USD'?fmtUSD(t.amount):fmtCLP(t.amount);
+    const sugerida=autoCategorize(t.desc)||'';
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.desc||'Sin descripción'}</div>
+          <div style="font-size:11px;color:var(--text2)">${t._tipo==='debito'?'Débito':'Crédito'} · ${fecha}</div>
+        </div>
+        <div style="font-size:13px;font-weight:700;flex-shrink:0">${monto}</div>
+      </div>
+      <select id="sinclasificar-cat-${i}" data-txid="${t.id}" data-txtype="${t._tipo}" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">
+        <option value="" ${sugerida?'':'selected'}>Sin categoría</option>
+        ${cats.map(c=>`<option value="${c.id}" ${sugerida===c.id?'selected':''}>${c.emoji} ${c.name}</option>`).join('')}
+      </select>
+    </div>`;
+  }).join('');
+  document.getElementById('sinclasificar-count').textContent=pend.length+' gasto'+(pend.length!==1?'s':'');
+  document.getElementById('sinclasificar-reminder-overlay').classList.add('open');
+}
+function confirmClasificarPendientes(){
+  const selects=[...document.querySelectorAll('#sinclasificar-reminder-list select')];
+  const creditData=getC(), debitData=getD();
+  let changed=0, changedC=false, changedD=false;
+  selects.forEach(sel=>{
+    if(!sel.value) return; // se dejó "Sin categoría": queda pendiente para la próxima
+    const txId=sel.getAttribute('data-txid'), txType=sel.getAttribute('data-txtype');
+    if(txType==='debito'){
+      const idx=debitData.findIndex(t=>t.id===txId);
+      if(idx>=0){debitData[idx].catId=sel.value;changedD=true;changed++;}
+    } else {
+      const idx=creditData.findIndex(t=>t.id===txId);
+      if(idx>=0){creditData[idx].catId=sel.value;changedC=true;changed++;}
+    }
+  });
+  if(changedC) saveC(creditData);
+  if(changedD) saveD(debitData);
+  closeSinClasificarReminder();
+  renderDashboard(); renderDebito(); renderHistorial();
+  showToast(changed?('✅ '+changed+' gasto'+(changed!==1?'s':'')+' clasificado'+(changed!==1?'s':'')):'Sin cambios');
+}
+function closeSinClasificarReminder(){
+  document.getElementById('sinclasificar-reminder-overlay').classList.remove('open');
+}
+function closeSinClasificarReminderOutside(e){
+  if(e.target===document.getElementById('sinclasificar-reminder-overlay')) closeSinClasificarReminder();
 }
 
 // ── Menú contextual (long press / right click) ────────────────────────────
@@ -3467,7 +3539,10 @@ document.addEventListener('DOMContentLoaded',function(){
     checkPaymentReminder();
     if(!document.getElementById('payment-reminder-overlay').classList.contains('open')){
       checkCobroReminder();
-      if(!document.getElementById('cobro-reminder-overlay').classList.contains('open')) checkServiciosReminder();
+      if(!document.getElementById('cobro-reminder-overlay').classList.contains('open')){
+        checkServiciosReminder();
+        if(!document.getElementById('servicios-reminder-overlay').classList.contains('open')) checkSinClasificarReminder();
+      }
     }
   },1200);
 });
