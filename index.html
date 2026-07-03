@@ -395,6 +395,11 @@
   <div style="padding:0 20px 14px" id="billing-dates-list"></div>
   <div class="settings-section"><h3>💳 Día de vencimiento de pago</h3></div>
   <div style="padding:0 20px 14px" id="payment-dates-list"></div>
+  <div class="settings-section"><h3>🏠 Servicios del hogar</h3></div>
+  <div style="padding:0 20px 14px" id="servicios-list"></div>
+  <div style="padding:0 20px 14px">
+    <button onclick="openAddServicioModal()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar servicio</button>
+  </div>
   <div class="settings-section"><h3>🏷️ Categorías</h3></div>
   <div style="padding:0 20px 14px" id="categorias-list"></div>
   <div style="padding:0 20px 14px">
@@ -457,6 +462,24 @@
         <div id="cat-color-picker" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
       <button onclick="confirmSaveCat()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Agregar/Editar Servicio del hogar -->
+<div class="modal-overlay" id="add-servicio-overlay" onclick="closeAddServicioModal(event)">
+  <div class="modal-box" style="max-width:340px">
+    <div class="modal-header"><h3 id="add-servicio-title">Nuevo servicio</h3><button class="modal-close" onclick="closeAddServicioModal()">✕</button></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="servicio-emoji-input" type="text" placeholder="Emoji" maxlength="2" style="width:52px;text-align:center;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:20px"/>
+        <input id="servicio-name-input" type="text" placeholder="Nombre (ej: Arriendo)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"/>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Día de vencimiento</div>
+        <input id="servicio-day-input" type="number" min="1" max="31" inputmode="numeric" placeholder="Ej: 5" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box"/>
+      </div>
+      <button onclick="confirmSaveServicio()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Guardar</button>
     </div>
   </div>
 </div>
@@ -598,6 +621,17 @@
   </div>
 </div>
 
+<!-- RECORDATORIO DE SERVICIOS DEL HOGAR -->
+<div class="modal-overlay" id="servicios-reminder-overlay" onclick="closeServiciosReminderOutside(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>🏠 Servicios por pagar</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">Tienes servicios del hogar con vencimiento próximo.</p>
+    <div id="servicios-reminder-list"></div>
+    <button class="btn-cancel" style="width:100%;margin-top:8px" onclick="closeServiciosReminder()">Cerrar</button>
+  </div>
+</div>
+
 <!-- EDIT TX MODAL -->
 <div class="edit-modal-overlay" id="edit-modal-overlay" onclick="closeEditModalOutside(event)">
   <div class="modal">
@@ -718,7 +752,8 @@ const CLOUD_MAP = {
   debts:{ ls:LS_DEUDAS, toCloud:a=>a, toLocal:a=>a, id:item=>item.id },
   people:{ ls:LS_PERSONAS, toCloud:a=>a.map(name=>({id:slugifyLocal(name),name})), toLocal:a=>a.map(i=>i.name), id:item=>item.id },
   categories:{ ls:LS_CATS, toCloud:a=>a, toLocal:a=>a, id:item=>item.id },
-  category_rules:{ ls:LS_CAT_RULES, toCloud:a=>a.map(r=>({...r,id:slugifyLocal(r.keyword)+'_'+slugifyLocal(r.catId)})), toLocal:a=>a.map(({id,...r})=>r), id:item=>item.id }
+  category_rules:{ ls:LS_CAT_RULES, toCloud:a=>a.map(r=>({...r,id:slugifyLocal(r.keyword)+'_'+slugifyLocal(r.catId)})), toLocal:a=>a.map(({id,...r})=>r), id:item=>item.id },
+  household_services:{ ls:'misgastos_servicios_hogar_v1', toCloud:a=>a, toLocal:a=>a, id:item=>item.id }
 };
 
 // Sincroniza un array local completo hacia Firestore: crea/actualiza los items
@@ -748,12 +783,13 @@ function syncCollectionToCloud(collName,localArray){
 
 function syncSettingsToCloud(){
   if(!window._fb||!window._fb.syncEnabled) return;
-  cloudSet('settings','main',{sueldo:getSueldo(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags()});
+  cloudSet('settings','main',{sueldo:getSueldo(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
 }
 
 const LOCAL_GETTERS = {
   transactions_credit:getC, transactions_debit:getD, debts:getDeudas,
-  people:getPersonas, categories:getCategorias, category_rules:getCatRules
+  people:getPersonas, categories:getCategorias, category_rules:getCatRules,
+  household_services:getServiciosHogar
 };
 
 // Llamado una sola vez por colección, en el primer snapshot tras activar el sync.
@@ -789,6 +825,7 @@ window.applyCloudSettings=function(data){
   if(data.billingDates) localStorage.setItem('misgastos_billing_dates',JSON.stringify(data.billingDates));
   if(data.paymentDates) localStorage.setItem('misgastos_payment_dates',JSON.stringify(data.paymentDates));
   if(data.paidFlags) localStorage.setItem('misgastos_paid_flags',JSON.stringify(data.paidFlags));
+  if(data.serviciosPaidFlags) localStorage.setItem('misgastos_servicios_paid_flags',JSON.stringify(data.serviciosPaidFlags));
   refreshCurrentPage();
 };
 
@@ -835,7 +872,8 @@ window.dataStore = {
       sueldo: getSueldo(),
       billingDates: getBillingDates(),
       paymentDates: getPaymentDates(),
-      paidFlags: getPaidFlags()
+      paidFlags: getPaidFlags(),
+      serviciosPaidFlags: getServiciosPaidFlags()
     };
   },
   async updateSettings(patch){
@@ -843,6 +881,7 @@ window.dataStore = {
     if(patch.billingDates) saveBillingDates(Object.assign({},getBillingDates(),patch.billingDates));
     if(patch.paymentDates) savePaymentDates(Object.assign({},getPaymentDates(),patch.paymentDates));
     if(patch.paidFlags) savePaidFlags(Object.assign({},getPaidFlags(),patch.paidFlags));
+    if(patch.serviciosPaidFlags) saveServiciosPaidFlags(Object.assign({},getServiciosPaidFlags(),patch.serviciosPaidFlags));
   }
 };
 
@@ -1809,6 +1848,7 @@ function renderAjustes(){
   document.getElementById('settings-cards-list').innerHTML=Object.values(CARDS).map(c=>`<div class="settings-row"><span class="row-label">${c.emoji} ${c.bank} ${c.num}</span><span class="row-val">${fmtCLP(c.limitCLP)}</span></div>`).join('');
   renderPersonasAjustes();
   renderCategoriasAjustes();
+  renderServiciosAjustes();
   // Fechas de facturación
   const billing=getBillingDates();
   const tarjetas=[
@@ -1862,6 +1902,70 @@ function deletePersona(idx){
   renderPersonasAjustes();
   showToast('Persona eliminada');
 }
+
+// ── Servicios del hogar ──────────────────────────────────────────────────
+let _editServicioId=null;
+function renderServiciosAjustes(){
+  const el=document.getElementById('servicios-list');
+  if(!el) return;
+  const servicios=getServiciosHogar();
+  el.innerHTML=servicios.map(s=>`
+    <div class="settings-row" style="gap:10px">
+      <span style="font-size:18px">${s.emoji}</span>
+      <span class="row-label" style="flex:1">${s.name}</span>
+      <span style="font-size:12px;color:var(--text2)">día ${s.day}</span>
+      <button onclick="openEditServicioModal('${s.id}')" style="background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;padding:4px 6px">✏️</button>
+      <button onclick="deleteServicio('${s.id}')" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 6px">🗑️</button>
+    </div>`).join('');
+}
+function openAddServicioModal(){
+  _editServicioId=null;
+  document.getElementById('add-servicio-title').textContent='Nuevo servicio';
+  document.getElementById('servicio-emoji-input').value='';
+  document.getElementById('servicio-name-input').value='';
+  document.getElementById('servicio-day-input').value='';
+  document.getElementById('add-servicio-overlay').classList.add('open');
+}
+function openEditServicioModal(id){
+  const s=getServiciosHogar().find(x=>x.id===id);
+  if(!s) return;
+  _editServicioId=id;
+  document.getElementById('add-servicio-title').textContent='Editar servicio';
+  document.getElementById('servicio-emoji-input').value=s.emoji;
+  document.getElementById('servicio-name-input').value=s.name;
+  document.getElementById('servicio-day-input').value=s.day;
+  document.getElementById('add-servicio-overlay').classList.add('open');
+}
+function closeAddServicioModal(e){
+  if(e&&e.target!==document.getElementById('add-servicio-overlay')) return;
+  document.getElementById('add-servicio-overlay').classList.remove('open');
+  _editServicioId=null;
+}
+function confirmSaveServicio(){
+  const emoji=document.getElementById('servicio-emoji-input').value.trim()||'🏠';
+  const name=document.getElementById('servicio-name-input').value.trim();
+  const day=Math.min(31,Math.max(1,parseInt(document.getElementById('servicio-day-input').value)||5));
+  if(!name){showToast('Ingresa un nombre','var(--yellow)');return;}
+  const servicios=getServiciosHogar();
+  if(_editServicioId){
+    const idx=servicios.findIndex(s=>s.id===_editServicioId);
+    if(idx>=0){servicios[idx]={...servicios[idx],emoji,name,day};}
+  } else {
+    const id='serv_'+Date.now();
+    servicios.push({id,emoji,name,day});
+  }
+  saveServiciosHogar(servicios);
+  document.getElementById('add-servicio-overlay').classList.remove('open');
+  _editServicioId=null;
+  renderServiciosAjustes();
+  showToast('✅ Servicio guardado');
+}
+function deleteServicio(id){
+  saveServiciosHogar(getServiciosHogar().filter(s=>s.id!==id));
+  renderServiciosAjustes();
+  showToast('Servicio eliminado');
+}
+
 function renderCategoriasAjustes(){
   const cats=getCategorias();
   const rules=getCatRules();
@@ -2012,6 +2116,22 @@ function getPaymentDates(){try{return JSON.parse(localStorage.getItem('misgastos
 function savePaymentDates(d){localStorage.setItem('misgastos_payment_dates',JSON.stringify(d));syncSettingsToCloud()}
 function getPaidFlags(){try{return JSON.parse(localStorage.getItem('misgastos_paid_flags')||'{}')}catch{return{}}}
 function savePaidFlags(d){localStorage.setItem('misgastos_paid_flags',JSON.stringify(d));syncSettingsToCloud()}
+
+// ── Servicios del hogar (Arriendo, Agua, Luz, etc.) ────────────────────────
+const LS_SERVICIOS='misgastos_servicios_hogar_v1';
+const DEFAULT_SERVICIOS=[
+  {id:'arriendo',emoji:'🏠',name:'Arriendo',day:5},
+  {id:'gastoscomunes',emoji:'🏢',name:'Gastos Comunes',day:5},
+  {id:'agua',emoji:'💧',name:'Agua',day:12},
+  {id:'luz',emoji:'💡',name:'Luz',day:15},
+  {id:'internet',emoji:'📶',name:'Internet',day:10},
+  {id:'club',emoji:'🏋️',name:'Club',day:8},
+  {id:'tag',emoji:'🚗',name:'Tag',day:20},
+];
+function getServiciosHogar(){try{const s=localStorage.getItem(LS_SERVICIOS);return s?JSON.parse(s):DEFAULT_SERVICIOS.map(s=>({...s}))}catch{return DEFAULT_SERVICIOS.map(s=>({...s}))}}
+function saveServiciosHogar(a){localStorage.setItem(LS_SERVICIOS,JSON.stringify(a));syncCollectionToCloud('household_services',a)}
+function getServiciosPaidFlags(){try{return JSON.parse(localStorage.getItem('misgastos_servicios_paid_flags')||'{}')}catch{return{}}}
+function saveServiciosPaidFlags(d){localStorage.setItem('misgastos_servicios_paid_flags',JSON.stringify(d));syncSettingsToCloud()}
 function updatePaymentDate(cardId,val){
   const d=getPaymentDates();
   d[cardId]=Math.min(31,Math.max(1,parseInt(val)||1));
@@ -2078,9 +2198,42 @@ function markPersonCobrado(person,idx){
 }
 function closeCobroReminder(){
   document.getElementById('cobro-reminder-overlay').classList.remove('open');
+  checkServiciosReminder();
 }
 function closeCobroReminderOutside(e){
   if(e.target===document.getElementById('cobro-reminder-overlay')) closeCobroReminder();
+}
+
+function checkServiciosReminder(){
+  const now=new Date(), day=now.getDate();
+  const monthKey=now.getFullYear()+'-'+(now.getMonth()+1);
+  const paidFlags=getServiciosPaidFlags();
+  const servicios=getServiciosHogar();
+  const pendientes=servicios.filter(s=>{
+    if(day>s.day) return false;
+    if(paidFlags[s.id+'_'+monthKey]) return false;
+    return true;
+  });
+  if(!pendientes.length) return;
+  document.getElementById('servicios-reminder-list').innerHTML=pendientes.map(s=>
+    `<div class="payment-card-row"><div class="payment-card-info"><span class="payment-card-name">${s.emoji} ${s.name}</span><span class="payment-card-amount">vence día ${s.day}</span></div><button class="payment-paid-btn servicio-paid-btn" id="serv-btn-${s.id}" onclick="markServicioPagado('${s.id}','${monthKey}')">✓ Pagado</button></div>`
+  ).join('');
+  document.getElementById('servicios-reminder-overlay').classList.add('open');
+}
+function markServicioPagado(id,monthKey){
+  const flags=getServiciosPaidFlags();
+  flags[id+'_'+monthKey]=true;
+  saveServiciosPaidFlags(flags);
+  const btn=document.getElementById('serv-btn-'+id);
+  if(btn){btn.textContent='✓ Listo';btn.className='payment-paid-btn done servicio-paid-btn';btn.disabled=true;}
+  const allDone=[...document.querySelectorAll('.servicio-paid-btn')].every(b=>b.disabled);
+  if(allDone) setTimeout(closeServiciosReminder,800);
+}
+function closeServiciosReminder(){
+  document.getElementById('servicios-reminder-overlay').classList.remove('open');
+}
+function closeServiciosReminderOutside(e){
+  if(e.target===document.getElementById('servicios-reminder-overlay')) closeServiciosReminder();
 }
 
 // ── Menú contextual (long press / right click) ────────────────────────────
@@ -3271,7 +3424,10 @@ document.addEventListener('DOMContentLoaded',function(){
   });
   setTimeout(function(){
     checkPaymentReminder();
-    if(!document.getElementById('payment-reminder-overlay').classList.contains('open')) checkCobroReminder();
+    if(!document.getElementById('payment-reminder-overlay').classList.contains('open')){
+      checkCobroReminder();
+      if(!document.getElementById('cobro-reminder-overlay').classList.contains('open')) checkServiciosReminder();
+    }
   },1200);
 });
 if('serviceWorker' in navigator){
@@ -3337,7 +3493,7 @@ window._fb.cloudDelete = async function(collName, id){
   catch(err){ console.warn('cloudDelete error',collName,id,err); }
 };
 
-const SYNC_COLLECTIONS=['transactions_credit','transactions_debit','debts','people','categories','category_rules'];
+const SYNC_COLLECTIONS=['transactions_credit','transactions_debit','debts','people','categories','category_rules','household_services'];
 
 // Activa el cache local (window._fb.cache) hidratado desde Firestore vía onSnapshot.
 // Cada cambio en la nube se refleja en localStorage y refresca la pantalla activa
@@ -3472,6 +3628,7 @@ window.cloudMigrate = async function(){
     counts.personas=await migrateCollection(uid,'people',personas);
     counts.categorias=await migrateCollection(uid,'categories',getCategorias());
     counts.reglas=await migrateCollection(uid,'category_rules',reglas);
+    counts.servicios=await migrateCollection(uid,'household_services',getServiciosHogar());
 
     const settings=await window.dataStore.getSettings();
     await setDoc(doc(fbDb,'users',uid,'settings','main'), settings, {merge:true});
