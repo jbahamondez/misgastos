@@ -2201,9 +2201,35 @@ function confirmEditTx(){
   showToast('✅ Gasto actualizado');
 }
 
+// Guarda en el gasto (y su deuda) la descripcion/monto/categoria que el
+// usuario haya escrito en el modal de editar, sin cerrar el modal ni avisar.
+// Se llama antes de Dividir/Modificar split/Revertir para no perder lo que
+// ya escribio ni operar con datos obsoletos (bug: se perdia la descripcion
+// si tocaba "+ Dividir este gasto" sin apretar "Guardar" primero).
+function persistEditFormIfValid(){
+  if(!_editTxId) return;
+  const descEl=document.getElementById('edit-desc'), amtEl=document.getElementById('edit-amount');
+  if(!descEl||!amtEl) return;
+  const desc=descEl.value.trim();
+  const amount=parseFloat(amtEl.value);
+  if(!desc||!amount||amount<=0) return; // invalido: no tocar, se usa lo que ya hay guardado
+  const catId=document.getElementById('edit-cat')?.value||'';
+  if(_editTxType==='debito'){
+    const d=getD(); const idx=d.findIndex(t=>t.id===_editTxId);
+    if(idx>=0){d[idx].desc=desc;d[idx].amount=amount;d[idx].catId=catId;saveD(d);}
+  } else {
+    const c=getC(); const idx=c.findIndex(t=>t.id===_editTxId);
+    if(idx>=0){c[idx].desc=desc;c[idx].amount=amount;c[idx].catId=catId;saveC(c);}
+  }
+  const deudas=getDeudas();
+  const dIdx=deudas.findIndex(d=>d.txId===_editTxId);
+  if(dIdx>=0 && deudas[dIdx].desc!==desc){ deudas[dIdx].desc=desc; saveDeudas(deudas); }
+}
+
 function revertSplit(){
   if(!confirm('¿Revertir la división? El gasto quedará a tu nombre completo y se eliminará la deuda asociada.')) return;
   const txId=_editTxId, txType=_editTxType;
+  persistEditFormIfValid();
   if(txType==='debito'){
     const d=getD();
     const idx=d.findIndex(t=>t.id===txId);
@@ -2220,6 +2246,7 @@ function revertSplit(){
 }
 function splitExistingTx(){
   const txId=_editTxId, txType=_editTxType;
+  persistEditFormIfValid();
   const tx=txType==='debito'?getD().find(t=>t.id===txId):getC().find(t=>t.id===txId);
   if(!tx) return;
   closeEditModal();
@@ -2228,6 +2255,7 @@ function splitExistingTx(){
 }
 function modifySplit(){
   const txId=_editTxId, txType=_editTxType;
+  persistEditFormIfValid();
   // Restaurar monto original sin pedir confirmación
   let fullAmount;
   if(txType==='debito'){
@@ -3172,8 +3200,10 @@ function renderConciliaReview(){
 
   const exHTML=extras.length?extras.map((r,i)=>fila(`
     <input type="checkbox" class="concilia-registrar" data-idx="${i}" style="width:17px;height:17px;flex-shrink:0;accent-color:var(--accent)">
-    <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.desc}</div>
-    <div style="font-size:11px;color:var(--text2)">${fmtF(r.date)}${r.cuotas>1?' · '+r.cuotas+' cuotas':''} · está en la cartola, no en la app</div></div>
+    <div style="flex:1;min-width:0">
+      <input type="text" id="concilia-desc-${i}" value="${String(r.desc||'').replace(/"/g,'&quot;')}" placeholder="Descripción" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 8px;color:var(--text);font-size:13px;font-weight:600;margin-bottom:3px;box-sizing:border-box" />
+      <div style="font-size:11px;color:var(--text2)">${fmtF(r.date)}${r.cuotas>1?' · '+r.cuotas+' cuotas':''} · está en la cartola, no en la app</div>
+    </div>
     <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(r.amount)}</span>`)).join('')
     :'<div style="font-size:12px;color:var(--text2);padding:6px 0">Nada sin registrar</div>';
 
@@ -3183,7 +3213,7 @@ function renderConciliaReview(){
     ${sec('⏳ No aparecen en la cartola — aplazar al próximo ciclo ('+sinFacturar.length+')','var(--yellow)',sfHTML)}
     ${sec('➕ En la cartola sin registrar — ¿registrar como gasto? ('+extras.length+')','var(--accent2)',exHTML)}
     <button onclick="conciliaConfirm()" class="btn-save" style="width:100%;margin-top:6px">Aplicar conciliación</button>
-    <div style="font-size:11px;color:var(--text2);margin-top:10px;line-height:1.5">ℹ️ Marca/desmarca lo que corresponda. Las aplazadas se mueven (compra + deuda) al ciclo siguiente; las registradas se agregan como gasto de ${CARDS[_conciliaCard].bank}.</div>`;
+    <div style="font-size:11px;color:var(--text2);margin-top:10px;line-height:1.5">ℹ️ Marca/desmarca lo que corresponda. Las aplazadas se mueven (compra + deuda) al ciclo siguiente. Las registradas se agregan como gasto de ${CARDS[_conciliaCard].bank} (puedes corregir la descripción) y luego se te preguntará si quieres dividirlas.</div>`;
 }
 
 function conciliaConfirm(){
@@ -3200,15 +3230,21 @@ function conciliaConfirm(){
     ds.forEach(d=>{ if(aplazarIds.includes(d.txId)){ d.cycleOffset=(d.cycleOffset||0)+1; dc=true; } });
     if(dc) saveDeudas(ds);
   }
-  // 2) Registrar los cargos de la cartola que faltaban en la app
+  // 2) Registrar los cargos de la cartola que faltaban en la app, usando la
+  // descripcion editada en el input (si el usuario la corrigio)
+  const splitItems=[];
   if(regIdx.length){
     const c2=getC();
     regIdx.forEach(i=>{
       const r=_conciliaData.extras[i];
       if(!r) return;
-      c2.push({id:'imp_'+Date.now()+'_'+Math.random().toString(36).slice(2), cardId:_conciliaCard,
-        amount:r.amount, desc:r.desc, cuotas:r.cuotas||1, currency:'CLP', date:r.date,
-        source:'cartola_concilia', catId:autoCategorize(r.desc)||''});
+      const descInput=document.getElementById('concilia-desc-'+i);
+      const desc=(descInput?descInput.value.trim():'')||r.desc||'Importado';
+      const txId='imp_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+      c2.push({id:txId, cardId:_conciliaCard,
+        amount:r.amount, desc, cuotas:r.cuotas||1, currency:'CLP', date:r.date,
+        source:'cartola_concilia', catId:autoCategorize(desc)||''});
+      splitItems.push({txId, amount:r.amount, desc, cuotas:r.cuotas||1, currency:'CLP', cardId:_conciliaCard, type:'credito', txDate:r.date});
     });
     saveC(c2);
   }
@@ -3218,6 +3254,12 @@ function conciliaConfirm(){
   if(aplazarIds.length) partes.push(aplazarIds.length+' aplazada'+(aplazarIds.length!==1?'s':''));
   if(regIdx.length) partes.push(regIdx.length+' registrada'+(regIdx.length!==1?'s':''));
   showToast(partes.length?('✅ Conciliación aplicada: '+partes.join(' · ')):'Conciliación revisada: sin cambios');
+  // Preguntar si dividir cada compra recien registrada (igual que al importar cartola)
+  if(splitItems.length>0){
+    _splitQueue=[...splitItems];
+    _splitImportMode=true;
+    setTimeout(()=>processSplitQueue(),400);
+  }
 }
 
 document.addEventListener('DOMContentLoaded',function(){
