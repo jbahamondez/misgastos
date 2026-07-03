@@ -3011,9 +3011,9 @@ function renderConciliaSetup(){
     <div style="font-size:11px;color:var(--accent2);margin-bottom:14px">📅 ${rango} · la app espera ${nEsperadas} cargo${nEsperadas!==1?'s':''}</div>
     <div class="import-box" style="margin:0" onclick="document.getElementById('concilia-file').click()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      <h4>Subir cartola del banco</h4>
-      <p>CSV o Excel (.xls / .xlsx) — PDF no soportado aún</p>
-      <input type="file" id="concilia-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="conciliaFile(event)" />
+      <h4>Subir cartola o estado de cuenta</h4>
+      <p>CSV, Excel (.xls / .xlsx) o PDF digital (ej. Scotia)</p>
+      <input type="file" id="concilia-file" accept=".csv,.xlsx,.xls,.pdf" style="display:none" onchange="conciliaFile(event)" />
     </div>`;
 }
 
@@ -3034,23 +3034,94 @@ function conciliaEsperadas(cardId, offset){
   return out;
 }
 
+// pdf.js (Mozilla) cargado bajo demanda, solo si el usuario sube un PDF.
+let _pdfjsPromise=null;
+function loadPdfJs(){
+  if(window.pdfjsLib) return Promise.resolve();
+  if(!_pdfjsPromise){
+    _pdfjsPromise=new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload=()=>{ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(); };
+      s.onerror=rej;
+      document.head.appendChild(s);
+    });
+  }
+  return _pdfjsPromise;
+}
+// Extrae movimientos de un estado de cuenta PDF (texto digital, no escaneado).
+// Heuristica: reconstruye lineas por posicion vertical y toma las que tengan
+// FECHA + MONTO; el ultimo monto de la linea es el cargo facturado.
+async function parsePdfCartola(buf, bank){
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const lineas=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);
+    const tc=await page.getTextContent();
+    const porY={};
+    tc.items.forEach(it=>{
+      const y=Math.round(it.transform[5]/2)*2; // agrupa items a la misma altura (+-2pt)
+      (porY[y]=porY[y]||[]).push({x:it.transform[4],str:it.str});
+    });
+    Object.keys(porY).map(Number).sort((a,b)=>b-a).forEach(y=>{
+      const linea=porY[y].sort((a,b)=>a.x-b.x).map(i=>i.str).join(' ').replace(/\s+/g,' ').trim();
+      if(linea) lineas.push(linea);
+    });
+  }
+  const res=[];
+  lineas.forEach((linea,i)=>{
+    const fm=linea.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+    if(!fm) return;
+    const fecha=parseFecha(fm[0]);
+    if(!fecha) return;
+    let resto=linea.replace(fm[0],' ');
+    // cuotas tipo "03/06" (despues de quitar la fecha)
+    let cuotas=1;
+    const qm=resto.match(/\b(\d{1,2})\/(\d{1,2})\b/);
+    if(qm && parseInt(qm[2])>1 && parseInt(qm[2])<=48){ cuotas=parseInt(qm[2]); resto=resto.replace(qm[0],' '); }
+    // montos: tokens numericos con miles (12.345) o $; el ULTIMO es el cargo
+    const tokens=resto.match(/\$?\s*\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\$\s*\d+/g)||[];
+    let amount=0;
+    for(let k=tokens.length-1;k>=0;k--){ const v=parseMonto(tokens[k]); if(v>=100){ amount=v; break; } }
+    if(!amount) return;
+    let desc=resto;
+    tokens.forEach(t=>{ desc=desc.replace(t,' '); });
+    desc=desc.replace(/[^\wÁÉÍÓÚÑáéíóúñ.*\- ]/g,' ').replace(/\s+/g,' ').trim()||'Movimiento PDF';
+    res.push({id:'pdf_'+Date.now()+'_'+i, bank, rawDesc:linea.slice(0,60), desc:desc.slice(0,40), cuotas, date:fecha.toISOString(), amount});
+  });
+  return res;
+}
+
 function conciliaFile(evt){
   const file=evt.target.files[0];
   if(!file) return;
-  const isCSV=file.name.toLowerCase().endsWith('.csv');
+  const name=file.name.toLowerCase();
+  const isCSV=name.endsWith('.csv');
+  const isPDF=name.endsWith('.pdf');
   const reader=new FileReader();
-  reader.onload=function(e){
+  reader.onload=async function(e){
     try{
-      let rows;
-      if(isCSV){ rows=parseCSV(e.target.result); }
-      else{
-        const wb=XLSX.read(e.target.result,{type:'array'});
-        rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
+      let parsed;
+      if(isPDF){
+        showToast('Leyendo PDF…');
+        await loadPdfJs();
+        parsed=await parsePdfCartola(new Uint8Array(e.target.result),_conciliaCard);
+      } else {
+        let rows;
+        if(isCSV){ rows=parseCSV(e.target.result); }
+        else{
+          const wb=XLSX.read(e.target.result,{type:'array'});
+          rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
+        }
+        parsed=parseCartola(rows,_conciliaCard);
       }
-      const parsed=parseCartola(rows,_conciliaCard);
-      if(!parsed.length){ showToast('No se encontraron movimientos en el archivo','var(--yellow)'); return; }
+      if(!parsed.length){ showToast(isPDF?'No se pudieron extraer movimientos del PDF (¿escaneado?)':'No se encontraron movimientos en el archivo','var(--yellow)'); return; }
       conciliaMatch(parsed);
-    }catch(err){ console.error('concilia:',err); showToast('Error al leer el archivo: '+err.message,'var(--red)'); }
+    }catch(err){
+      console.error('concilia:',err);
+      const msg=String(err&&err.name==='PasswordException'?'El PDF tiene contraseña; guárdalo sin clave e intenta de nuevo':('Error al leer el archivo: '+(err.message||err)));
+      showToast(msg,'var(--red)');
+    }
   };
   if(isCSV) reader.readAsText(file,'UTF-8'); else reader.readAsArrayBuffer(file);
   evt.target.value='';
