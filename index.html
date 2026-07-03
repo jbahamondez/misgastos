@@ -2998,9 +2998,12 @@ function handleURLParams(){
 let _analisisPeriod='ciclo';
 let _analisisTxType='ambos';
 let _analisisCatDetalle=null; // catId cuyo detalle se esta viendo, o null = resumen
+let _analisisInformeSetup=false; // true = mostrando el selector de rango de meses del informe
+let _informeDesde=null, _informeHasta=null; // claves 'YYYY-MM'
 
 function openAnalisisModal(){
   _analisisCatDetalle=null;
+  _analisisInformeSetup=false;
   renderAnalisis();
   document.getElementById('analisis-overlay').classList.add('open');
 }
@@ -3033,7 +3036,11 @@ function renderAnalisis(){
   ];
   document.getElementById('analisis-type-filters').innerHTML=`<div style="display:flex;gap:8px">`+types.map(t=>
     `<button onclick="setAnalisisTxType('${t.id}')" style="flex:1;padding:7px;border-radius:10px;border:1px solid ${_analisisTxType===t.id?'var(--accent2)':'var(--border)'};background:${_analisisTxType===t.id?'var(--accent2)':'transparent'};color:${_analisisTxType===t.id?'#fff':'var(--text2)'};font-size:13px;cursor:pointer">${t.label}</button>`
-  ).join('')+'</div>';
+  ).join('')+'</div>'
+  +`<div style="text-align:right;margin-top:10px"><button onclick="openInformeSetup()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0">📄 Generar informe (PDF) →</button></div>`;
+
+  // Si se esta eligiendo el rango del informe, mostrar ese selector (independiente del período de arriba)
+  if(_analisisInformeSetup){ renderInformeSetup(); return; }
 
   // Get date range
   const now=new Date();
@@ -3154,6 +3161,113 @@ function renderAnalisisCatDetalle(cat,itemsInCat){
       <div style="font-size:18px;font-weight:700;color:var(--accent2)">${fmtCLP(total)}</div>
     </div>
     <div class="tx-list" style="padding:0">${rowsHTML}</div>`;
+}
+
+// ── Informe de gastos en PDF (rango de meses elegido por el usuario) ───────
+const _MESES_NOMBRE=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function mesLabel(key){ const [y,m]=key.split('-').map(Number); return _MESES_NOMBRE[m-1]+' '+y; }
+// Meses (claves 'YYYY-MM') que tienen al menos un gasto, segun el filtro de tipo actual
+function mesesDisponibles(){
+  const set=new Set();
+  const addAll=arr=>arr.forEach(t=>{ const d=new Date(t.date); set.add(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); });
+  if(_analisisTxType!=='debito') addAll(getC().filter(t=>!esPrestada(t)));
+  if(_analisisTxType!=='credito') addAll(getD().filter(t=>!esPrestada(t)));
+  return [...set].sort();
+}
+function openInformeSetup(){
+  _analisisCatDetalle=null;
+  _analisisInformeSetup=true;
+  const meses=mesesDisponibles();
+  if(meses.length){
+    if(!_informeDesde||!meses.includes(_informeDesde)) _informeDesde=meses[0];
+    if(!_informeHasta||!meses.includes(_informeHasta)) _informeHasta=meses[meses.length-1];
+  }
+  renderAnalisis();
+}
+function closeInformeSetup(){
+  _analisisInformeSetup=false;
+  renderAnalisis();
+}
+function setInformeDesde(v){ _informeDesde=v; }
+function setInformeHasta(v){ _informeHasta=v; }
+function renderInformeSetup(){
+  const meses=mesesDisponibles();
+  if(!meses.length){
+    document.getElementById('analisis-content').innerHTML=`
+      <button onclick="closeInformeSetup()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-bottom:14px">← Volver</button>
+      <div style="text-align:center;padding:30px 0;color:var(--text2)"><p style="font-size:13px">No hay gastos registrados para generar un informe.</p></div>`;
+    return;
+  }
+  const optsDesde=meses.map(k=>`<option value="${k}" ${k===_informeDesde?'selected':''}>${mesLabel(k)}</option>`).join('');
+  const optsHasta=meses.map(k=>`<option value="${k}" ${k===_informeHasta?'selected':''}>${mesLabel(k)}</option>`).join('');
+  const tipoLabel=_analisisTxType==='ambos'?'Todos':_analisisTxType==='credito'?'Crédito':'Débito';
+  document.getElementById('analisis-content').innerHTML=`
+    <button onclick="closeInformeSetup()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-bottom:14px">← Volver</button>
+    <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">📄 Generar informe</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:16px">Elige el rango de meses a incluir (filtro actual: ${tipoLabel}).</p>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:5px">Desde</label>
+      <select onchange="setInformeDesde(this.value)" style="width:100%;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px">${optsDesde}</select>
+    </div>
+    <div style="margin-bottom:20px">
+      <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:5px">Hasta</label>
+      <select onchange="setInformeHasta(this.value)" style="width:100%;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px">${optsHasta}</select>
+    </div>
+    <button onclick="generarInformePDF()" class="btn-save" style="width:100%">Generar PDF</button>`;
+}
+async function generarInformePDF(){
+  if(!_informeDesde||!_informeHasta) return;
+  const [d1,d2]=[_informeDesde,_informeHasta].sort(); // 'YYYY-MM' ordena bien como string
+  const [y1,m1]=d1.split('-').map(Number), [y2,m2]=d2.split('-').map(Number);
+  const dateStart=new Date(y1,m1-1,1,0,0,0);
+  const dateEnd=new Date(y2,m2,0,23,59,59); // ultimo dia del mes "hasta"
+
+  let txs=[];
+  if(_analisisTxType!=='debito'){
+    const c=getC().filter(t=>!esPrestada(t)).filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;});
+    txs=txs.concat(c.map(t=>({...t,_tipo:'credito',_monto:t.currency==='CLP'?t.amount/Math.max(1,t.cuotas||1):0})));
+  }
+  if(_analisisTxType!=='credito'){
+    const d=getD().filter(t=>!esPrestada(t)).filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;});
+    txs=txs.concat(d.map(t=>({...t,_tipo:'debito',_monto:t.amount||0})));
+  }
+  if(!txs.length){ showToast('No hay gastos en ese rango de meses','var(--yellow)'); return; }
+
+  const cats=getCategorias();
+  const catMap={};
+  cats.forEach(c=>{catMap[c.id]={...c,total:0,count:0,items:[]};});
+  catMap['']={id:'',name:'Sin categoría',emoji:'❓',color:'#555',total:0,count:0,items:[]};
+  txs.forEach(t=>{
+    const cid=t.catId||'';
+    if(!catMap[cid]) catMap[cid]={id:cid,name:'Sin categoría',emoji:'❓',color:'#555',total:0,count:0,items:[]};
+    catMap[cid].total+=t._monto; catMap[cid].count++; catMap[cid].items.push(t);
+  });
+  const catData=Object.values(catMap).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
+  const grandTotal=catData.reduce((s,c)=>s+c.total,0);
+  const totCred=txs.filter(t=>t._tipo==='credito').reduce((s,t)=>s+t._monto,0);
+  const totDeb=txs.filter(t=>t._tipo==='debito').reduce((s,t)=>s+t._monto,0);
+  const rangoLabel=d1===d2?mesLabel(d1):(mesLabel(d1)+' - '+mesLabel(d2));
+
+  const resumenBloque={
+    titulo:'Resumen',
+    rows:[{desc:'Crédito',monto:fmtCLP(totCred)},{desc:'Débito',monto:fmtCLP(totDeb)}],
+    total:{label:'Total gastado',value:fmtCLP(grandTotal)}
+  };
+  const catBloques=catData.map(c=>{
+    const pct=((c.total/grandTotal)*100).toFixed(1);
+    return {
+      titulo:c.emoji+' '+c.name,
+      subtitulo:pct+'% del total · '+c.count+' gasto'+(c.count!==1?'s':''),
+      rows:[...c.items].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(t=>({
+        desc:t.desc+(t._tipo==='debito'?' · Débito':'')+(t._tipo==='credito'&&t.cuotas>1?' · cuota mensual':''),
+        monto:fmtCLP(t._monto)
+      })),
+      total:{label:'Subtotal',value:fmtCLP(c.total)}
+    };
+  });
+
+  closeInformeSetup(); // vuelve al resumen mientras se genera/comparte el PDF
+  await compartirPDF('informe_gastos_'+d1+'_a_'+d2+'.pdf', 'Informe de gastos — '+rangoLabel, [resumenBloque,...catBloques]);
 }
 
 // ── ¿Qué debo? — desglose de compras por pagar ────────────────────────────
