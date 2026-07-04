@@ -503,6 +503,7 @@
       <h2 style="font-size:18px;font-weight:700">📊 Análisis de gastos</h2>
       <button onclick="closeAnalisisModal()" style="background:none;border:none;color:var(--text2);font-size:22px;cursor:pointer;line-height:1">✕</button>
     </div>
+    <div style="padding:14px 20px 0" id="analisis-modo-switch"></div>
     <div style="padding:14px 20px 0;display:flex;gap:8px;overflow-x:auto;padding-bottom:8px" id="analisis-period-filters"></div>
     <div style="padding:14px 20px 0" id="analisis-type-filters"></div>
     <div style="padding:14px 20px" id="analisis-content"></div>
@@ -3117,6 +3118,18 @@ function closeAnalisisOutside(e){
 function setAnalisisPeriod(p){_analisisPeriod=p;renderAnalisis();}
 function setAnalisisTxType(t){_analisisTxType=t;renderAnalisis();}
 
+// Modo del analisis (aplica a resumen, detalle, comparativo e informe PDF):
+// 'cuotas'  -> lo que se PAGA en el periodo: cuotas mensuales con arrastre
+// 'compras' -> lo que se COMPRO en el periodo: por fecha de compra y monto total
+let _analisisModo='cuotas';
+function setAnalisisModo(m){ _analisisModo=m; renderAnalisis(); }
+// Fuente de credito segun el modo elegido (debito siempre va por su fecha)
+function analisisCreditoTxs(){
+  if(_analisisModo==='compras')
+    return getC().filter(t=>!esPrestada(t)).map(t=>({...t,_tipo:'credito',_monto:t.currency==='CLP'?t.amount:0}));
+  return cuotasMensuales();
+}
+
 // Expande las compras de credito en sus cuotas mensuales (arrastre a nivel de mes):
 // una compra en N cuotas aporta amount/N a su mes de compra (corrido por cycleOffset
 // si fue aplazada) y a los N-1 meses siguientes, conservando el dia de la compra.
@@ -3142,6 +3155,19 @@ function cuotasMensuales(){
 function _finMesActual(){ const h=new Date(); return new Date(h.getFullYear(),h.getMonth()+1,0,23,59,59); }
 
 function renderAnalisis(){
+  // Selector de modo: cuotas pagadas en el periodo vs compras realizadas en el
+  const modos=[
+    {id:'cuotas',label:'💳 Cuotas del período'},
+    {id:'compras',label:'🛒 Compras realizadas'},
+  ];
+  document.getElementById('analisis-modo-switch').innerHTML=
+    `<div style="display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:3px">`
+    +modos.map(m=>`<button onclick="setAnalisisModo('${m.id}')" style="flex:1;padding:8px 4px;border-radius:9px;border:none;background:${_analisisModo===m.id?'var(--accent2)':'transparent'};color:${_analisisModo===m.id?'#fff':'var(--text2)'};font-size:12.5px;font-weight:600;cursor:pointer">${m.label}</button>`).join('')
+    +`</div>
+    <div style="font-size:11px;color:var(--text2);margin-top:6px">${_analisisModo==='cuotas'
+      ?'Lo que pagas en el período: incluye las cuotas de compras de meses anteriores.'
+      :'Lo que compraste en el período, por su monto total (aunque sea en cuotas).'}</div>`;
+
   // Period filters
   const periods=[
     {id:'ciclo',label:'Este ciclo'},
@@ -3178,11 +3204,10 @@ function renderAnalisis(){
   else if(_analisisPeriod==='mes'){dateStart=new Date(now.getFullYear(),now.getMonth(),1);dateEnd=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);}
   else if(_analisisPeriod==='mes-ant'){dateStart=new Date(now.getFullYear(),now.getMonth()-1,1);dateEnd=new Date(now.getFullYear(),now.getMonth(),0,23,59,59);}
 
-  // Collect transactions (credito expandido en cuotas mensuales, modelo de arrastre:
-  // en cada mes aparece la cuota que realmente se esta pagando ese mes)
+  // Collect transactions (credito segun el modo: cuotas con arrastre o compras totales)
   let txs=[];
   if(_analisisTxType!=='debito'){
-    let c=cuotasMensuales();
+    let c=analisisCreditoTxs();
     if(dateStart) c=c.filter(t=>{const d=new Date(t.date);return d>=dateStart&&d<=dateEnd;});
     else c=c.filter(t=>new Date(t.date)<=_finMesActual()); // "Todo": sin cuotas futuras
     txs=txs.concat(c);
@@ -3295,16 +3320,16 @@ function renderAnalisisCatDetalle(cat,itemsInCat){
 }
 
 // ── Comparativo mensual (barras mes a mes, dentro de "Ver análisis") ───────
-// Agrupa con el mismo criterio del modal de Analisis: credito expandido en
-// cuotas mensuales (arrastre — cada mes suma la cuota que se paga ese mes),
-// debito por su fecha. Las cuotas de meses futuros no se incluyen.
+// Agrupa con el mismo criterio (y modo) del modal de Analisis: credito por
+// cuota mensual con arrastre o por compra total segun _analisisModo, debito
+// por su fecha. Los meses futuros no se incluyen.
 function comparativoMensualData(){
   const map={};
   const hoy=new Date();
   const capKey=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
   const key=t=>{ const d=new Date(t.date); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
   if(_analisisTxType!=='debito'){
-    cuotasMensuales().forEach(t=>{
+    analisisCreditoTxs().forEach(t=>{
       const k=key(t); if(k>capKey) return; // sin meses futuros
       if(!map[k]) map[k]={key:k,cred:0,deb:0};
       map[k].cred+=t._monto;
@@ -3378,7 +3403,7 @@ function renderComparativoMensual(){
       <span style="font-size:14px;font-weight:700;color:${m.total>prom?'var(--red)':'var(--green)'}">${fmtCLP(m.total)}</span>
     </div>`).join('');
   cont.innerHTML=volver+
-    `<div style="font-size:12px;color:var(--text2);margin-bottom:14px">Gasto mensual (últimos ${data.length} mes${data.length!==1?'es':''} con datos). Promedio: <strong style="color:var(--text)">${fmtCLP(prom)}</strong> — en la lista, <span style="color:var(--red)">rojo</span> = sobre el promedio, <span style="color:var(--green)">verde</span> = bajo.</div>`
+    `<div style="font-size:12px;color:var(--text2);margin-bottom:14px">${_analisisModo==='cuotas'?'Pago mensual':'Compras por mes'} (últimos ${data.length} mes${data.length!==1?'es':''} con datos). Promedio: <strong style="color:var(--text)">${fmtCLP(prom)}</strong> — en la lista, <span style="color:var(--red)">rojo</span> = sobre el promedio, <span style="color:var(--green)">verde</span> = bajo.</div>`
     +chart+legend+filas;
 }
 
@@ -3386,14 +3411,13 @@ function renderComparativoMensual(){
 const _MESES_NOMBRE=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 function mesLabel(key){ const [y,m]=key.split('-').map(Number); return _MESES_NOMBRE[m-1]+' '+y; }
 // Meses (claves 'YYYY-MM') que tienen al menos un cargo, segun el filtro de tipo
-// actual. Credito por cuota mensual (arrastre), asi un mes donde solo cae la cuota
-// de una compra vieja tambien es elegible. Sin meses futuros.
+// y el modo actual (cuotas con arrastre o compras por fecha). Sin meses futuros.
 function mesesDisponibles(){
   const set=new Set();
   const hoy=new Date();
   const capKey=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
   const add=t=>{ const d=new Date(t.date); const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); if(k<=capKey) set.add(k); };
-  if(_analisisTxType!=='debito') cuotasMensuales().forEach(add);
+  if(_analisisTxType!=='debito') analisisCreditoTxs().forEach(add);
   if(_analisisTxType!=='credito') getD().filter(t=>!esPrestada(t)).forEach(add);
   return [...set].sort();
 }
@@ -3425,10 +3449,11 @@ function renderInformeSetup(){
   const optsDesde=meses.map(k=>`<option value="${k}" ${k===_informeDesde?'selected':''}>${mesLabel(k)}</option>`).join('');
   const optsHasta=meses.map(k=>`<option value="${k}" ${k===_informeHasta?'selected':''}>${mesLabel(k)}</option>`).join('');
   const tipoLabel=_analisisTxType==='ambos'?'Todos':_analisisTxType==='credito'?'Crédito':'Débito';
+  const modoLbl=_analisisModo==='cuotas'?'Cuotas del período':'Compras realizadas';
   document.getElementById('analisis-content').innerHTML=`
     <button onclick="closeInformeSetup()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-bottom:14px">← Volver</button>
     <h3 style="font-size:15px;font-weight:700;margin-bottom:4px">📄 Generar informe</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:16px">Elige el rango de meses a incluir (filtro actual: ${tipoLabel}).</p>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:16px">Elige el rango de meses a incluir (filtro: ${tipoLabel} · modo: ${modoLbl}).</p>
     <div style="margin-bottom:12px">
       <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:5px">Desde</label>
       <select onchange="setInformeDesde(this.value)" style="width:100%;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px">${optsDesde}</select>
@@ -3447,11 +3472,11 @@ async function generarInformePDF(){
   const dateEnd=new Date(y2,m2,0,23,59,59); // ultimo dia del mes "hasta"
   const nMesesRango=(y2*12+m2)-(y1*12+m1)+1;
 
-  // Credito por cuota mensual (arrastre): cada mes del rango incluye la cuota
-  // que se paga ese mes, aunque la compra sea de un mes anterior.
+  // Credito segun el modo del analisis: cuotas del periodo (arrastre) o
+  // compras realizadas en el periodo por su monto total.
   let txs=[];
   if(_analisisTxType!=='debito'){
-    txs=txs.concat(cuotasMensuales().filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;}));
+    txs=txs.concat(analisisCreditoTxs().filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;}));
   }
   if(_analisisTxType!=='credito'){
     const d=getD().filter(t=>!esPrestada(t)).filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;});
@@ -3474,6 +3499,7 @@ async function generarInformePDF(){
   const totDeb=txs.filter(t=>t._tipo==='debito').reduce((s,t)=>s+t._monto,0);
   const rangoLabel=d1===d2?mesLabel(d1):(mesLabel(d1)+' - '+mesLabel(d2));
   const tipoLabel=_analisisTxType==='ambos'?'Crédito y débito':_analisisTxType==='credito'?'Solo crédito':'Solo débito';
+  const modoLabel=_analisisModo==='cuotas'?'Cuotas del período':'Compras realizadas';
   const pctTxt=v=>v.toFixed(1).replace('.',',')+'%';
 
   const fmtFechaPdf=d=>new Date(d).toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'numeric'});
@@ -3483,7 +3509,7 @@ async function generarInformePDF(){
     titulo:'Resumen del período',
     subtitulo:txs.length+' cargo'+(txs.length!==1?'s':''),
     rows:[
-      {desc:'Gasto en crédito (cuotas del período)',monto:fmtCLP(totCred),pct:grandTotal>0?pctTxt(totCred/grandTotal*100):''},
+      {desc:_analisisModo==='cuotas'?'Gasto en crédito (cuotas del período)':'Compras en crédito (monto total)',monto:fmtCLP(totCred),pct:grandTotal>0?pctTxt(totCred/grandTotal*100):''},
       {desc:'Gasto en débito',monto:fmtCLP(totDeb),pct:grandTotal>0?pctTxt(totDeb/grandTotal*100):''}
     ].concat(nMesesRango>1?[{desc:'Promedio mensual ('+nMesesRango+' meses)',monto:fmtCLP(grandTotal/nMesesRango)}]:[]),
     total:{label:'Total gastado',value:fmtCLP(grandTotal)}
@@ -3533,7 +3559,10 @@ async function generarInformePDF(){
     rows:[...c.items].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(t=>({
       col1:fmtFechaPdf(t.date),
       desc:t.desc||'Sin descripción',
-      sub:origenPdf(t)+(t._cuotaTotal>1?' · cuota '+t._cuotaNum+'/'+t._cuotaTotal:'')+(t.currency==='USD'?' · en dólares (no suma al total CLP)':''),
+      sub:origenPdf(t)
+        +(t._cuotaTotal>1?' · cuota '+t._cuotaNum+'/'+t._cuotaTotal:'')
+        +(!t._cuotaTotal&&t._tipo==='credito'&&t.cuotas>1?' · '+t.cuotas+' cuotas'+(t.currency==='CLP'?' de '+fmtCLP(t.amount/t.cuotas):''):'')
+        +(t.currency==='USD'?' · en dólares (no suma al total CLP)':''),
       monto:t.currency==='USD'?fmtUSD(t.amount/Math.max(1,t._cuotaTotal||1)):fmtCLP(t._monto)
     })),
     total:{label:'Subtotal',value:fmtCLP(c.total)}
@@ -3542,7 +3571,7 @@ async function generarInformePDF(){
   closeInformeSetup(); // vuelve al resumen mientras se genera/comparte el PDF
   const bloques=[resumenBloque].concat(balanceBloque?[balanceBloque]:[]).concat(compBloque?[compBloque]:[]).concat(catBloques);
   await compartirPDF('informe_gastos_'+d1+'_a_'+d2+'.pdf', 'Informe de gastos - '+rangoLabel, bloques,
-    {estilo:'ejecutivo',tituloPrincipal:'Informe de gastos',subtitulo:rangoLabel+' · '+tipoLabel});
+    {estilo:'ejecutivo',tituloPrincipal:'Informe de gastos',subtitulo:rangoLabel+' · '+tipoLabel+' · '+modoLabel});
 }
 
 // ── ¿Qué debo? — desglose de compras por pagar ────────────────────────────
