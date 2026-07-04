@@ -1749,7 +1749,62 @@ function bloquesATexto(tituloDoc,bloques){
   });
   return L.join('\n').trim();
 }
-async function compartirPDF(filename,tituloDoc,bloques){
+// Estilo "ejecutivo" (informe de gastos): tablas sobrias con columnas alineadas,
+// sin puntos de color ni barras. Filas admiten col1 (columna fija de fecha) y
+// pct (porcentaje secundario); el total admite color 'green'/'red' (ahorro/deficit).
+function _pdfEjecutivo(doc,bloques,opts){
+  const W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight(), M=48;
+  const INK=[24,28,38], GRY=[122,128,142], LN=[205,209,218], LNSOFT=[234,236,241], AC=[108,99,255], GREEN=[21,128,61], RED=[185,28,28];
+  const setF=(st,sz,col)=>{ doc.setFont('helvetica',st); doc.setFontSize(sz); doc.setTextColor.apply(doc,col); };
+  // Cabecera (solo primera pagina)
+  setF('bold',10,AC); doc.text('MISGASTOS', M, 52, {charSpace:2});
+  setF('normal',8.5,GRY); doc.text('Generado el '+new Date().toLocaleDateString('es-CL'), W-M, 52, {align:'right'});
+  setF('bold',21,INK); doc.text(pdfSafe(opts.tituloPrincipal||'Informe'), M, 84);
+  if(opts.subtitulo){ setF('normal',10,GRY); doc.text(pdfSafe(opts.subtitulo), M, 101); }
+  doc.setDrawColor.apply(doc,INK); doc.setLineWidth(1.1); doc.line(M,114,W-M,114);
+  let y=144;
+  const nl=h=>{ if(y+h>H-58){ doc.addPage(); y=66; } };
+  bloques.forEach(b=>{
+    nl(72);
+    // Titulo de seccion en mayusculas + regla fina
+    setF('bold',9,GRY); doc.text(pdfSafe(b.titulo).toUpperCase(), M, y, {charSpace:1.1});
+    if(b.subtitulo){ setF('normal',8.5,GRY); doc.text(pdfSafe(b.subtitulo), W-M, y, {align:'right'}); }
+    y+=6; doc.setDrawColor.apply(doc,LN); doc.setLineWidth(0.8); doc.line(M,y,W-M,y);
+    y+=17;
+    b.rows.forEach((r,idx)=>{
+      const rh=r.sub?27:19;
+      nl(rh+6);
+      const dx=r.col1?M+64:M;
+      if(r.col1){ setF('normal',8.5,GRY); doc.text(pdfSafe(r.col1), M, y); }
+      setF('normal',10,INK); doc.text(pdfSafe(r.desc), dx, y);
+      if(r.pct){ setF('normal',8.5,GRY); doc.text(String(r.pct), W-M-80, y, {align:'right'}); }
+      setF('bold',10,INK); doc.text(String(r.monto), W-M, y, {align:'right'});
+      if(r.sub){ setF('normal',7.5,GRY); doc.text(pdfSafe(r.sub), dx, y+10); }
+      if(idx<b.rows.length-1){
+        const ly=y+(r.sub?16:7.5);
+        doc.setDrawColor.apply(doc,LNSOFT); doc.setLineWidth(0.4); doc.line(M,ly,W-M,ly);
+      }
+      y+=rh;
+    });
+    // Total del bloque: regla firme + fila en negrita
+    nl(34);
+    doc.setDrawColor.apply(doc,INK); doc.setLineWidth(0.9); doc.line(M,y-10,W-M,y-10);
+    setF('bold',10.5,INK); doc.text(pdfSafe(b.total.label), M, y+4);
+    const tc=b.total.color==='green'?GREEN:(b.total.color==='red'?RED:INK);
+    setF('bold',11,tc); doc.text(String(b.total.value), W-M, y+4, {align:'right'});
+    y+=38;
+  });
+  // Pie de pagina + numeracion en todas las paginas
+  const nP=doc.getNumberOfPages();
+  for(let p=1;p<=nP;p++){
+    doc.setPage(p);
+    doc.setDrawColor.apply(doc,LNSOFT); doc.setLineWidth(0.5); doc.line(M,H-40,W-M,H-40);
+    setF('normal',7.5,GRY);
+    doc.text('Generado con MisGastos · '+new Date().toLocaleDateString('es-CL'), M, H-27);
+    doc.text('Página '+p+' de '+nP, W-M, H-27, {align:'right'});
+  }
+}
+async function compartirPDF(filename,tituloDoc,bloques,opts){
   let ready=false;
   try{ await loadJsPDF(); ready=!!(window.jspdf&&window.jspdf.jsPDF); }catch(e){ ready=false; }
   if(!ready){ // sin libreria (offline): vuelve a texto como antes
@@ -1760,6 +1815,10 @@ async function compartirPDF(filename,tituloDoc,bloques){
   }
   const { jsPDF }=window.jspdf;
   const doc=new jsPDF({unit:'pt',format:'a4'});
+  if(opts&&opts.estilo==='ejecutivo'){
+    _pdfEjecutivo(doc,bloques,opts);
+    return _compartirDocPDF(doc,filename,tituloDoc);
+  }
   const W=doc.internal.pageSize.getWidth(), H=doc.internal.pageSize.getHeight(), M=40;
   const AC=[108,99,255], AC2=[167,139,250], INK=[33,37,48], GRY=[130,135,148], ZEB=[244,244,250], TOTBG=[238,235,255], BARBG=[229,229,236];
   const footer=()=>{ doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor.apply(doc,GRY); doc.text('Generado con MisGastos · '+new Date().toLocaleDateString('es-CL'), M, H-24); };
@@ -1819,6 +1878,10 @@ async function compartirPDF(filename,tituloDoc,bloques){
     doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor.apply(doc,GRY);
     doc.text('Página '+p+' de '+nPages, W-M, H-24, {align:'right'});
   }
+  return _compartirDocPDF(doc,filename,tituloDoc);
+}
+// Comparte (o descarga) un documento jsPDF ya dibujado
+async function _compartirDocPDF(doc,filename,tituloDoc){
   const blob=doc.output('blob');
   const file=new File([blob],filename,{type:'application/pdf'});
   if(navigator.canShare&&navigator.canShare({files:[file]})){
@@ -2554,8 +2617,11 @@ function txHTML(t){
   const color=isD?'var(--blue)':(c?.color||'#888');
   const bank=isD?(t.bank?CARDS[t.bank]?.bank||t.bank:'Cuenta Corriente'):(c?.bank||'');
   const date=new Date(t.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
-  const amt=t.currency==='USD'?fmtUSD(t.amount):fmtCLP(t.amount);
-  const cuota=!isD&&t.cuotas>1?t.cuotas+' cuotas':(isD?'Débito':'Contado');
+  // Filas expandidas por cuotasMensuales (detalle de Analisis): muestran la
+  // cuota del mes (monto mensual + "cuota k/n"), no la compra completa.
+  const esCuota=!isD&&t._cuotaTotal>1;
+  const amt=esCuota&&t.currency==='CLP'?fmtCLP(t._monto):(t.currency==='USD'?fmtUSD(t.amount):fmtCLP(t.amount));
+  const cuota=esCuota?('cuota '+t._cuotaNum+'/'+t._cuotaTotal):(!isD&&t.cuotas>1?t.cuotas+' cuotas':(isD?'Débito':'Contado'));
   const txType=isD?'debito':'credito';
   return`<div class="tx-item ${isD?'debito':''}" oncontextmenu="openTxMenu(event,'${t.id}','${txType}')" ontouchstart="startTxHold(event,'${t.id}','${txType}')" ontouchend="cancelTxHold()" ontouchmove="cancelTxHold()">
     <div class="tx-icon" style="background:${color}22">${getIcon(t.desc)}</div>
@@ -3051,6 +3117,30 @@ function closeAnalisisOutside(e){
 function setAnalisisPeriod(p){_analisisPeriod=p;renderAnalisis();}
 function setAnalisisTxType(t){_analisisTxType=t;renderAnalisis();}
 
+// Expande las compras de credito en sus cuotas mensuales (arrastre a nivel de mes):
+// una compra en N cuotas aporta amount/N a su mes de compra (corrido por cycleOffset
+// si fue aplazada) y a los N-1 meses siguientes, conservando el dia de la compra.
+// Es la version por mes calendario de cuotasActivasCiclo (que trabaja por ciclo de
+// facturacion); Analisis, Comparativo e Informe agrupan por mes, por eso esta variante.
+// Cada cuota sale con date = fecha nominal de esa cuota y _monto = cuota mensual.
+function cuotasMensuales(){
+  const out=[];
+  getC().filter(t=>!esPrestada(t)).forEach(t=>{
+    const n=Math.max(1,t.cuotas||1);
+    const d=new Date(t.date);
+    const cuotaAmt=t.currency==='CLP'?t.amount/n:0;
+    for(let k=0;k<n;k++){
+      const m=d.getMonth()+(t.cycleOffset||0)+k;
+      const ultDia=new Date(d.getFullYear(),m+1,0).getDate();
+      const f=new Date(d.getFullYear(),m,Math.min(d.getDate(),ultDia),12,0,0);
+      out.push({...t,date:f.toISOString(),_tipo:'credito',_monto:cuotaAmt,_cuotaNum:k+1,_cuotaTotal:n});
+    }
+  });
+  return out;
+}
+// Fin del mes actual: las cuotas de meses futuros no se muestran en los analisis
+function _finMesActual(){ const h=new Date(); return new Date(h.getFullYear(),h.getMonth()+1,0,23,59,59); }
+
 function renderAnalisis(){
   // Period filters
   const periods=[
@@ -3088,12 +3178,14 @@ function renderAnalisis(){
   else if(_analisisPeriod==='mes'){dateStart=new Date(now.getFullYear(),now.getMonth(),1);dateEnd=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);}
   else if(_analisisPeriod==='mes-ant'){dateStart=new Date(now.getFullYear(),now.getMonth()-1,1);dateEnd=new Date(now.getFullYear(),now.getMonth(),0,23,59,59);}
 
-  // Collect transactions
+  // Collect transactions (credito expandido en cuotas mensuales, modelo de arrastre:
+  // en cada mes aparece la cuota que realmente se esta pagando ese mes)
   let txs=[];
   if(_analisisTxType!=='debito'){
-    let c=getC().filter(t=>!esPrestada(t));
+    let c=cuotasMensuales();
     if(dateStart) c=c.filter(t=>{const d=new Date(t.date);return d>=dateStart&&d<=dateEnd;});
-    txs=txs.concat(c.map(t=>({...t,_tipo:'credito',_monto:t.currency==='CLP'?t.amount/Math.max(1,t.cuotas||1):0})));
+    else c=c.filter(t=>new Date(t.date)<=_finMesActual()); // "Todo": sin cuotas futuras
+    txs=txs.concat(c);
   }
   if(_analisisTxType!=='credito'){
     let d=getD().filter(t=>!esPrestada(t));
@@ -3165,7 +3257,7 @@ function renderAnalisis(){
         <div style="background:${c.color};height:100%;width:${barW}%;border-radius:4px;transition:width .4s"></div>
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px;display:flex;justify-content:space-between">
-        <span>${pct}% · ${c.count} gasto${c.count!==1?'s':''}</span>
+        <span>${pct}% · ${c.count} cargo${c.count!==1?'s':''}</span>
         <span style="color:var(--accent2)">Ver detalle →</span>
       </div>
     </div>`;
@@ -3195,7 +3287,7 @@ function renderAnalisisCatDetalle(cat,itemsInCat){
       <span style="font-size:22px">${cat.emoji}</span>
       <div style="flex:1">
         <div style="font-size:16px;font-weight:700">${cat.name}</div>
-        <div style="font-size:12px;color:var(--text2)">${itemsInCat.length} gasto${itemsInCat.length!==1?'s':''}</div>
+        <div style="font-size:12px;color:var(--text2)">${itemsInCat.length} cargo${itemsInCat.length!==1?'s':''}</div>
       </div>
       <div style="font-size:18px;font-weight:700;color:var(--accent2)">${fmtCLP(total)}</div>
     </div>
@@ -3203,15 +3295,19 @@ function renderAnalisisCatDetalle(cat,itemsInCat){
 }
 
 // ── Comparativo mensual (barras mes a mes, dentro de "Ver análisis") ───────
-// Agrupa por mes de compra con el mismo criterio del modal de Analisis
-// (credito = cuota mensual asignada al mes de la compra; debito = monto).
+// Agrupa con el mismo criterio del modal de Analisis: credito expandido en
+// cuotas mensuales (arrastre — cada mes suma la cuota que se paga ese mes),
+// debito por su fecha. Las cuotas de meses futuros no se incluyen.
 function comparativoMensualData(){
   const map={};
+  const hoy=new Date();
+  const capKey=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
   const key=t=>{ const d=new Date(t.date); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); };
   if(_analisisTxType!=='debito'){
-    getC().filter(t=>!esPrestada(t)).forEach(t=>{
-      const k=key(t); if(!map[k]) map[k]={key:k,cred:0,deb:0};
-      map[k].cred+=t.currency==='CLP'?t.amount/Math.max(1,t.cuotas||1):0;
+    cuotasMensuales().forEach(t=>{
+      const k=key(t); if(k>capKey) return; // sin meses futuros
+      if(!map[k]) map[k]={key:k,cred:0,deb:0};
+      map[k].cred+=t._monto;
     });
   }
   if(_analisisTxType!=='credito'){
@@ -3289,12 +3385,16 @@ function renderComparativoMensual(){
 // ── Informe de gastos en PDF (rango de meses elegido por el usuario) ───────
 const _MESES_NOMBRE=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 function mesLabel(key){ const [y,m]=key.split('-').map(Number); return _MESES_NOMBRE[m-1]+' '+y; }
-// Meses (claves 'YYYY-MM') que tienen al menos un gasto, segun el filtro de tipo actual
+// Meses (claves 'YYYY-MM') que tienen al menos un cargo, segun el filtro de tipo
+// actual. Credito por cuota mensual (arrastre), asi un mes donde solo cae la cuota
+// de una compra vieja tambien es elegible. Sin meses futuros.
 function mesesDisponibles(){
   const set=new Set();
-  const addAll=arr=>arr.forEach(t=>{ const d=new Date(t.date); set.add(d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')); });
-  if(_analisisTxType!=='debito') addAll(getC().filter(t=>!esPrestada(t)));
-  if(_analisisTxType!=='credito') addAll(getD().filter(t=>!esPrestada(t)));
+  const hoy=new Date();
+  const capKey=hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0');
+  const add=t=>{ const d=new Date(t.date); const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); if(k<=capKey) set.add(k); };
+  if(_analisisTxType!=='debito') cuotasMensuales().forEach(add);
+  if(_analisisTxType!=='credito') getD().filter(t=>!esPrestada(t)).forEach(add);
   return [...set].sort();
 }
 function openInformeSetup(){
@@ -3345,11 +3445,13 @@ async function generarInformePDF(){
   const [y1,m1]=d1.split('-').map(Number), [y2,m2]=d2.split('-').map(Number);
   const dateStart=new Date(y1,m1-1,1,0,0,0);
   const dateEnd=new Date(y2,m2,0,23,59,59); // ultimo dia del mes "hasta"
+  const nMesesRango=(y2*12+m2)-(y1*12+m1)+1;
 
+  // Credito por cuota mensual (arrastre): cada mes del rango incluye la cuota
+  // que se paga ese mes, aunque la compra sea de un mes anterior.
   let txs=[];
   if(_analisisTxType!=='debito'){
-    const c=getC().filter(t=>!esPrestada(t)).filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;});
-    txs=txs.concat(c.map(t=>({...t,_tipo:'credito',_monto:t.currency==='CLP'?t.amount/Math.max(1,t.cuotas||1):0})));
+    txs=txs.concat(cuotasMensuales().filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;}));
   }
   if(_analisisTxType!=='credito'){
     const d=getD().filter(t=>!esPrestada(t)).filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;});
@@ -3371,34 +3473,37 @@ async function generarInformePDF(){
   const totCred=txs.filter(t=>t._tipo==='credito').reduce((s,t)=>s+t._monto,0);
   const totDeb=txs.filter(t=>t._tipo==='debito').reduce((s,t)=>s+t._monto,0);
   const rangoLabel=d1===d2?mesLabel(d1):(mesLabel(d1)+' - '+mesLabel(d2));
+  const tipoLabel=_analisisTxType==='ambos'?'Crédito y débito':_analisisTxType==='credito'?'Solo crédito':'Solo débito';
+  const pctTxt=v=>v.toFixed(1).replace('.',',')+'%';
 
   const fmtFechaPdf=d=>new Date(d).toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'numeric'});
   const origenPdf=t=>t._tipo==='debito'?('Débito '+(CARDS[t.bank]?CARDS[t.bank].bank:'')).trim():(CARDS[t.cardId]?CARDS[t.cardId].bank:'Crédito');
+
   const resumenBloque={
-    titulo:'Resumen',
-    subtitulo:txs.length+' gasto'+(txs.length!==1?'s':'')+' en el período',
-    rows:[{desc:'Crédito',monto:fmtCLP(totCred)},{desc:'Débito',monto:fmtCLP(totDeb)}],
+    titulo:'Resumen del período',
+    subtitulo:txs.length+' cargo'+(txs.length!==1?'s':''),
+    rows:[
+      {desc:'Gasto en crédito (cuotas del período)',monto:fmtCLP(totCred),pct:grandTotal>0?pctTxt(totCred/grandTotal*100):''},
+      {desc:'Gasto en débito',monto:fmtCLP(totDeb),pct:grandTotal>0?pctTxt(totDeb/grandTotal*100):''}
+    ].concat(nMesesRango>1?[{desc:'Promedio mensual ('+nMesesRango+' meses)',monto:fmtCLP(grandTotal/nMesesRango)}]:[]),
     total:{label:'Total gastado',value:fmtCLP(grandTotal)}
   };
-  const catBloques=catData.map(c=>{
-    const pct=(c.total/grandTotal)*100;
-    return {
-      titulo:c.emoji+' '+c.name,
-      subtitulo:pct.toFixed(1)+'% del total · '+c.count+' gasto'+(c.count!==1?'s':''),
-      color:hexToRgb(c.color)||undefined,
-      barPct:pct,
-      rows:[...c.items].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(t=>({
-        desc:t.desc,
-        sub:fmtFechaPdf(t.date)+' · '+origenPdf(t)+(t._tipo==='credito'&&t.cuotas>1?' · cuota mensual ('+t.cuotas+' cuotas)':''),
-        monto:fmtCLP(t._monto)
-      })),
-      total:{label:'Subtotal',value:fmtCLP(c.total)}
-    };
-  });
 
-  // Comparativo mensual dentro del PDF (solo si el rango cubre 2+ meses):
-  // una fila por mes con su total, sublinea credito/debito y mini-barra
-  // proporcional al mes mas alto del rango.
+  // Balance vs ingreso: cuanto entro (sueldo x meses) vs cuanto se gasto = ahorro
+  const sueldo=getSueldo();
+  const ingresoTotal=sueldo*nMesesRango;
+  const ahorro=ingresoTotal-grandTotal;
+  const balanceBloque=sueldo>0?{
+    titulo:'Balance del período',
+    subtitulo:'ingreso mensual: '+fmtCLP(sueldo),
+    rows:[
+      {desc:'Ingresos ('+nMesesRango+' mes'+(nMesesRango!==1?'es':'')+')',monto:fmtCLP(ingresoTotal)},
+      {desc:'Total gastado',monto:fmtCLP(grandTotal),pct:ingresoTotal>0?pctTxt(grandTotal/ingresoTotal*100):''}
+    ],
+    total:{label:ahorro>=0?'Ahorro estimado':'Déficit del período',value:fmtCLP(ahorro),color:ahorro>=0?'green':'red'}
+  }:null;
+
+  // Comparativo mensual dentro del PDF (solo si el rango cubre 2+ meses)
   let compBloque=null;
   const porMes={};
   txs.forEach(t=>{
@@ -3409,23 +3514,35 @@ async function generarInformePDF(){
   });
   const mesesData=Object.values(porMes).map(m=>({...m,total:m.cred+m.deb})).sort((a,b)=>a.key<b.key?-1:1);
   if(mesesData.length>=2){
-    const maxMes=Math.max(...mesesData.map(m=>m.total));
     compBloque={
       titulo:'Comparativo mensual',
-      subtitulo:'la barra compara cada mes con el más alto',
+      subtitulo:'% = participación en el total del período',
       rows:mesesData.map(m=>({
         desc:mesLabel(m.key),
         sub:'Crédito '+fmtCLP(m.cred)+' · Débito '+fmtCLP(m.deb),
-        barPct:maxMes>0?(m.total/maxMes)*100:0,
-        monto:fmtCLP(m.total)
+        monto:fmtCLP(m.total),
+        pct:grandTotal>0?pctTxt(m.total/grandTotal*100):''
       })),
       total:{label:'Promedio mensual',value:fmtCLP(grandTotal/mesesData.length)}
     };
   }
 
+  const catBloques=catData.map(c=>({
+    titulo:c.name,
+    subtitulo:pctTxt((c.total/grandTotal)*100)+' del total · '+c.count+' cargo'+(c.count!==1?'s':''),
+    rows:[...c.items].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(t=>({
+      col1:fmtFechaPdf(t.date),
+      desc:t.desc||'Sin descripción',
+      sub:origenPdf(t)+(t._cuotaTotal>1?' · cuota '+t._cuotaNum+'/'+t._cuotaTotal:'')+(t.currency==='USD'?' · en dólares (no suma al total CLP)':''),
+      monto:t.currency==='USD'?fmtUSD(t.amount/Math.max(1,t._cuotaTotal||1)):fmtCLP(t._monto)
+    })),
+    total:{label:'Subtotal',value:fmtCLP(c.total)}
+  }));
+
   closeInformeSetup(); // vuelve al resumen mientras se genera/comparte el PDF
-  const bloques=[resumenBloque].concat(compBloque?[compBloque]:[]).concat(catBloques);
-  await compartirPDF('informe_gastos_'+d1+'_a_'+d2+'.pdf', 'Informe de gastos — '+rangoLabel, bloques);
+  const bloques=[resumenBloque].concat(balanceBloque?[balanceBloque]:[]).concat(compBloque?[compBloque]:[]).concat(catBloques);
+  await compartirPDF('informe_gastos_'+d1+'_a_'+d2+'.pdf', 'Informe de gastos - '+rangoLabel, bloques,
+    {estilo:'ejecutivo',tituloPrincipal:'Informe de gastos',subtitulo:rangoLabel+' · '+tipoLabel});
 }
 
 // ── ¿Qué debo? — desglose de compras por pagar ────────────────────────────
