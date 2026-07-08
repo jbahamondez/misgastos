@@ -569,6 +569,26 @@ function renderDebito(){
 
 let importBank='bci', importType='debito', pendingRows=[];
 
+// xlsx (SheetJS, ~880KB) cargado bajo demanda, solo al importar/conciliar una
+// cartola Excel: sacarlo del arranque ahorra esa descarga en cada apertura.
+// Mismo patron (y mismo hash SRI) que loadJsPDF/loadPdfJs.
+let _xlsxPromise=null;
+function loadXLSX(){
+  if(window.XLSX) return Promise.resolve();
+  if(!_xlsxPromise){
+    _xlsxPromise=new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.integrity='sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==';
+      s.crossOrigin='anonymous'; s.referrerPolicy='no-referrer';
+      s.onload=res;
+      s.onerror=()=>{ _xlsxPromise=null; rej(new Error('No se pudo cargar el lector de Excel (¿sin conexión?)')); };
+      document.head.appendChild(s);
+    });
+  }
+  return _xlsxPromise;
+}
+
 function selectImportType(type){
   importType=type;
   document.getElementById('chip-type-debito').classList.toggle('active', type==='debito');
@@ -591,12 +611,13 @@ function handleFileUpload(evt){
   if(!file)return;
   const isCSV=file.name.toLowerCase().endsWith('.csv');
   const reader=new FileReader();
-  reader.onload=function(e){
+  reader.onload=async function(e){
     try{
       let rows;
       if(isCSV){
         rows=parseCSV(e.target.result);
       }else{
+        await loadXLSX();
         const wb=XLSX.read(e.target.result,{type:'array'});
         const ws=wb.Sheets[wb.SheetNames[0]];
         rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
@@ -3142,6 +3163,7 @@ function conciliaFile(evt){
         let rows;
         if(isCSV){ rows=parseCSV(e.target.result); }
         else{
+          await loadXLSX();
           const wb=XLSX.read(e.target.result,{type:'array'});
           rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:''});
         }
