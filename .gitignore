@@ -1,0 +1,9 @@
+# Artefactos de las pruebas headless (tests/)
+tests/*.txt
+tests/**/*.txt
+before.txt
+after.txt
+*.output
+
+# Perfil temporal del navegador de prueba (por si se crea dentro del repo)
+misgastos-test-profile/
