@@ -19,12 +19,12 @@ const LS_C='gastos_credito_v2', LS_D='gastos_debito_v2', LS_S='sueldo_mensual', 
 
 function getC(){try{return JSON.parse(localStorage.getItem(LS_C)||'[]')}catch{return[]}}
 function getD(){try{return JSON.parse(localStorage.getItem(LS_D)||'[]')}catch{return[]}}
-function saveC(a){localStorage.setItem(LS_C,JSON.stringify(a));syncCollectionToCloud('transactions_credit',a)}
-function saveD(a){localStorage.setItem(LS_D,JSON.stringify(a));syncCollectionToCloud('transactions_debit',a)}
+function saveC(a,opts){localStorage.setItem(LS_C,JSON.stringify(a));syncCollectionToCloud('transactions_credit',a,opts)}
+function saveD(a,opts){localStorage.setItem(LS_D,JSON.stringify(a));syncCollectionToCloud('transactions_debit',a,opts)}
 function getSueldo(){return parseFloat(localStorage.getItem(LS_S)||'0')}
 function setSueldo(v){localStorage.setItem(LS_S,String(v));syncSettingsToCloud()}
 function getDeudas(){try{return JSON.parse(localStorage.getItem(LS_DEUDAS)||'[]')}catch{return[]}}
-function saveDeudas(a){localStorage.setItem(LS_DEUDAS,JSON.stringify(a));syncCollectionToCloud('debts',a)}
+function saveDeudas(a,opts){localStorage.setItem(LS_DEUDAS,JSON.stringify(a));syncCollectionToCloud('debts',a,opts)}
 function getPersonas(){try{return JSON.parse(localStorage.getItem(LS_PERSONAS)||'["🤍 Tamarindo"]')}catch{return['🤍 Tamarindo']}}
 function savePersonas(a){localStorage.setItem(LS_PERSONAS,JSON.stringify(a));syncCollectionToCloud('people',a)}
 const DEFAULT_CATS=[
@@ -72,25 +72,39 @@ const CLOUD_MAP = {
 // nuevos o cambiados y borra en la nube los que ya no estén en el array.
 // No hace nada hasta que el cache de la colección esté hidratado (post-migración),
 // para no borrar todo en la nube antes de migrar.
-function syncCollectionToCloud(collName,localArray){
+//
+// opts.allowBulk=true: permite borrados masivos (usado por operaciones EXPLICITAS
+// del usuario: "borrar todos los gastos" y "restaurar respaldo"). Sin ese flag,
+// un sync que eliminaria casi toda una coleccion grande se ABORTA por completo:
+// casi siempre es un localStorage corrupto (getX() devolvio [] por un parse fallido)
+// que, de propagarse, borraria el historial en la nube. Mejor no tocar la nube.
+function syncCollectionToCloud(collName,localArray,opts){
   if(!window._fb||!window._fb.syncEnabled) return;
   const cache=window._fb.cache[collName];
   if(!cache) return;
   const map=CLOUD_MAP[collName];
   const cloudArray=map.toCloud(localArray);
-  const newIds=new Set();
+  const newIds=new Set(cloudArray.map(item=>String(map.id(item))));
+  const toDelete=Array.from(cache.keys()).filter(id=>!newIds.has(id));
+  // Guard anti-borrado masivo: solo protege el historial financiero irrecuperable
+  // (gastos y deudas). Categorias/personas/reglas/servicios son pocas, se rehacen
+  // facil y se borran en cascada legitimamente (ej. borrar una categoria elimina
+  // sus reglas), asi que ahi no aplica el guard. Tampoco en operaciones allowBulk.
+  const PROTEGIDAS=['transactions_credit','transactions_debit','debts'];
+  if(!(opts&&opts.allowBulk) && PROTEGIDAS.includes(collName) && cache.size>=5 && toDelete.length>cache.size*0.5){
+    console.error('[sync] Borrado masivo bloqueado en "'+collName+'": '+toDelete.length+' de '+cache.size+' documentos. Posible localStorage corrupto; no se modifica la nube.');
+    if(window.showToast) showToast('⚠️ Sincronización pausada: datos locales inconsistentes','var(--red)');
+    return; // no se toca la nube en absoluto (ni altas ni bajas)
+  }
   cloudArray.forEach(item=>{
     const id=String(map.id(item));
-    newIds.add(id);
     const prev=cache.get(id);
     if(!prev||JSON.stringify(prev)!==JSON.stringify(item)){
       cloudSet(collName,id,item);
       cache.set(id,item);
     }
   });
-  Array.from(cache.keys()).forEach(id=>{
-    if(!newIds.has(id)){ cloudDelete(collName,id); cache.delete(id); }
-  });
+  toDelete.forEach(id=>{ cloudDelete(collName,id); cache.delete(id); });
 }
 
 function syncSettingsToCloud(){
@@ -1021,6 +1035,8 @@ function loadJsPDF(){
     _jspdfPromise=new Promise((res,rej)=>{
       const s=document.createElement('script');
       s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.integrity='sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==';
+      s.crossOrigin='anonymous'; s.referrerPolicy='no-referrer';
       s.onload=res; s.onerror=rej;
       document.head.appendChild(s);
     });
@@ -2275,7 +2291,8 @@ function importData(){
         // Si hay sesión activa, sincroniza el respaldo restaurado hacia la nube
         // (incluye borrados: lo que no esté en el respaldo se borra también en Firestore).
         if(window._fb&&window._fb.syncEnabled){
-          Object.keys(CLOUD_MAP).forEach(collName=>syncCollectionToCloud(collName,LOCAL_GETTERS[collName]()));
+          // allowBulk: restaurar un respaldo es explicito y puede reducir colecciones
+          Object.keys(CLOUD_MAP).forEach(collName=>syncCollectionToCloud(collName,LOCAL_GETTERS[collName](),{allowBulk:true}));
           syncSettingsToCloud();
         }
         showToast('Respaldo restaurado ✓');
@@ -2288,7 +2305,8 @@ function importData(){
 }
 function clearData(){
   if(confirm('¿Borrar TODOS tus gastos de crédito y débito?\n\nTambién se eliminarán las deudas/divisiones asociadas (dependen de esos gastos).\n\nTus categorías, reglas, personas y configuración NO se borran.\n\nEsta acción no se puede deshacer.')){
-    saveC([]);saveD([]);saveDeudas([]);
+    // allowBulk: es un vaciado EXPLICITO del usuario, salta el guard anti-borrado
+    saveC([],{allowBulk:true});saveD([],{allowBulk:true});saveDeudas([],{allowBulk:true});
     renderDashboard();renderDebito();renderHistorial();renderDeudas();
     showToast('Gastos eliminados','var(--red)');
   }
@@ -3051,6 +3069,8 @@ function loadPdfJs(){
     _pdfjsPromise=new Promise((res,rej)=>{
       const s=document.createElement('script');
       s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.integrity='sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ==';
+      s.crossOrigin='anonymous'; s.referrerPolicy='no-referrer';
       s.onload=()=>{ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(); };
       s.onerror=rej;
       document.head.appendChild(s);
