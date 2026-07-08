@@ -254,6 +254,16 @@ function getMonth(){
   const now=new Date();
   return{start:new Date(now.getFullYear(),now.getMonth(),1),end:new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59)};
 }
+// Rango de fechas de los filtros de período que comparten Historial y Análisis.
+// 'ciclo' usa el ciclo de facturación de referencia (BCI); 'todo' => null (sin filtro).
+// Única fuente: si algún día cambia qué significa "mes anterior", cambia solo aquí.
+function rangoPeriodo(id){
+  const now=new Date();
+  if(id==='ciclo'){const c=getCycle('bci');return{start:c.start,end:c.end};}
+  if(id==='mes') return{start:new Date(now.getFullYear(),now.getMonth(),1),end:new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59)};
+  if(id==='mes-ant') return{start:new Date(now.getFullYear(),now.getMonth()-1,1),end:new Date(now.getFullYear(),now.getMonth(),0,23,59,59)};
+  return null; // 'todo'
+}
 function getCycleTxs(cardId){
   const{start,end}=getCycle(cardId);
   return getC().filter(t=>t.cardId===cardId&&new Date(t.date)>=start&&new Date(t.date)<=end);
@@ -799,19 +809,9 @@ function renderHistorial(){
   const filters=[{id:'all',label:'Todos'},{id:'credito',label:'Credito'},{id:'debito',label:'Debito'},{id:'bci',label:'BCI'},{id:'bchile',label:'Banco Chile'},{id:'scotia',label:'Scotia'}];
   document.getElementById('filter-row').innerHTML=filters.map(f=>`<button class="filter-chip ${activeFilter===f.id?'active':''}" onclick="setFilter('${f.id}')">${f.label}</button>`).join('');
 
-  // Date range
-  let dateStart=null, dateEnd=null;
-  const now=new Date();
-  if(activeDateFilter==='ciclo'){
-    const c=getCycle('bci'); dateStart=c.start; dateEnd=c.end;
-  } else if(activeDateFilter==='mes'){
-    dateStart=new Date(now.getFullYear(),now.getMonth(),1);
-    dateEnd=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);
-  } else if(activeDateFilter==='mes-ant'){
-    dateStart=new Date(now.getFullYear(),now.getMonth()-1,1);
-    dateEnd=new Date(now.getFullYear(),now.getMonth(),0,23,59,59);
-  }
-  // 'todo' → no filter
+  // Date range ('todo' => null, sin filtro)
+  const rango=rangoPeriodo(activeDateFilter);
+  const dateStart=rango?rango.start:null, dateEnd=rango?rango.end:null;
 
   // Search term
   const searchTerm=(document.getElementById('hist-search-input')?.value||'').trim().toLowerCase();
@@ -867,11 +867,18 @@ function toggleCuotaPagada(debtId,k,val){
 }
 // Expande cada deuda en sus cuotas VENCIDAS (hasta el ciclo actual), con nro de
 // cuota y a que ciclo pertenece. Misma logica de ciclos que "¿Que debo?".
+// El dia de corte es el de la TARJETA de la compra asociada (via txId), no el
+// global: si algun dia las tarjetas cierran en dias distintos, cada deuda se
+// asigna al ciclo correcto. Fallback al global para deudas de debito o cuya
+// compra ya no existe (hoy es equivalente: todas cierran el mismo dia).
 function deudaInstallments(){
-  const cutDay=getBillingDay();
-  const curIdx=queDeboCycleIndex(new Date(), cutDay);
+  const cardDeTx={};
+  getC().forEach(t=>{cardDeTx[t.id]=t.cardId;});
+  const hoy=new Date();
   const out=[];
   getDeudas().forEach(d=>{
+    const cutDay=getBillingDay(cardDeTx[d.txId]);
+    const curIdx=queDeboCycleIndex(hoy, cutDay);
     const n=Math.max(1,d.cuotas||1);
     const base=queDeboCycleIndex(d.date, cutDay)+(d.cycleOffset||0); // "aplazar" corre la deuda de ciclo
     const per=(d.deudaPerCuota!=null?d.deudaPerCuota:(d.deudaTotal||0)/n);
@@ -2032,16 +2039,58 @@ let _splitSelectedPersons=[];
 let _splitLent=false; // true = "presté mi tarjeta": el 100% es deuda de la persona, no gasto mio
 function toggleSplitLent(){ _splitLent=document.getElementById('split-lent').checked; updateSplitPreview(); }
 
+// Matematica UNICA de una division (usada por el preview, confirmSplit y
+// splitApplyAll: si cambia el reparto/redondeo, cambia solo aqui y los tres
+// siempre cuadran). lent=true = "preste la tarjeta": tu parte es $0, el reparto
+// va solo entre las personas y la tx conserva su monto completo.
+function calcularSplit(amount, cuotas, type, nPersonas, lent){
+  const esDebito=(type||'credito')==='debito';
+  const cuotasReal=esDebito?1:Math.max(1,cuotas||1); // debito no tiene cuotas
+  const cuotaAmt=amount/cuotasReal;
+  const totalParticipants=lent?nPersonas:nPersonas+1;
+  const userSharePerCuota=lent?0:cuotaAmt/(nPersonas+1);
+  const personSharePerCuota=lent?(nPersonas>0?cuotaAmt/nPersonas:0):cuotaAmt/(nPersonas+1);
+  const userTotal=lent?amount:userSharePerCuota*cuotasReal;
+  return {esDebito,cuotasReal,cuotaAmt,totalParticipants,userSharePerCuota,personSharePerCuota,userTotal};
+}
+
+// Aplica una division ya decidida: actualiza la tx (monto = tu parte, splitWith,
+// splitTotal, lent) y crea una deuda por persona. No renderiza ni notifica;
+// devuelve el calculo para que el llamador arme su toast.
+function aplicarSplit(item, personas, lent){
+  const s=calcularSplit(item.amount, item.cuotas, item.type, personas.length, lent);
+  const txData=s.esDebito?getD():getC();
+  const idx=txData.findIndex(t=>t.id===item.txId);
+  if(idx>=0){
+    txData[idx].amount=s.userTotal;
+    txData[idx].splitWith=personas.join(', ');
+    txData[idx].splitTotal=item.amount;
+    if(lent) txData[idx].lent=true; else delete txData[idx].lent;
+    (s.esDebito?saveD:saveC)(txData);
+  }
+  const ds=getDeudas();
+  personas.forEach(person=>{
+    ds.push({id:'deu_'+Date.now()+'_'+Math.random().toString(36).slice(2),
+      person,txId:item.txId,desc:item.desc,
+      type:s.esDebito?'debito':'credito',
+      totalAmount:item.amount,cuotas:s.cuotasReal,
+      deudaPerCuota:s.personSharePerCuota,deudaTotal:s.personSharePerCuota*s.cuotasReal,
+      currency:item.currency||'CLP',date:item.txDate||new Date().toISOString(),
+      paid:false,paidDate:null});
+  });
+  saveDeudas(ds);
+  return s;
+}
+
 function updateSplitPreview(){
   if(!_pendingSplit) return;
   const split=_pendingSplit;
-  const esDebito=(split.type||'credito')==='debito';
-  const cuotas=esDebito?1:Math.max(1,split.cuotas||1);
-  const cuotaAmt=split.amount/cuotas;
   const n=_splitSelectedPersons.length;
-  const total=_splitLent?n:n+1;          // prestada: tu parte es $0, no cuentas en el reparto
-  const userShare=_splitLent?0:cuotaAmt/(n+1);
-  const personShare=(_splitLent?(n>0?cuotaAmt/n:0):cuotaAmt/(n+1));
+  const s=calcularSplit(split.amount, split.cuotas, split.type, n, _splitLent);
+  const esDebito=s.esDebito, cuotas=s.cuotasReal, cuotaAmt=s.cuotaAmt;
+  const total=s.totalParticipants;       // prestada: tu parte es $0, no cuentas en el reparto
+  const userShare=s.userSharePerCuota;
+  const personShare=s.personSharePerCuota;
   const tipoLabel=esDebito?'💳 Débito':'💳 Crédito';
   const splitLabel=_splitLent?'0%':(n+1===2?'50%':'1/'+(n+1));
   document.getElementById('split-preview-box').innerHTML=`
@@ -2080,30 +2129,13 @@ function openSplitModal(split){
 function splitApplyAll(){
   confirmSplit();
   const personas=_splitSelectedPersons.length?_splitSelectedPersons:[getPersonas()[0]||'Mi pareja'];
-  const totalParticipants=personas.length+1;
+  // Misma matematica y aplicacion que confirmSplit (en importacion no hay "prestada")
   while(_splitQueue.length>0){
-    const item=_splitQueue.shift();
-    const esDebito=(item.type||'credito')==='debito';
-    const cuotasR=esDebito?1:Math.max(1,item.cuotas||1);
-    const cuotaAmt=item.amount/cuotasR;
-    const personShare=cuotaAmt/totalParticipants;
-    const userTotal=(cuotaAmt/totalParticipants)*cuotasR;
-    const txData=esDebito?getD():getC();
-    const idx=txData.findIndex(t=>t.id===item.txId);
-    if(idx>=0){txData[idx].amount=userTotal;txData[idx].splitWith=personas.join(', ');txData[idx].splitTotal=item.amount;(esDebito?saveD:saveC)(txData);}
-    const ds=getDeudas();
-    personas.forEach(persona=>{
-      ds.push({id:'deu_'+Date.now()+'_'+Math.random().toString(36).slice(2),
-        person:persona,txId:item.txId,desc:item.desc,
-        type:(item.type||'credito'),totalAmount:item.amount,cuotas:cuotasR,
-        deudaPerCuota:personShare,deudaTotal:personShare*cuotasR,
-        currency:item.currency||'CLP',date:item.txDate||new Date().toISOString(),paid:false,paidDate:null});
-    });
-    saveDeudas(ds);
+    aplicarSplit(_splitQueue.shift(), personas, false);
   }
   _splitImportMode=false;_splitQueue=[];
   renderDashboard();
-  showToast('✅ Todos los gastos divididos en '+(totalParticipants)+' con '+personas.join(' y '));
+  showToast('✅ Todos los gastos divididos en '+(personas.length+1)+' con '+personas.join(' y '));
 }
 
 function splitApplyNone(){
@@ -2164,51 +2196,17 @@ function confirmSplit(){
   }
   if(!_splitSelectedPersons.length){showToast('Selecciona al menos una persona','var(--yellow)');return}
 
-  const {txId,amount,desc,cuotas,currency,type,txDate}=_pendingSplit;
-  const esDebito=(type||'credito')==='debito';
-  const cuotasReal=esDebito?1:Math.max(1,cuotas||1);
+  const amount=_pendingSplit.amount;
   const esPrestado=_splitLent;
-  // En "prestada" tu parte es $0: el reparto es solo entre las personas.
-  const totalParticipants=esPrestado?_splitSelectedPersons.length:_splitSelectedPersons.length+1;
-  const cuotaAmt=amount/cuotasReal;
-  const personSharePerCuota=cuotaAmt/totalParticipants;
-  const userTotal=esPrestado?amount:(cuotaAmt/totalParticipants)*cuotasReal; // prestada: la tx mantiene su monto completo
-
-  // Actualizar el gasto original. Si es prestada, NO se reduce el monto y se marca lent=true.
-  if(esDebito){
-    const debitData=getD();
-    const txIdx=debitData.findIndex(t=>t.id===txId);
-    if(txIdx>=0){debitData[txIdx].amount=userTotal;debitData[txIdx].splitWith=_splitSelectedPersons.join(', ');debitData[txIdx].splitTotal=amount;if(esPrestado)debitData[txIdx].lent=true;else delete debitData[txIdx].lent;saveD(debitData);}
-  } else {
-    const credData=getC();
-    const txIdx=credData.findIndex(t=>t.id===txId);
-    if(txIdx>=0){credData[txIdx].amount=userTotal;credData[txIdx].splitWith=_splitSelectedPersons.join(', ');credData[txIdx].splitTotal=amount;if(esPrestado)credData[txIdx].lent=true;else delete credData[txIdx].lent;saveC(credData);}
-  }
-
-  // Crear una deuda por cada persona
-  const ds=getDeudas();
-  _splitSelectedPersons.forEach(person=>{
-    ds.push({
-      id:'deu_'+Date.now()+'_'+Math.random().toString(36).slice(2),
-      person,txId,desc,
-      type:esDebito?'debito':'credito',
-      totalAmount:amount,
-      cuotas:cuotasReal,
-      deudaPerCuota:personSharePerCuota,
-      deudaTotal:personSharePerCuota*cuotasReal,
-      currency:currency||'CLP',
-      date:txDate||new Date().toISOString(),
-      paid:false,paidDate:null
-    });
-  });
-  saveDeudas(ds);
+  // Actualiza el gasto y crea las deudas con la matematica unica del split.
+  const s=aplicarSplit(_pendingSplit, _splitSelectedPersons, esPrestado);
 
   document.getElementById('split-modal-overlay').classList.remove('open');
   _pendingSplit=null;
   renderDashboard();
   const n=_splitSelectedPersons.length;
   const names=_splitSelectedPersons.join(' y ');
-  showToast(esPrestado?'🤝 Prestada a '+names+' — te deben '+fmtCLP(amount):'💜 Dividido en '+(n+1)+' con '+names+' — '+fmtCLP(personSharePerCuota)+'/cuota c/u');
+  showToast(esPrestado?'🤝 Prestada a '+names+' — te deben '+fmtCLP(amount):'💜 Dividido en '+(n+1)+' con '+names+' — '+fmtCLP(s.personSharePerCuota)+'/cuota c/u');
   // Procesar siguiente en cola si hay más
   if(_splitQueue.length>0){
     setTimeout(processSplitQueue, 800);
@@ -2469,6 +2467,44 @@ function cuotasMensuales(){
 // Fin del mes actual: las cuotas de meses futuros no se muestran en los analisis
 function _finMesActual(){ const h=new Date(); return new Date(h.getFullYear(),h.getMonth()+1,0,23,59,59); }
 
+// Transacciones del analisis en un rango (credito segun _analisisModo + debito
+// por su fecha, sin prestadas), cada una con _tipo y _monto ya calculados.
+// dateStart null = "Todo": el credito se capea a fin del mes actual (sin cuotas
+// futuras). Fuente unica de renderAnalisis y generarInformePDF: el bug de julio
+// (informe sin cuotas) nacio de tener esta logica duplicada y divergente.
+function analisisTxsPeriodo(dateStart,dateEnd){
+  let txs=[];
+  if(_analisisTxType!=='debito'){
+    let c=analisisCreditoTxs();
+    if(dateStart) c=c.filter(t=>{const d=new Date(t.date);return d>=dateStart&&d<=dateEnd;});
+    else c=c.filter(t=>new Date(t.date)<=_finMesActual());
+    txs=txs.concat(c);
+  }
+  if(_analisisTxType!=='credito'){
+    let d=getD().filter(t=>!esPrestada(t));
+    if(dateStart) d=d.filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;});
+    txs=txs.concat(d.map(t=>({...t,_tipo:'debito',_monto:t.amount||0})));
+  }
+  return txs;
+}
+
+// Agrupa transacciones (con _monto) por categoria. Devuelve {catMap, catData,
+// grandTotal}: catData son las categorias con total>0 ordenadas de mayor a menor,
+// cada una con items[] para el detalle y el informe. Fuente unica del resumen
+// de Analisis y del PDF, para que ambos siempre cuadren.
+function agruparPorCategoria(txs){
+  const catMap={};
+  getCategorias().forEach(c=>{catMap[c.id]={...c,total:0,count:0,items:[]};});
+  catMap['']={id:'',name:'Sin categoría',emoji:'❓',color:'#555',total:0,count:0,items:[]};
+  txs.forEach(t=>{
+    const cid=t.catId||'';
+    if(!catMap[cid]) catMap[cid]={id:cid,name:'Sin categoría',emoji:'❓',color:'#555',total:0,count:0,items:[]};
+    catMap[cid].total+=t._monto; catMap[cid].count++; catMap[cid].items.push(t);
+  });
+  const catData=Object.values(catMap).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
+  return {catMap, catData, grandTotal:catData.reduce((s,c)=>s+c.total,0)};
+}
+
 function renderAnalisis(){
   // Selector de modo: cuotas pagadas en el periodo vs compras realizadas en el
   const modos=[
@@ -2512,47 +2548,17 @@ function renderAnalisis(){
   if(_analisisInformeSetup){ renderInformeSetup(); return; }
   if(_analisisComparativo){ renderComparativoMensual(); return; }
 
-  // Get date range
-  const now=new Date();
-  let dateStart=null,dateEnd=null;
-  if(_analisisPeriod==='ciclo'){const c=getCycle('bci');dateStart=c.start;dateEnd=c.end;}
-  else if(_analisisPeriod==='mes'){dateStart=new Date(now.getFullYear(),now.getMonth(),1);dateEnd=new Date(now.getFullYear(),now.getMonth()+1,0,23,59,59);}
-  else if(_analisisPeriod==='mes-ant'){dateStart=new Date(now.getFullYear(),now.getMonth()-1,1);dateEnd=new Date(now.getFullYear(),now.getMonth(),0,23,59,59);}
-
-  // Collect transactions (credito segun el modo: cuotas con arrastre o compras totales)
-  let txs=[];
-  if(_analisisTxType!=='debito'){
-    let c=analisisCreditoTxs();
-    if(dateStart) c=c.filter(t=>{const d=new Date(t.date);return d>=dateStart&&d<=dateEnd;});
-    else c=c.filter(t=>new Date(t.date)<=_finMesActual()); // "Todo": sin cuotas futuras
-    txs=txs.concat(c);
-  }
-  if(_analisisTxType!=='credito'){
-    let d=getD().filter(t=>!esPrestada(t));
-    if(dateStart) d=d.filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;});
-    txs=txs.concat(d.map(t=>({...t,_tipo:'debito',_monto:t.amount||0})));
-  }
+  // Get date range ('todo' => null) y transacciones del período según modo y tipo
+  const rango=rangoPeriodo(_analisisPeriod);
+  const txs=analisisTxsPeriodo(rango?rango.start:null, rango?rango.end:null);
 
   if(!txs.length){
     document.getElementById('analisis-content').innerHTML='<div style="text-align:center;padding:40px 0;color:var(--text2)"><div style="font-size:40px">📭</div><p style="margin-top:8px">Sin gastos en este período</p></div>';
     return;
   }
 
-  // Group by category
-  const cats=getCategorias();
-  const catMap={};
-  cats.forEach(c=>{catMap[c.id]={...c,total:0,count:0};});
-  catMap['']={id:'',name:'Sin categoría',emoji:'❓',color:'#555',total:0,count:0};
-
-  txs.forEach(t=>{
-    const cid=t.catId||'';
-    if(!catMap[cid]) catMap[cid]={id:cid,name:'Sin categoría',emoji:'❓',color:'#555',total:0,count:0};
-    catMap[cid].total+=t._monto;
-    catMap[cid].count++;
-  });
-
-  const catData=Object.values(catMap).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
-  const grandTotal=catData.reduce((s,c)=>s+c.total,0);
+  // Group by category (fuente unica compartida con el informe PDF)
+  const {catMap,catData,grandTotal}=agruparPorCategoria(txs);
 
   // Si se seleccionó una categoría, mostrar su detalle (lista de gastos) en vez del resumen
   if(_analisisCatDetalle!==null){
@@ -2787,29 +2793,11 @@ async function generarInformePDF(){
   const dateEnd=new Date(y2,m2,0,23,59,59); // ultimo dia del mes "hasta"
   const nMesesRango=(y2*12+m2)-(y1*12+m1)+1;
 
-  // Credito segun el modo del analisis: cuotas del periodo (arrastre) o
-  // compras realizadas en el periodo por su monto total.
-  let txs=[];
-  if(_analisisTxType!=='debito'){
-    txs=txs.concat(analisisCreditoTxs().filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;}));
-  }
-  if(_analisisTxType!=='credito'){
-    const d=getD().filter(t=>!esPrestada(t)).filter(t=>{const dt=new Date(t.date);return dt>=dateStart&&dt<=dateEnd;});
-    txs=txs.concat(d.map(t=>({...t,_tipo:'debito',_monto:t.amount||0})));
-  }
+  // Misma fuente que el modal de Analisis (analisisTxsPeriodo + agruparPorCategoria):
+  // el informe SIEMPRE cuadra con lo que se ve en pantalla.
+  const txs=analisisTxsPeriodo(dateStart,dateEnd);
   if(!txs.length){ showToast('No hay gastos en ese rango de meses','var(--yellow)'); return; }
-
-  const cats=getCategorias();
-  const catMap={};
-  cats.forEach(c=>{catMap[c.id]={...c,total:0,count:0,items:[]};});
-  catMap['']={id:'',name:'Sin categoría',emoji:'❓',color:'#555',total:0,count:0,items:[]};
-  txs.forEach(t=>{
-    const cid=t.catId||'';
-    if(!catMap[cid]) catMap[cid]={id:cid,name:'Sin categoría',emoji:'❓',color:'#555',total:0,count:0,items:[]};
-    catMap[cid].total+=t._monto; catMap[cid].count++; catMap[cid].items.push(t);
-  });
-  const catData=Object.values(catMap).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
-  const grandTotal=catData.reduce((s,c)=>s+c.total,0);
+  const {catData,grandTotal}=agruparPorCategoria(txs);
   const totCred=txs.filter(t=>t._tipo==='credito').reduce((s,t)=>s+t._monto,0);
   const totDeb=txs.filter(t=>t._tipo==='debito').reduce((s,t)=>s+t._monto,0);
   const rangoLabel=d1===d2?mesLabel(d1):(mesLabel(d1)+' - '+mesLabel(d2));
