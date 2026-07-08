@@ -224,6 +224,16 @@ function fmtUSD(n){return 'USD '+parseFloat(n).toFixed(2)}
 function fmtPct(n){return n.toFixed(1)+'%'}
 function getIcon(d){const u=(d||'').toUpperCase();for(const[k,v]of Object.entries(ICONS))if(u.includes(k))return v;return ICONS.DEFAULT}
 
+// Escapa texto de usuario antes de interpolarlo en innerHTML. Descripciones y
+// nombres pueden venir de la URL (?desc=...), correos, cartolas o PDFs: nunca
+// deben interpretarse como HTML (XSS almacenado). Los datos se guardan crudos;
+// el escape es SIEMPRE al renderizar.
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+// Para argumentos string dentro de onclick="fn('X')": escapa JS (\ y ') y
+// luego HTML — el navegador decodifica las entidades del atributo antes de
+// parsear el JS, asi el valor llega intacto y no puede cerrar la comilla.
+function escJsAttr(s){return esc(String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"));}
+
 function getBillingDay(cardId){
   // Retorna el día de cierre de una tarjeta específica, o el global si no se especifica
   const dates=getBillingDates();
@@ -746,7 +756,7 @@ function showPreview(rows){
   if(!rows.length){showToast('No se encontraron transacciones','var(--yellow)');return}
   document.getElementById('preview-count').textContent=rows.length+' movimientos';
   document.getElementById('preview-table').innerHTML='<thead><tr><th>Fecha</th><th>Descripcion</th><th>Monto</th></tr></thead><tbody>'
-    +rows.slice(0,50).map(r=>'<tr><td>'+new Date(r.date).toLocaleDateString('es-CL')+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+r.rawDesc+'</td><td style="font-weight:600">'+fmtCLP(r.amount)+'</td></tr>').join('')+'</tbody>';
+    +rows.slice(0,50).map(r=>'<tr><td>'+new Date(r.date).toLocaleDateString('es-CL')+'</td><td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.rawDesc)+'</td><td style="font-weight:600">'+fmtCLP(r.amount)+'</td></tr>').join('')+'</tbody>';
   document.getElementById('preview-box').classList.add('visible');
 }
 function discardPreview(){pendingRows=[];document.getElementById('preview-box').classList.remove('visible');}
@@ -923,8 +933,9 @@ function aplazadaTag(off){ return off>0?` <span style="font-size:9px;font-weight
 // Botones de aplazar/reactivar (para ¿Qué debo? y Deudas)
 function aplazarControlHTML(txId, off){
   const b='font-size:10px;font-weight:600;padding:3px 8px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer';
-  if(off>0) return `<button onclick="aplazarCompra('${txId}',1)" style="${b}">⏳ Aplazar +1</button><button onclick="aplazarCompra('${txId}',-1)" style="${b};color:var(--accent2);border-color:var(--accent2)">↩ Reactivar</button>`;
-  return `<button onclick="aplazarCompra('${txId}',1)" style="${b}">⏳ Aún no facturada · Aplazar</button>`;
+  const id=escJsAttr(txId); // el txId puede venir de fuentes externas (sync de correos)
+  if(off>0) return `<button onclick="aplazarCompra('${id}',1)" style="${b}">⏳ Aplazar +1</button><button onclick="aplazarCompra('${id}',-1)" style="${b};color:var(--accent2);border-color:var(--accent2)">↩ Reactivar</button>`;
+  return `<button onclick="aplazarCompra('${id}',1)" style="${b}">⏳ Aún no facturada · Aplazar</button>`;
 }
 
 function markAllCyclePaid(){
@@ -986,7 +997,7 @@ function renderDeudas(){
     const aplazarLine=(tipo==='credito'&&!it.paid)?`<div style="flex-basis:100%;display:flex;gap:6px;margin-top:8px">${aplazarControlHTML(d.txId, off)}</div>`:'';
     return `<div class="deuda-item ${it.paid?'paid':''}" style="flex-wrap:wrap">
       <div class="deuda-item-info">
-        <div class="deuda-item-title">${tipoBadge}<span class="deuda-item-desc">${d.desc}</span>${aplazadaTag(off)}</div>
+        <div class="deuda-item-title">${tipoBadge}<span class="deuda-item-desc">${esc(d.desc)}</span>${aplazadaTag(off)}</div>
         <div class="deuda-item-meta">${dateStr}${cuotaStr}${it.paid?' · ✅ Cobrada':''}</div>
       </div>
       <div class="deuda-item-amount">
@@ -1008,9 +1019,9 @@ function renderDeudas(){
       ?`<button class="btn-mark-all-cycle" onclick="markAllCyclePaid()">✓ Marcar todo cobrado (${unpaidCount})</button>`:'';
     const cardsHTML=Object.entries(byPerson).map(([person,pItems])=>{
       const pendTotal=pItems.filter(i=>!i.paid).reduce((s,i)=>s+i.amt,0);
-      const shareBtn=pendTotal>0?`<button onclick="compartirDeuda('${person.replace(/'/g,"\\'")}','${section}')" title="Compartir deudas de ${person}" style="background:var(--accent2);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;padding:5px 11px;cursor:pointer;flex-shrink:0">📤 Compartir</button>`:'';
+      const shareBtn=pendTotal>0?`<button onclick="compartirDeuda('${escJsAttr(person)}','${section}')" title="Compartir deudas de ${esc(person)}" style="background:var(--accent2);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;padding:5px 11px;cursor:pointer;flex-shrink:0">📤 Compartir</button>`:'';
       return `<div class="deuda-person-card">
-        <div class="deuda-person-header"><h3>👤 ${person}</h3><div style="display:flex;align-items:center;gap:10px"><span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span>${shareBtn}</div></div>
+        <div class="deuda-person-header"><h3>👤 ${esc(person)}</h3><div style="display:flex;align-items:center;gap:10px"><span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span>${shareBtn}</div></div>
         ${pItems.sort((a,b)=>(new Date(b.d.date)-new Date(a.d.date))||a.k-b.k).map(renderInstItem).join('')}
       </div>`;
     }).join('');
@@ -1321,7 +1332,7 @@ function renderPersonasAjustes(){
   if(!el) return;
   el.innerHTML=personas.map((p,i)=>`
     <div class="settings-row" style="gap:10px">
-      <span class="row-label" style="flex:1">👤 ${p}</span>
+      <span class="row-label" style="flex:1">👤 ${esc(p)}</span>
       <button onclick="deletePersona(${i})" style="padding:5px 12px;border-radius:8px;border:1px solid var(--red);background:transparent;color:var(--red);font-size:12px;font-weight:600;cursor:pointer">Eliminar</button>
     </div>`).join('');
 }
@@ -1342,11 +1353,11 @@ function renderServiciosAjustes(){
   const servicios=getServiciosHogar();
   el.innerHTML=servicios.map(s=>`
     <div class="settings-row" style="gap:10px">
-      <span style="font-size:18px">${s.emoji}</span>
-      <span class="row-label" style="flex:1">${s.name}</span>
+      <span style="font-size:18px">${esc(s.emoji)}</span>
+      <span class="row-label" style="flex:1">${esc(s.name)}</span>
       <span style="font-size:12px;color:var(--text2)">día ${s.day}</span>
-      <button onclick="openEditServicioModal('${s.id}')" style="background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;padding:4px 6px">✏️</button>
-      <button onclick="deleteServicio('${s.id}')" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 6px">🗑️</button>
+      <button onclick="openEditServicioModal('${escJsAttr(s.id)}')" style="background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;padding:4px 6px">✏️</button>
+      <button onclick="deleteServicio('${escJsAttr(s.id)}')" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 6px">🗑️</button>
     </div>`).join('');
 }
 function openAddServicioModal(){
@@ -1405,11 +1416,11 @@ function renderCategoriasAjustes(){
   if(catList){
     catList.innerHTML=cats.map(c=>`
       <div class="settings-row" style="gap:10px">
-        <span style="font-size:18px">${c.emoji}</span>
-        <span class="row-label" style="flex:1">${c.name}</span>
-        <span style="width:14px;height:14px;border-radius:50%;background:${c.color};display:inline-block;flex-shrink:0"></span>
-        <button onclick="openEditCatModal('${c.id}')" style="background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;padding:4px 6px">✏️</button>
-        <button onclick="deleteCat('${c.id}')" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 6px">🗑️</button>
+        <span style="font-size:18px">${esc(c.emoji)}</span>
+        <span class="row-label" style="flex:1">${esc(c.name)}</span>
+        <span style="width:14px;height:14px;border-radius:50%;background:${esc(c.color)};display:inline-block;flex-shrink:0"></span>
+        <button onclick="openEditCatModal('${escJsAttr(c.id)}')" style="background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;padding:4px 6px">✏️</button>
+        <button onclick="deleteCat('${escJsAttr(c.id)}')" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 6px">🗑️</button>
       </div>`).join('');
   }
   // Render rules list
@@ -1418,8 +1429,8 @@ function renderCategoriasAjustes(){
     ruleList.innerHTML=rules.length?rules.map((r,i)=>{
       const cat=getCatById(r.catId);
       return `<div class="settings-row" style="gap:10px">
-        <span style="font-size:16px">${cat?cat.emoji:'❓'}</span>
-        <span class="row-label" style="flex:1">"${r.keyword}" → ${cat?cat.name:'Desconocida'}</span>
+        <span style="font-size:16px">${cat?esc(cat.emoji):'❓'}</span>
+        <span class="row-label" style="flex:1">"${esc(r.keyword)}" → ${cat?esc(cat.name):'Desconocida'}</span>
         <button onclick="deleteRule(${i})" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 6px">🗑️</button>
       </div>`;
     }).join(''):'<div style="padding:8px 0;color:var(--text2);font-size:13px">Sin reglas aún. Agrega una para auto-categorizar cartolas.</div>';
@@ -1491,7 +1502,7 @@ function deleteCat(id){
 function openAddRuleModal(){
   document.getElementById('rule-keyword-input').value='';
   const cats=getCategorias();
-  document.getElementById('rule-cat-select').innerHTML=cats.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
+  document.getElementById('rule-cat-select').innerHTML=cats.map(c=>`<option value="${esc(c.id)}">${esc(c.emoji)} ${esc(c.name)}</option>`).join('');
   document.getElementById('add-rule-overlay').classList.add('open');
 }
 function closeAddRuleModal(e){
@@ -1614,7 +1625,7 @@ function checkCobroReminder(){
   const byPerson={};
   pend.forEach(i=>{byPerson[i.d.person]=(byPerson[i.d.person]||0)+i.amt;});
   document.getElementById('cobro-reminder-list').innerHTML=Object.entries(byPerson).map(([person,total],i)=>
-    `<div class="payment-card-row"><div class="payment-card-info"><span class="payment-card-name">👤 ${person}</span><span class="payment-card-amount" style="color:var(--accent2)">${fmtCLP(total)}</span></div><button class="payment-paid-btn cobro-paid-btn" id="cobro-btn-${i}" onclick="markPersonCobrado('${person.replace(/'/g,"\\'")}',${i})">✓ Cobrado</button></div>`
+    `<div class="payment-card-row"><div class="payment-card-info"><span class="payment-card-name">👤 ${esc(person)}</span><span class="payment-card-amount" style="color:var(--accent2)">${fmtCLP(total)}</span></div><button class="payment-paid-btn cobro-paid-btn" id="cobro-btn-${i}" onclick="markPersonCobrado('${escJsAttr(person)}',${i})">✓ Cobrado</button></div>`
   ).join('');
   document.getElementById('cobro-reminder-overlay').classList.add('open');
 }
@@ -1647,7 +1658,7 @@ function checkServiciosReminder(){
   });
   if(!pendientes.length) return;
   document.getElementById('servicios-reminder-list').innerHTML=pendientes.map(s=>
-    `<div class="payment-card-row"><div class="payment-card-info"><span class="payment-card-name">${s.emoji} ${s.name}</span><span class="payment-card-amount">vence día ${s.day}</span></div><button class="payment-paid-btn servicio-paid-btn" id="serv-btn-${s.id}" onclick="markServicioPagado('${s.id}','${monthKey}')">✓ Pagado</button></div>`
+    `<div class="payment-card-row"><div class="payment-card-info"><span class="payment-card-name">${esc(s.emoji)} ${esc(s.name)}</span><span class="payment-card-amount">vence día ${s.day}</span></div><button class="payment-paid-btn servicio-paid-btn" id="serv-btn-${esc(s.id)}" onclick="markServicioPagado('${escJsAttr(s.id)}','${monthKey}')">✓ Pagado</button></div>`
   ).join('');
   document.getElementById('servicios-reminder-overlay').classList.add('open');
 }
@@ -1683,14 +1694,14 @@ function checkSinClasificarReminder(){
     return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.desc||'Sin descripción'}</div>
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.desc)||'Sin descripción'}</div>
           <div style="font-size:11px;color:var(--text2)">${t._tipo==='debito'?'Débito':'Crédito'} · ${fecha}</div>
         </div>
         <div style="font-size:13px;font-weight:700;flex-shrink:0">${monto}</div>
       </div>
-      <select id="sinclasificar-cat-${i}" data-txid="${t.id}" data-txtype="${t._tipo}" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">
+      <select id="sinclasificar-cat-${i}" data-txid="${esc(t.id)}" data-txtype="${t._tipo}" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px">
         <option value="" ${sugerida?'':'selected'}>Sin categoría</option>
-        ${cats.map(c=>`<option value="${c.id}" ${sugerida===c.id?'selected':''}>${c.emoji} ${c.name}</option>`).join('')}
+        ${cats.map(c=>`<option value="${esc(c.id)}" ${sugerida===c.id?'selected':''}>${esc(c.emoji)} ${esc(c.name)}</option>`).join('')}
       </select>
     </div>`;
   }).join('');
@@ -1797,7 +1808,7 @@ function openEditModal(txId, txType){
       <div style="background:var(--bg3);border-radius:10px;padding:12px">
         <div style="margin-bottom:10px">
           <div style="font-size:11px;color:var(--text2);margin-bottom:2px">${esPrest?'🤝 Prestada a (te lo deben)':'Dividido con'}</div>
-          <div style="font-size:13px;font-weight:600">👤 ${tx.splitWith}</div>
+          <div style="font-size:13px;font-weight:600">👤 ${esc(tx.splitWith)}</div>
         </div>
         <div style="display:flex;gap:8px">
           <button onclick="modifySplit()" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--accent2);background:transparent;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer">✏️ Modificar</button>
@@ -1944,9 +1955,9 @@ function txHTML(t){
   const amt=esCuota&&t.currency==='CLP'?fmtCLP(t._monto):(t.currency==='USD'?fmtUSD(t.amount):fmtCLP(t.amount));
   const cuota=esCuota?('cuota '+t._cuotaNum+'/'+t._cuotaTotal):(!isD&&t.cuotas>1?t.cuotas+' cuotas':(isD?'Débito':'Contado'));
   const txType=isD?'debito':'credito';
-  return`<div class="tx-item ${isD?'debito':''}" oncontextmenu="openTxMenu(event,'${t.id}','${txType}')" ontouchstart="startTxHold(event,'${t.id}','${txType}')" ontouchend="cancelTxHold()" ontouchmove="cancelTxHold()">
+  return`<div class="tx-item ${isD?'debito':''}" oncontextmenu="openTxMenu(event,'${escJsAttr(t.id)}','${txType}')" ontouchstart="startTxHold(event,'${escJsAttr(t.id)}','${txType}')" ontouchend="cancelTxHold()" ontouchmove="cancelTxHold()">
     <div class="tx-icon" style="background:${color}22">${getIcon(t.desc)}</div>
-    <div class="tx-info"><div class="tx-name">${t.desc||'Sin descripción'}${esPrestada(t)?' <span style="font-size:9px;font-weight:700;color:var(--accent2);background:rgba(167,139,250,.15);padding:1px 6px;border-radius:6px;vertical-align:middle">🤝 PRESTADA</span>':''}${!isD?aplazadaTag(t.cycleOffset||0):''}</div><div class="tx-meta">${bank} · ${date}</div></div>
+    <div class="tx-info"><div class="tx-name">${esc(t.desc)||'Sin descripción'}${esPrestada(t)?' <span style="font-size:9px;font-weight:700;color:var(--accent2);background:rgba(167,139,250,.15);padding:1px 6px;border-radius:6px;vertical-align:middle">🤝 PRESTADA</span>':''}${!isD?aplazadaTag(t.cycleOffset||0):''}</div><div class="tx-meta">${esc(bank)} · ${date}</div></div>
     <div class="tx-amount"><div class="amount" style="color:${esPrestada(t)?'var(--text2)':(t.amount<0?'var(--green)':(isD?'var(--blue)':'var(--text)'))}">${amt}</div><div class="cuotas">${esPrestada(t)?'por cobrar':cuota}</div></div>
   </div>`;
 }
@@ -1963,7 +1974,7 @@ function populateCatSelect(selectId, selectedId){
   const cats=getCategorias();
   const sel=document.getElementById(selectId);
   if(!sel) return;
-  sel.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${c.id}" ${c.id===selectedId?'selected':''}>${c.emoji} ${c.name}</option>`).join('');
+  sel.innerHTML='<option value="">Sin categoría</option>'+cats.map(c=>`<option value="${esc(c.id)}" ${c.id===selectedId?'selected':''}>${esc(c.emoji)} ${esc(c.name)}</option>`).join('');
 }
 function openModal(){
   // Fecha de hoy en formato YYYY-MM-DD que requiere input type=date
@@ -2094,7 +2105,7 @@ function updateSplitPreview(){
   const tipoLabel=esDebito?'💳 Débito':'💳 Crédito';
   const splitLabel=_splitLent?'0%':(n+1===2?'50%':'1/'+(n+1));
   document.getElementById('split-preview-box').innerHTML=`
-    <div class="sp-row"><span class="sp-label">${tipoLabel}</span><span class="sp-val" style="font-size:0.8em;opacity:0.7">${split.desc}</span></div>
+    <div class="sp-row"><span class="sp-label">${tipoLabel}</span><span class="sp-val" style="font-size:0.8em;opacity:0.7">${esc(split.desc)}</span></div>
     <div class="sp-row"><span class="sp-label">Monto total</span><span class="sp-val">${fmtCLP(split.amount)}${!esDebito&&cuotas>1?' ('+cuotas+' cuotas)':''}</span></div>
     ${!esDebito&&cuotas>1?`<div class="sp-row"><span class="sp-label">Cuota mensual</span><span class="sp-val yellow">${fmtCLP(cuotaAmt)}</span></div>`:''}
     <div class="sp-row"><span class="sp-label">Tu parte (${splitLabel})</span><span class="sp-val green">${fmtCLP(userShare)}</span></div>
@@ -2150,7 +2161,7 @@ function splitApplyNone(){
 function renderPersonChips(){
   const personas=getPersonas();
   document.getElementById('person-chips').innerHTML=personas.map(p=>
-    `<button class="person-chip ${_splitSelectedPersons.includes(p)?'active':''}" onclick="selectPerson('${p.replace(/'/g,"\\'")}')">👤 ${p}</button>`
+    `<button class="person-chip ${_splitSelectedPersons.includes(p)?'active':''}" onclick="selectPerson('${escJsAttr(p)}')">👤 ${esc(p)}</button>`
   ).join('');
 }
 
@@ -2386,11 +2397,15 @@ function handleURLParams(){
   const p=new URLSearchParams(window.location.search);
   if(!p.has('amount')) return;
   const amount=parseFloat(p.get('amount')||0);
-  const desc=decodeURIComponent(p.get('desc')||'Gasto automático');
-  const type=p.get('type')||'credito';
-  const bank=p.get('bank')||'bci';
-  const cuotas=parseInt(p.get('cuotas')||1);
-  const currency=p.get('currency')||'CLP';
+  // p.get() YA decodifica (el decodeURIComponent extra corrompia descs con '%').
+  // La URL es una entrada REMOTA (cualquiera puede armar un link a la app):
+  // se sanea aqui (largo acotado, sin caracteres de control) y ademas todo
+  // desc se escapa al renderizar (esc en txHTML), asi nunca se interpreta HTML.
+  const desc=String(p.get('desc')||'Gasto automático').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,120)||'Gasto automático';
+  const type=p.get('type')==='debito'?'debito':'credito';
+  const bank=CARDS[p.get('bank')]?p.get('bank'):'bci';
+  const cuotas=Math.min(48,Math.max(1,parseInt(p.get('cuotas')||1)||1));
+  const currency=p.get('currency')==='USD'?'USD':'CLP';
   const rawDate=p.get('date');
   const date=rawDate?parseFecha(rawDate):new Date();
   if(!amount||amount<=0) return;
@@ -2580,7 +2595,7 @@ function renderAnalisis(){
     const xi1=cx+ri*Math.cos(startAngle),yi1=cy+ri*Math.sin(startAngle);
     const xi2=cx+ri*Math.cos(endAngle),yi2=cy+ri*Math.sin(endAngle);
     const large=angle>Math.PI?1:0;
-    slices+=`<path d="M${xi1},${yi1} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} L${xi2},${yi2} A${ri},${ri} 0 ${large} 0 ${xi1},${yi1}" fill="${c.color}" opacity="0.9"/>`;
+    slices+=`<path d="M${xi1},${yi1} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} L${xi2},${yi2} A${ri},${ri} 0 ${large} 0 ${xi1},${yi1}" fill="${esc(c.color)}" opacity="0.9"/>`;
     startAngle=endAngle;
   });
   const pieChart=`<svg viewBox="0 0 ${size} ${size}" style="width:180px;height:180px;display:block;margin:0 auto 16px">
@@ -2594,13 +2609,13 @@ function renderAnalisis(){
   const breakdown=catData.map(c=>{
     const pct=((c.total/grandTotal)*100).toFixed(1);
     const barW=Math.round((c.total/grandTotal)*100);
-    return `<div onclick="openAnalisisCatDetalle('${c.id}')" style="margin-bottom:14px;cursor:pointer">
+    return `<div onclick="openAnalisisCatDetalle('${escJsAttr(c.id)}')" style="margin-bottom:14px;cursor:pointer">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <span style="font-size:13px;font-weight:600">${c.emoji} ${c.name}</span>
+        <span style="font-size:13px;font-weight:600">${esc(c.emoji)} ${esc(c.name)}</span>
         <span style="font-size:13px;font-weight:700;color:var(--accent2)">${fmtCLP(c.total)}</span>
       </div>
       <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
-        <div style="background:${c.color};height:100%;width:${barW}%;border-radius:4px;transition:width .4s"></div>
+        <div style="background:${esc(c.color)};height:100%;width:${barW}%;border-radius:4px;transition:width .4s"></div>
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px;display:flex;justify-content:space-between">
         <span>${pct}% · ${c.count} cargo${c.count!==1?'s':''}</span>
@@ -2630,9 +2645,9 @@ function renderAnalisisCatDetalle(cat,itemsInCat){
   document.getElementById('analisis-content').innerHTML=`
     <button onclick="closeAnalisisCatDetalle()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-bottom:14px">← Volver al resumen</button>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-      <span style="font-size:22px">${cat.emoji}</span>
+      <span style="font-size:22px">${esc(cat.emoji)}</span>
       <div style="flex:1">
-        <div style="font-size:16px;font-weight:700">${cat.name}</div>
+        <div style="font-size:16px;font-weight:700">${esc(cat.name)}</div>
         <div style="font-size:12px;color:var(--text2)">${itemsInCat.length} cargo${itemsInCat.length!==1?'s':''}</div>
       </div>
       <div style="font-size:18px;font-weight:700;color:var(--accent2)">${fmtCLP(total)}</div>
@@ -2955,7 +2970,7 @@ function renderQueDebo(){
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:10px;height:10px;border-radius:50%;background:${card.color};flex-shrink:0" title="${card.bank}"></div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tx.desc||'Sin descripción'}${aplazadaTag(off)}</div>
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(tx.desc)||'Sin descripción'}${aplazadaTag(off)}</div>
           <div style="font-size:11px;color:var(--text2);margin-top:2px">${card.bank} · ${fecha} · ${nCuotas}${montoFull}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
@@ -3175,14 +3190,14 @@ function renderConciliaReview(){
 
   const okHTML=ok.length?ok.map(e=>fila(`
     <span style="color:var(--green);flex-shrink:0">✅</span>
-    <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.tx.desc}</div>
-    <div style="font-size:11px;color:var(--text2)">${fmtF(e.tx.date)}${e.cuotasTotal>1?' · cuota '+e.cuotaNum+'/'+e.cuotasTotal:''} · en cartola: "${(e.match.rawDesc||e.match.desc||'').slice(0,28)}"</div></div>
+    <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.tx.desc)}</div>
+    <div style="font-size:11px;color:var(--text2)">${fmtF(e.tx.date)}${e.cuotasTotal>1?' · cuota '+e.cuotaNum+'/'+e.cuotasTotal:''} · en cartola: "${esc((e.match.rawDesc||e.match.desc||'').slice(0,28))}"</div></div>
     <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(e.bankAmt)}</span>`)).join('')
     :'<div style="font-size:12px;color:var(--text2);padding:6px 0">Ninguna coincidencia</div>';
 
   const sfHTML=sinFacturar.length?sinFacturar.map((e,i)=>fila(`
-    <input type="checkbox" class="concilia-aplazar" data-txid="${e.tx.id}" checked style="width:17px;height:17px;flex-shrink:0;accent-color:var(--yellow)">
-    <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.tx.desc}</div>
+    <input type="checkbox" class="concilia-aplazar" data-txid="${esc(e.tx.id)}" checked style="width:17px;height:17px;flex-shrink:0;accent-color:var(--yellow)">
+    <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.tx.desc)}</div>
     <div style="font-size:11px;color:var(--text2)">${fmtF(e.tx.date)}${e.cuotasTotal>1?' · cuota '+e.cuotaNum+'/'+e.cuotasTotal:''} · no aparece en la cartola</div></div>
     <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(e.bankAmt)}</span>`)).join('')
     :'<div style="font-size:12px;color:var(--text2);padding:6px 0">Todo lo esperado aparece en la cartola 🎉</div>';
@@ -3190,7 +3205,7 @@ function renderConciliaReview(){
   const exHTML=extras.length?extras.map((r,i)=>fila(`
     <input type="checkbox" class="concilia-registrar" data-idx="${i}" style="width:17px;height:17px;flex-shrink:0;accent-color:var(--accent)">
     <div style="flex:1;min-width:0">
-      <input type="text" id="concilia-desc-${i}" value="${String(r.desc||'').replace(/"/g,'&quot;')}" placeholder="Descripción" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 8px;color:var(--text);font-size:13px;font-weight:600;margin-bottom:3px;box-sizing:border-box" />
+      <input type="text" id="concilia-desc-${i}" value="${esc(r.desc)}" placeholder="Descripción" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 8px;color:var(--text);font-size:13px;font-weight:600;margin-bottom:3px;box-sizing:border-box" />
       <div style="font-size:11px;color:var(--text2)">${fmtF(r.date)}${r.cuotas>1?' · '+r.cuotas+' cuotas':''} · está en la cartola, no en la app</div>
     </div>
     <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(r.amount)}</span>`)).join('')
