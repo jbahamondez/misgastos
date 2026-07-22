@@ -2255,9 +2255,15 @@ window.addExpenseFromShortcut=function(cardId,amount,desc,cuotas,currency){
   saveC(d); renderDashboard(); return'OK';
 };
 window.parseEmailBCI=function(body){
-  // Monto: acepta "$75.462" o "Monto $75.462"
-  const m=body.match(/Monto\s*\$?\s*([\d.,]+)/i)||body.match(/\$\s*([\d.,]+)/);
+  // Monto: nacional "Monto $75.462" o internacional "Monto USD 23,80" (compra en
+  // comercio internacional). Mismo formato de numero chileno (punto=miles, coma=
+  // decimal); solo cambia el prefijo y la moneda. Antes solo se leia el formato con
+  // "$" en pesos, por eso los cobros en dolares (ej. Anthropic, OpenAI) no entraban.
+  const um=body.match(/Monto\s*USD\s*([\d.,]+)/i)||body.match(/\bUSD\s*([\d.,]+)/i);
+  const cm2=body.match(/Monto\s*\$?\s*([\d.,]+)/i)||body.match(/\$\s*([\d.,]+)/);
+  const m=um||cm2;
   if(!m)return null;
+  const currency=um?'USD':'CLP';
   const amount=parseFloat(m[1].replace(/\./g,'').replace(',','.'));
   // Comercio: todo lo que viene después de "Comercio" hasta salto de línea o "Cuotas"
   const cm=body.match(/Comercio\s+([^\n\r]+?)(?:\s*(?:Cuotas|$))/is)||body.match(/Comercio\s+([^\n\r]+)/i);
@@ -2265,7 +2271,7 @@ window.parseEmailBCI=function(body){
   // Cuotas: 0 o vacío = 1 cuota
   const qm=body.match(/Cuotas\s+(\d+)/i);
   const cuotas=qm?Math.max(1,parseInt(qm[1])):1;
-  return window.addExpenseFromShortcut('bci',amount,desc,cuotas,'CLP');
+  return window.addExpenseFromShortcut('bci',amount,desc,cuotas,currency);
 };
 window.parseEmailBancoChile=function(body){
   const m=body.match(/compra por \$([\d.,]+) con Tarjeta de Credito \*+(\d+) en (.+?) el/i);
@@ -2373,21 +2379,27 @@ async function syncFromSheets(){
       if(!txId||!amount) continue;
       const existing=[...getC(),...getD()].find(t=>t.id===txId);
       if(existing) continue;
+      // Respeta la moneda que envia la cola (compras internacionales = USD). Antes
+      // se forzaba 'CLP', por lo que los cobros en dolares (ej. Anthropic, OpenAI)
+      // quedaban con moneda y magnitud equivocadas. Default CLP para filas sin
+      // moneda (compatibilidad con la cola actual).
+      const cur=String(currency||'').toUpperCase()==='USD'?'USD':'CLP';
+      const amt=parseFloat(amount);
       if(type==='debito'){
         const d=getD();
-        d.push({id:txId,bank,amount:parseFloat(amount),desc,currency:'CLP',
+        d.push({id:txId,bank,amount:amt,desc,currency:cur,
           date:(date?new Date(date):new Date()).toISOString(),source:'email_auto',catId:autoCategorize(desc)||''});
         saveD(d);
-        pendingSplits.push({txId,amount:parseFloat(amount),desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito'});
+        pendingSplits.push({txId,amount:amt,desc,cuotas:1,currency:cur,cardId:bank,type:'debito'});
       } else {
         const d=getC();
-        d.push({id:txId,cardId:bank,amount:parseFloat(amount),desc,cuotas:parseInt(cuotas)||1,currency:'CLP',
+        d.push({id:txId,cardId:bank,amount:amt,desc,cuotas:parseInt(cuotas)||1,currency:cur,
           date:(date?new Date(date):new Date()).toISOString(),source:'email_auto',catId:autoCategorize(desc)||''});
         saveC(d);
-        pendingSplits.push({txId,amount:parseFloat(amount),desc,cuotas:parseInt(cuotas)||1,currency:'CLP',cardId:bank,type:'credito'});
+        pendingSplits.push({txId,amount:amt,desc,cuotas:parseInt(cuotas)||1,currency:cur,cardId:bank,type:'credito'});
       }
       imported++;
-      toasts.push({msg:desc+' — '+fmtCLP(parseFloat(amount)),type});
+      toasts.push({msg:desc+' — '+(cur==='USD'?fmtUSD(amt):fmtCLP(amt)),type});
     }
     if(imported>0){
       renderDashboard(); renderDebito();
