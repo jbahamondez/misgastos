@@ -41,15 +41,31 @@ Check 'PARSE-EMAIL-USD-MONTO-GRANDE' @'
 })()
 '@
 
-Check 'SYNCFROMSHEETS-RESPETA-USD' @'
+Check 'PARSE-MONTO-COLA' @'
+(function(){
+  // numero directo, string con punto, string chileno con coma, entero nacional,
+  // y USD grande con miles+coma. parseFloat("23,8")=23 (bug historico) -> aqui 23.8
+  return JSON.stringify({pass:
+    parseMontoCola(23.8)===23.8 &&
+    parseMontoCola("23.8")===23.8 &&
+    parseMontoCola("23,8")===23.8 &&
+    parseMontoCola(23800)===23800 &&
+    parseMontoCola("23800")===23800 &&
+    parseMontoCola("1.234,56")===1234.56,
+    comaStr:parseMontoCola("23,8"), milesComa:parseMontoCola("1.234,56")});
+})()
+'@
+
+Check 'SYNCFROMSHEETS-RESPETA-USD-Y-COMA' @'
 (async function(){
   localStorage.setItem('gastos_credito_v2','[]');
   localStorage.setItem('gastos_debito_v2','[]');
   localStorage.removeItem('misgastos_sync_last');
   const realFetch=window.fetch;
   window.fetch=function(url,opts){
+    // el monto USD llega como TEXTO "23,8" (caso real de Google Sheets en locale CL)
     if(String(url).indexOf('getPending')>=0) return Promise.resolve({ok:true,text:()=>Promise.resolve(JSON.stringify({rows:[
-      ['imp_usd_1','bci','credito',23.8,'ANTHROPIC* CLAUDE SUB',1,'USD','2026-07-20T16:15:00.000Z'],
+      ['imp_usd_1','bci','credito','23,8','ANTHROPIC* CLAUDE SUB',1,'USD','2026-07-20T16:15:00.000Z'],
       ['imp_clp_1','bci','credito',23800,'JUMBO',3,'CLP','2026-07-18T12:00:00.000Z'],
       ['imp_empty_1','bci','debito',5000,'FARMACIA',1,'','2026-07-19T12:00:00.000Z']
     ]}))});

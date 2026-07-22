@@ -2389,6 +2389,17 @@ function showToast(msg,color){
 const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbwxWhRJehKodrfiPFu5iG6gwaMq2JtX6sRwm5ngKTjduB2v6W2d14p-WD9mF4swUoFj/exec';
 const LS_SYNC='misgastos_sync_last';
 
+// Parsea el monto que llega en una fila de la cola. Normalmente es un numero, pero
+// si llega como TEXTO en formato chileno con coma decimal (ej. "23,8", que traen los
+// montos USD), parseFloat lo cortaria en la coma y daria 23; por eso convertimos la
+// coma a punto (y quitamos los puntos de miles) antes. Sin coma se parsea directo,
+// asi los enteros nacionales (23800 / "23800") no se tocan.
+function parseMontoCola(v){
+  if(typeof v==='number') return v;
+  const s=String(v).trim();
+  return parseFloat(s.indexOf(',')>=0 ? s.replace(/\./g,'').replace(',','.') : s)||0;
+}
+
 async function syncFromSheets(){
   // Evitar sync si ya se hizo en los últimos 15 segundos
   const last=parseInt(localStorage.getItem(LS_SYNC)||'0');
@@ -2415,7 +2426,7 @@ async function syncFromSheets(){
       // quedaban con moneda y magnitud equivocadas. Default CLP para filas sin
       // moneda (compatibilidad con la cola actual).
       const cur=String(currency||'').toUpperCase()==='USD'?'USD':'CLP';
-      const amt=parseFloat(amount);
+      const amt=parseMontoCola(amount);
       if(type==='debito'){
         const d=getD();
         d.push({id:txId,bank,amount:amt,desc,currency:cur,
