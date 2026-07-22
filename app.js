@@ -23,6 +23,13 @@ function saveC(a,opts){localStorage.setItem(LS_C,JSON.stringify(a));syncCollecti
 function saveD(a,opts){localStorage.setItem(LS_D,JSON.stringify(a));syncCollectionToCloud('transactions_debit',a,opts)}
 function getSueldo(){return parseFloat(localStorage.getItem(LS_S)||'0')}
 function setSueldo(v){localStorage.setItem(LS_S,String(v));syncSettingsToCloud()}
+// Valor de 1 USD en CLP, configurable en Ajustes. 0 = sin definir: los cobros en
+// dolares NO se convierten ni suman a los totales en pesos (comportamiento previo).
+function getValorDolar(){return parseFloat(localStorage.getItem('misgastos_valor_dolar')||'0')||0}
+function setValorDolar(v){localStorage.setItem('misgastos_valor_dolar',String(v));syncSettingsToCloud()}
+// Lleva un monto a CLP: si es USD lo multiplica por el valor del dolar (0 => 0,
+// asi los USD no suman hasta que se define el valor). CLP queda igual.
+function aCLP(amount,currency){ return currency==='USD' ? amount*getValorDolar() : amount; }
 function getDeudas(){try{return JSON.parse(localStorage.getItem(LS_DEUDAS)||'[]')}catch{return[]}}
 function saveDeudas(a,opts){localStorage.setItem(LS_DEUDAS,JSON.stringify(a));syncCollectionToCloud('debts',a,opts)}
 function getPersonas(){try{return JSON.parse(localStorage.getItem(LS_PERSONAS)||'["🤍 Tamarindo"]')}catch{return['🤍 Tamarindo']}}
@@ -109,7 +116,7 @@ function syncCollectionToCloud(collName,localArray,opts){
 
 function syncSettingsToCloud(){
   if(!window._fb||!window._fb.syncEnabled) return;
-  cloudSet('settings','main',{sueldo:getSueldo(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
+  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
 }
 
 const LOCAL_GETTERS = {
@@ -148,6 +155,7 @@ window.applyCloudCollection=function(collName,cloudArray){
 // Llamado desde Firebase (onSnapshot) cuando cambia el doc settings/main.
 window.applyCloudSettings=function(data){
   if(data.sueldo!==undefined) localStorage.setItem(LS_S,String(data.sueldo));
+  if(data.valorDolar!==undefined) localStorage.setItem('misgastos_valor_dolar',String(data.valorDolar));
   if(data.billingDates) localStorage.setItem('misgastos_billing_dates',JSON.stringify(data.billingDates));
   if(data.paymentDates) localStorage.setItem('misgastos_payment_dates',JSON.stringify(data.paymentDates));
   if(data.paidFlags) localStorage.setItem('misgastos_paid_flags',JSON.stringify(data.paidFlags));
@@ -379,7 +387,8 @@ function renderDashboard(){
 
   // Totales
   let totCuota=0;
-  Object.values(CARDS).forEach(c=>{totCuota+=cuotaCLP(c.id);});
+  // Suma la cuota CLP + la cuota USD convertida (aCLP; 0 si no hay valor definido)
+  Object.values(CARDS).forEach(c=>{totCuota+=cuotaCLP(c.id)+aCLP(cuotaUSD(c.id),'USD');});
   const totDeb=debitoThisMonth().filter(t=>!esPrestada(t)).reduce((s,t)=>s+t.amount,0);
   const sueldo=getSueldo();
   // El widget "Total a pagar" es SOLO credito (deuda al banco). El debito ya esta
@@ -1341,6 +1350,25 @@ function renderAjustes(){
         onkeydown="if(event.key==='Enter'){this.blur()}"
       />
     </div>`).join('');
+  // Valor del dólar: convierte los cobros en USD a pesos en todos los totales
+  const vdRow=document.getElementById('valor-dolar-row');
+  if(vdRow){
+    const vd=getValorDolar();
+    vdRow.innerHTML=`
+      <div class="settings-row" style="align-items:center;gap:10px">
+        <span class="row-label" style="flex:1">Valor de 1 USD en pesos</span>
+        <input type="number" min="0" inputmode="numeric" value="${vd||''}" placeholder="Ej: 950"
+          style="width:90px;text-align:right;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"
+          onblur="updateValorDolar(this.value)" onkeydown="if(event.key==='Enter'){this.blur()}" />
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>`;
+  }
+}
+function updateValorDolar(v){
+  const n=Math.max(0,parseFloat(v)||0);
+  setValorDolar(n);
+  renderDashboard();
+  showToast(n>0?('Valor del dólar: '+fmtCLP(n)):'Valor del dólar sin definir');
 }
 
 // ── Categorías ────────────────────────────────────────────────────────────
@@ -1973,7 +2001,10 @@ function txHTML(t){
   // Filas expandidas por cuotasMensuales (detalle de Analisis): muestran la
   // cuota del mes (monto mensual + "cuota k/n"), no la compra completa.
   const esCuota=!isD&&t._cuotaTotal>1;
-  const amt=esCuota&&t.currency==='CLP'?fmtCLP(t._monto):(t.currency==='USD'?fmtUSD(t.amount):fmtCLP(t.amount));
+  const _vd=getValorDolar();
+  // USD: monto en dolares y, si hay valor definido, estimado en pesos al lado
+  const amtUSD=fmtUSD(t.amount)+(_vd>0?` <span style="font-size:10px;color:var(--text2);font-weight:400">≈ ${fmtCLP(t.amount*_vd)}</span>`:'');
+  const amt=esCuota&&t.currency==='CLP'?fmtCLP(t._monto):(t.currency==='USD'?amtUSD:fmtCLP(t.amount));
   const cuota=esCuota?('cuota '+t._cuotaNum+'/'+t._cuotaTotal):(!isD&&t.cuotas>1?t.cuotas+' cuotas':(isD?'Débito':'Contado'));
   const txType=isD?'debito':'credito';
   return`<div class="tx-item ${isD?'debito':''}" oncontextmenu="openTxMenu(event,'${escJsAttr(t.id)}','${txType}')" ontouchstart="startTxHold(event,'${escJsAttr(t.id)}','${txType}')" ontouchend="cancelTxHold()" ontouchmove="cancelTxHold()">
@@ -2487,7 +2518,7 @@ function setAnalisisModo(m){ _analisisModo=m; renderAnalisis(); }
 // Fuente de credito segun el modo elegido (debito siempre va por su fecha)
 function analisisCreditoTxs(){
   if(_analisisModo==='compras')
-    return getC().filter(t=>!esPrestada(t)).map(t=>({...t,_tipo:'credito',_monto:t.currency==='CLP'?t.amount:0}));
+    return getC().filter(t=>!esPrestada(t)).map(t=>({...t,_tipo:'credito',_monto:aCLP(t.amount,t.currency)}));
   return cuotasMensuales();
 }
 
@@ -2502,7 +2533,7 @@ function cuotasMensuales(){
   getC().filter(t=>!esPrestada(t)).forEach(t=>{
     const n=Math.max(1,t.cuotas||1);
     const d=new Date(t.date);
-    const cuotaAmt=t.currency==='CLP'?t.amount/n:0;
+    const cuotaAmt=aCLP(t.amount,t.currency)/n;
     for(let k=0;k<n;k++){
       const m=d.getMonth()+(t.cycleOffset||0)+k;
       const ultDia=new Date(d.getFullYear(),m+1,0).getDate();
@@ -2904,6 +2935,9 @@ async function generarInformePDF(){
     };
   }
 
+  // Con valor del dolar, los USD ya vienen convertidos en _monto y suman al total,
+  // asi que el informe muestra el peso convertido; sin valor, el USD va aparte.
+  const vdPdf=getValorDolar();
   const catBloques=catData.map(c=>({
     titulo:c.name,
     subtitulo:pctTxt((c.total/grandTotal)*100)+' del total · '+c.count+' cargo'+(c.count!==1?'s':''),
@@ -2913,8 +2947,8 @@ async function generarInformePDF(){
       sub:origenPdf(t)
         +(t._cuotaTotal>1?' · cuota '+t._cuotaNum+'/'+t._cuotaTotal:'')
         +(!t._cuotaTotal&&t._tipo==='credito'&&t.cuotas>1?' · '+t.cuotas+' cuotas'+(t.currency==='CLP'?' de '+fmtCLP(t.amount/t.cuotas):''):'')
-        +(t.currency==='USD'?' · en dólares (no suma al total CLP)':''),
-      monto:t.currency==='USD'?fmtUSD(t.amount/Math.max(1,t._cuotaTotal||1)):fmtCLP(t._monto)
+        +(t.currency==='USD'?(vdPdf>0?' · '+fmtUSD(t.amount/Math.max(1,t._cuotaTotal||1))+' convertido a CLP':' · en dólares (no suma al total CLP)'):''),
+      monto:t.currency==='USD'?(vdPdf>0?fmtCLP(t._monto):fmtUSD(t.amount/Math.max(1,t._cuotaTotal||1))):fmtCLP(t._monto)
     })),
     total:{label:'Subtotal',value:fmtCLP(c.total)}
   }));
@@ -2991,10 +3025,12 @@ function renderQueDebo(){
     return;
   }
 
+  const vd=getValorDolar();
   const rows=items.map(({tx,card,cuotaNum,cuotasTotal})=>{
     const cuota=tx.amount/cuotasTotal;
     const esUSD=tx.currency==='USD';
-    const montoCuota=esUSD?fmtUSD(cuota):fmtCLP(cuota);
+    // USD: muestra el monto en dolares y, si hay valor definido, el estimado en pesos
+    const montoCuota=esUSD?(fmtUSD(cuota)+(vd>0?` <span style="font-size:10px;color:var(--text2);font-weight:400">≈ ${fmtCLP(cuota*vd)}</span>`:'')):fmtCLP(cuota);
     const nCuotas=cuotasTotal>1?`cuota ${cuotaNum} de ${cuotasTotal}`:'Contado';
     const montoFull=cuotasTotal>1?` · total ${esUSD?fmtUSD(tx.amount):fmtCLP(tx.amount)}`:'';
     const fecha=new Date(tx.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
@@ -3015,7 +3051,11 @@ function renderQueDebo(){
     </div>`;
   }).join('');
 
-  const totalStr=`${fmtCLP(totalCLP)}${totalUSD>0?' + '+fmtUSD(totalUSD):''}`;
+  // Con valor del dolar: total en pesos con el USD ya convertido. Sin valor: como
+  // antes (peso + el USD aparte, para no ocultarlo).
+  const totalStr = vd>0
+    ? fmtCLP(totalCLP+totalUSD*vd)
+    : `${fmtCLP(totalCLP)}${totalUSD>0?' + '+fmtUSD(totalUSD):''}`;
   // En listas largas, mostrar el total tambien arriba para no tener que bajar hasta el final
   const topTotal = items.length>8
     ? `<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px">

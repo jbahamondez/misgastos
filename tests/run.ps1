@@ -13,7 +13,7 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
-$ci = @('smoke','sri-guard','xss','lazy-xlsx','usd-import')  # suites de invariantes (fecha-independientes)
+$ci = @('smoke','sri-guard','xss','lazy-xlsx','usd-import','usd-conversion')  # suites de invariantes (fecha-independientes)
 
 # Ubicar el ejecutable de Edge (o Chrome) sin asumir una ruta unica
 $browser = @(
