@@ -72,6 +72,38 @@ Check 'QUEDEBO-TOTAL-FOLD' @'
 })()
 '@
 
+Check 'SPLIT-USD-DEUDA-EN-CLP' @'
+(function(){
+  localStorage.setItem('misgastos_valor_dolar','900');
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([
+    {id:'ux1',cardId:'bci',amount:23.8,desc:'ANTHROPIC',cuotas:1,currency:'USD',date:new Date().toISOString()}
+  ]));
+  localStorage.setItem('gastos_deudas_v1','[]');
+  const item={txId:'ux1',amount:23.8,desc:'ANTHROPIC',cuotas:1,currency:'USD',type:'credito',txDate:new Date().toISOString()};
+  aplicarSplit(item, ['Ana'], false);
+  const d=getDeudas().find(x=>x.txId==='ux1')||{};
+  const tx=getC().find(t=>t.id==='ux1')||{};
+  // deuda en CLP: (23.8/2)*900 = 10710 ; la tx (tu mitad) sigue en USD: 11.9
+  return JSON.stringify({pass: d.currency==='CLP' && Math.abs(d.deudaPerCuota-10710)<0.5
+    && tx.currency==='USD' && Math.abs(tx.amount-11.9)<0.01,
+    deudaCur:d.currency, deudaPer:d.deudaPerCuota, txCur:tx.currency, txAmt:tx.amount});
+})()
+'@
+
+Check 'SPLIT-PREVIEW-USD-AMBAS-MONEDAS' @'
+(function(){
+  localStorage.setItem('misgastos_valor_dolar','900');
+  _pendingSplit={txId:'ux1',amount:23.8,desc:'ANTHROPIC',cuotas:1,currency:'USD',cardId:'bci'};
+  _splitSelectedPersons=['Ana']; _splitLent=false;
+  updateSplitPreview();
+  const t=document.getElementById('split-preview-box').textContent;
+  _pendingSplit=null; _splitSelectedPersons=[];
+  // total: USD y su equivalente $21.420 ; cada persona debe en pesos: $10.710
+  return JSON.stringify({pass: t.indexOf('USD 23.80')>=0 && t.indexOf('21.420')>=0 && t.indexOf('10.710')>=0,
+    hasUSD:t.indexOf('USD 23.80')>=0, hasTotConv:t.indexOf('21.420')>=0, hasParte:t.indexOf('10.710')>=0});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

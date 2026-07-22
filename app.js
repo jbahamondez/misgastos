@@ -2131,14 +2131,21 @@ function aplicarSplit(item, personas, lent){
     if(lent) txData[idx].lent=true; else delete txData[idx].lent;
     (s.esDebito?saveD:saveC)(txData);
   }
+  // La deuda de un cobro en USD se genera en CLP (convertida al valor del dolar):
+  // a la persona se le cobra en pesos, con la tasa congelada al momento de dividir.
+  // Sin valor de dolar definido, la deuda queda en su moneda original (USD).
+  const vd=getValorDolar();
+  const aPesos=(item.currency==='USD'&&vd>0);
+  const conv=aPesos?vd:1;
+  const deudaCur=aPesos?'CLP':(item.currency||'CLP');
   const ds=getDeudas();
   personas.forEach(person=>{
     ds.push({id:'deu_'+Date.now()+'_'+Math.random().toString(36).slice(2),
       person,txId:item.txId,desc:item.desc,
       type:s.esDebito?'debito':'credito',
-      totalAmount:item.amount,cuotas:s.cuotasReal,
-      deudaPerCuota:s.personSharePerCuota,deudaTotal:s.personSharePerCuota*s.cuotasReal,
-      currency:item.currency||'CLP',date:item.txDate||new Date().toISOString(),
+      totalAmount:item.amount*conv,cuotas:s.cuotasReal,
+      deudaPerCuota:s.personSharePerCuota*conv,deudaTotal:s.personSharePerCuota*s.cuotasReal*conv,
+      currency:deudaCur,date:item.txDate||new Date().toISOString(),
       paid:false,paidDate:null});
   });
   saveDeudas(ds);
@@ -2156,13 +2163,21 @@ function updateSplitPreview(){
   const personShare=s.personSharePerCuota;
   const tipoLabel=esDebito?'💳 Débito':'💳 Crédito';
   const splitLabel=_splitLent?'0%':(n+1===2?'50%':'1/'+(n+1));
+  // Cobros en USD: el monto total/cuota se muestra en dolares y su equivalente en
+  // pesos; las partes a cobrar van en pesos (asi se genera la deuda). fmtTot muestra
+  // ambas monedas, fmtParte muestra la parte ya en pesos.
+  const esUSD=(split.currency==='USD'); const vd=getValorDolar();
+  const fmtTot=v=>esUSD?(vd>0?fmtUSD(v)+' ≈ '+fmtCLP(v*vd):fmtUSD(v)):fmtCLP(v);
+  const fmtParte=v=>esUSD?(vd>0?fmtCLP(v*vd):fmtUSD(v)):fmtCLP(v);
   document.getElementById('split-preview-box').innerHTML=`
     <div class="sp-row"><span class="sp-label">${tipoLabel}</span><span class="sp-val" style="font-size:0.8em;opacity:0.7">${esc(split.desc)}</span></div>
-    <div class="sp-row"><span class="sp-label">Monto total</span><span class="sp-val">${fmtCLP(split.amount)}${!esDebito&&cuotas>1?' ('+cuotas+' cuotas)':''}</span></div>
-    ${!esDebito&&cuotas>1?`<div class="sp-row"><span class="sp-label">Cuota mensual</span><span class="sp-val yellow">${fmtCLP(cuotaAmt)}</span></div>`:''}
-    <div class="sp-row"><span class="sp-label">Tu parte (${splitLabel})</span><span class="sp-val green">${fmtCLP(userShare)}</span></div>
-    ${n>0?`<div class="sp-row"><span class="sp-label">Cada persona debe${n>1?' (c/u)':''}</span><span class="sp-val" style="color:var(--accent2)">${fmtCLP(personShare)}</span></div>`:''}
-    ${n>1?`<div class="sp-row"><span class="sp-label">Total a cobrar (${n} personas)</span><span class="sp-val" style="color:var(--accent2)">${fmtCLP(personShare*n)}</span></div>`:''}
+    <div class="sp-row"><span class="sp-label">Monto total</span><span class="sp-val">${fmtTot(split.amount)}${!esDebito&&cuotas>1?' ('+cuotas+' cuotas)':''}</span></div>
+    ${!esDebito&&cuotas>1?`<div class="sp-row"><span class="sp-label">Cuota mensual</span><span class="sp-val yellow">${fmtTot(cuotaAmt)}</span></div>`:''}
+    <div class="sp-row"><span class="sp-label">Tu parte (${splitLabel})</span><span class="sp-val green">${fmtParte(userShare)}</span></div>
+    ${n>0?`<div class="sp-row"><span class="sp-label">Cada persona debe${n>1?' (c/u)':''}</span><span class="sp-val" style="color:var(--accent2)">${fmtParte(personShare)}</span></div>`:''}
+    ${n>1?`<div class="sp-row"><span class="sp-label">Total a cobrar (${n} personas)</span><span class="sp-val" style="color:var(--accent2)">${fmtParte(personShare*n)}</span></div>`:''}
+    ${esUSD&&vd>0?`<div class="sp-row"><span class="sp-label" style="font-size:0.82em;color:var(--text2)">La deuda se cobra en pesos (USD × ${fmtCLP(vd)})</span></div>`:''}
+    ${esUSD&&vd===0?`<div class="sp-row"><span class="sp-label" style="font-size:0.82em;color:var(--yellow)">Define el "Valor del dólar" en Ajustes para cobrar en pesos</span></div>`:''}
     ${_splitLent&&n===0?`<div class="sp-row"><span class="sp-label" style="color:var(--yellow)">Selecciona la persona a la que prestaste</span></div>`:''}`;
   const btn=document.getElementById('btn-confirm-split');
   if(btn) btn.textContent=_splitLent?(n===1?'Asignar 100% a '+_splitSelectedPersons[0]:'Asignar 100% ('+n+' personas)'):(n===0?'Dividir':total===2?'Dividir 50/50':'Dividir en '+total);
@@ -2260,6 +2275,7 @@ function confirmSplit(){
   if(!_splitSelectedPersons.length){showToast('Selecciona al menos una persona','var(--yellow)');return}
 
   const amount=_pendingSplit.amount;
+  const esUSD=(_pendingSplit.currency==='USD');
   const esPrestado=_splitLent;
   // Actualiza el gasto y crea las deudas con la matematica unica del split.
   const s=aplicarSplit(_pendingSplit, _splitSelectedPersons, esPrestado);
@@ -2269,7 +2285,10 @@ function confirmSplit(){
   renderDashboard();
   const n=_splitSelectedPersons.length;
   const names=_splitSelectedPersons.join(' y ');
-  showToast(esPrestado?'🤝 Prestada a '+names+' — te deben '+fmtCLP(amount):'💜 Dividido en '+(n+1)+' con '+names+' — '+fmtCLP(s.personSharePerCuota)+'/cuota c/u');
+  // El aviso muestra el monto en pesos si el cobro USD se convirtio (deuda en CLP)
+  const _vd=getValorDolar();
+  const fmtAviso=v=>esUSD?(_vd>0?fmtCLP(v*_vd):fmtUSD(v)):fmtCLP(v);
+  showToast(esPrestado?'🤝 Prestada a '+names+' — te deben '+fmtAviso(amount):'💜 Dividido en '+(n+1)+' con '+names+' — '+fmtAviso(s.personSharePerCuota)+'/cuota c/u');
   // Procesar siguiente en cola si hay más
   if(_splitQueue.length>0){
     setTimeout(processSplitQueue, 800);
