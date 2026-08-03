@@ -3150,9 +3150,24 @@ function renderConciliaSetup(){
     </div>`;
 }
 
+// Valor COMPLETO del producto (precio de la operacion) que la app debe comparar
+// contra la cartola, sin importar la division: la cartola muestra el precio
+// (monto operacion), no tu parte tras dividir. Prefiere splitTotal (el total
+// exacto guardado al dividir); si falta, lo reconstruye como tu parte × nº de
+// personas (deudas de esa compra); si no esta dividida, el monto normal.
+function montoRealCartola(t){
+  if(t.splitTotal && t.splitTotal > t.amount) return t.splitTotal;
+  if(!t.lent){
+    const nDeudas=getDeudas().filter(d=>d.txId===t.id).length;
+    if(nDeudas>0) return t.amount*(nDeudas+1);
+  }
+  return t.amount;
+}
+
 // Cargos que la app ESPERA en la cartola de ese ciclo. A diferencia de
-// cuotasActivasCiclo, incluye prestadas (el banco igual las cobra) y usa el
-// monto que cobro el banco: en divididas/prestadas es el total (splitTotal).
+// cuotasActivasCiclo, incluye prestadas (el banco igual las cobra). Se compara
+// contra el PRECIO completo del producto (monto operacion), no la cuota con
+// interes: la app no conoce el interes financiero, pero si el precio de compra.
 function conciliaEsperadas(cardId, offset){
   const cutDay=getBillingDay(cardId);
   const targetIdx=queDeboCycleIndex(new Date(),cutDay)+(offset||0);
@@ -3162,7 +3177,7 @@ function conciliaEsperadas(cardId, offset){
     const n=Math.max(1,t.cuotas||1);
     const base=queDeboCycleIndex(t.date,cutDay)+(t.cycleOffset||0);
     const k=targetIdx-base;
-    if(k>=0&&k<n) out.push({tx:t, cuotaNum:k+1, cuotasTotal:n, bankAmt:(t.splitTotal||t.amount)/n});
+    if(k>=0&&k<n) out.push({tx:t, cuotaNum:k+1, cuotasTotal:n, bankAmt:montoRealCartola(t)});
   });
   return out;
 }
@@ -3184,9 +3199,24 @@ function loadPdfJs(){
   }
   return _pdfjsPromise;
 }
+// Elige el monto de una linea de cartola (ya sin fecha ni cuota). Por defecto el
+// ULTIMO monto (el cargo facturado). Excepcion formato Cencosud en cuotas, que
+// trae [precio, total a pagar, cuota mensual] donde la cuota (ultimo) = total/nº
+// cuotas: ahi toma el PRECIO (monto operacion, el primero), no la cuota con
+// interes, para que calce con el precio que la app guardo de la compra.
+function montoLineaCartola(resto, cuotas){
+  const tokens=resto.match(/\$?\s*\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\$\s*\d+/g)||[];
+  const vals=tokens.map(parseMonto);
+  const esCencoCuotas = cuotas>1 && vals.length>=3 &&
+    Math.abs(Math.round(vals[vals.length-2]/cuotas) - vals[vals.length-1]) <= 2;
+  if(esCencoCuotas) return vals.find(v=>v>=100) || 0;
+  for(let k=vals.length-1;k>=0;k--){ if(vals[k]>=100) return vals[k]; }
+  return 0;
+}
+
 // Extrae movimientos de un estado de cuenta PDF (texto digital, no escaneado).
 // Heuristica: reconstruye lineas por posicion vertical y toma las que tengan
-// FECHA + MONTO; el ultimo monto de la linea es el cargo facturado.
+// FECHA + MONTO (ver montoLineaCartola para cual monto de la linea).
 async function parsePdfCartola(buf, bank){
   const pdf=await pdfjsLib.getDocument({data:buf}).promise;
   const lineas=[];
@@ -3214,10 +3244,9 @@ async function parsePdfCartola(buf, bank){
     let cuotas=1;
     const qm=resto.match(/\b(\d{1,2})\/(\d{1,2})\b/);
     if(qm && parseInt(qm[2])>1 && parseInt(qm[2])<=48){ cuotas=parseInt(qm[2]); resto=resto.replace(qm[0],' '); }
-    // montos: tokens numericos con miles (12.345) o $; el ULTIMO es el cargo
+    // monto de la linea (ultimo por defecto; precio si es cuota formato Cencosud)
     const tokens=resto.match(/\$?\s*\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\$\s*\d+/g)||[];
-    let amount=0;
-    for(let k=tokens.length-1;k>=0;k--){ const v=parseMonto(tokens[k]); if(v>=100){ amount=v; break; } }
+    const amount=montoLineaCartola(resto, cuotas);
     if(!amount) return;
     let desc=resto;
     tokens.forEach(t=>{ desc=desc.replace(t,' '); });
