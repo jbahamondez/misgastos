@@ -3183,13 +3183,21 @@ function montoRealCartola(t){
 // cuotasActivasCiclo, incluye prestadas (el banco igual las cobra). Se compara
 // contra el PRECIO completo del producto (monto operacion), no la cuota con
 // interes: la app no conoce el interes financiero, pero si el precio de compra.
-function conciliaEsperadas(cardId, offset){
+// periodo (opcional, leido de la cartola): si viene, las compras al CONTADO se
+// esperan por su FECHA real dentro de [desde,hasta] (robusto a que el banco corra
+// el cierre). Las compras en CUOTAS siempre por ciclo/arrastre (dia de cierre).
+function conciliaEsperadas(cardId, offset, periodo){
   const cutDay=getBillingDay(cardId);
   const targetIdx=queDeboCycleIndex(new Date(),cutDay)+(offset||0);
   const out=[];
   getC().forEach(t=>{
     if(t.cardId!==cardId || t.currency==='USD') return;
     const n=Math.max(1,t.cuotas||1);
+    if(n<=1 && periodo){
+      const d=new Date(t.date);
+      if(d>=periodo.desde && d<=periodo.hasta) out.push({tx:t, cuotaNum:1, cuotasTotal:1, bankAmt:montoRealCartola(t)});
+      return;
+    }
     const base=queDeboCycleIndex(t.date,cutDay)+(t.cycleOffset||0);
     const k=targetIdx-base;
     if(k>=0&&k<n) out.push({tx:t, cuotaNum:k+1, cuotasTotal:n, bankAmt:montoRealCartola(t)});
@@ -3239,6 +3247,27 @@ function montoFinanciadoLinea(resto, cuotas){
   return (Math.abs(Math.round(total/cuotas)-cuota)<=2 && total>precio) ? total : 0;
 }
 
+// Periodo real facturado que imprime la cartola (ej. BCI "PERIODO FACTURADO
+// 20-06-2026 22-07-2026"; Cencosud "PERIODO FACTURADO 21/06/2026 20/07/2026").
+// Se usa para conciliar las compras al CONTADO por su fecha real, robusto a que
+// el banco corra el dia de cierre. Ignora el periodo ANTERIOR y el PROXIMO
+// ("DE FACTURACION"/"A FACTURAR" no matchean "FACTURADO"). null si no se
+// encuentra o el rango no parece un ciclo (~1 mes) => cae al dia de cierre fijo.
+function parsePeriodoCartola(lineas){
+  const texto=(lineas||[]).join(' \n ');
+  const rx=/PERIODO\s+FACTURADO(?!\s+ANTERIOR)[\s\S]{0,40}?(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})[\s\S]{0,15}?(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/i;
+  const m=texto.match(rx);
+  if(!m) return null;
+  const a=parseFecha(m[1]), b=parseFecha(m[2]);
+  if(!a||!b) return null;
+  const d1=a<b?a:b, d2=a<b?b:a, dias=(d2-d1)/86400000;
+  if(dias<20||dias>45) return null;
+  return {
+    desde:new Date(d1.getFullYear(),d1.getMonth(),d1.getDate(),0,0,0),
+    hasta:new Date(d2.getFullYear(),d2.getMonth(),d2.getDate(),23,59,59)
+  };
+}
+
 // Extrae movimientos de un estado de cuenta PDF (texto digital, no escaneado).
 // Heuristica: reconstruye lineas por posicion vertical y toma las que tengan
 // FECHA + MONTO (ver montoLineaCartola para cual monto de la linea).
@@ -3278,6 +3307,7 @@ async function parsePdfCartola(buf, bank){
     desc=desc.replace(/[^\wÁÉÍÓÚÑáéíóúñ.*\- ]/g,' ').replace(/\s+/g,' ').trim()||'Movimiento PDF';
     res.push({id:'pdf_'+Date.now()+'_'+i, bank, rawDesc:linea.slice(0,60), desc:desc.slice(0,40), cuotas, date:fecha.toISOString(), amount, montoFinanciado:montoFinanciadoLinea(resto, cuotas)});
   });
+  res.periodo=parsePeriodoCartola(lineas); // periodo real de la cartola (o null)
   return res;
 }
 
@@ -3321,7 +3351,7 @@ function conciliaFile(evt){
 // banco) y entre candidatos con el mismo monto gana la fecha mas cercana.
 function conciliaMatch(rows){
   const offset=_conciliaPeriod==='cerrado'?-1:0;
-  const esperadas=conciliaEsperadas(_conciliaCard,offset);
+  const esperadas=conciliaEsperadas(_conciliaCard,offset,rows.periodo);
   const used=new Array(rows.length).fill(false);
   const TOL=5;
   esperadas.forEach(e=>{

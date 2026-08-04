@@ -188,6 +188,54 @@ Check 'CONCILIA-APRENDE-INTERES' @'
 })()
 '@
 
+Check 'PARSE-PERIODO-CARTOLA' @'
+(function(){
+  // BCI: ignora ANTERIOR y PROXIMO, toma el PERIODO FACTURADO actual (20/06-22/07)
+  const bci=parsePeriodoCartola([
+    'PERIODO DE FACTURACION ANTERIOR 20/05/2026 19/06/2026',
+    'PERIODO FACTURADO 20-06-2026 22-07-2026',
+    'PROXIMO PERIODO DE FACTURACION 23/07/2026 20/08/2026'
+  ]);
+  // Cencosud: PERIODO FACTURADO 21/06-20/07 (ignora el ANTERIOR)
+  const cen=parsePeriodoCartola(['PERIODO FACTURADO 21/06/2026 20/07/2026','PERIODO FACTURADO ANTERIOR 21/05/2026 20/06/2026']);
+  const okBci = bci && bci.desde.getDate()===20 && bci.desde.getMonth()===5 && bci.hasta.getDate()===22 && bci.hasta.getMonth()===6;
+  const okCen = cen && cen.desde.getDate()===21 && cen.desde.getMonth()===5 && cen.hasta.getDate()===20 && cen.hasta.getMonth()===6;
+  return JSON.stringify({pass: okBci && okCen, bci:okBci, cen:okCen});
+})()
+'@
+
+Check 'CONCILIA-PERIODO-CONTADO-CALZA' @'
+(function(){
+  // Contado 20/21/24 jun (borde) deben calzar por el periodo real; el 25/jul queda fuera.
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([
+    {id:'c20',cardId:'bci',amount:10960,desc:'IKEA 20jun',cuotas:1,currency:'CLP',date:'2026-06-20T12:00:00'},
+    {id:'c21',cardId:'bci',amount:3600,desc:'JUMBO 21jun',cuotas:1,currency:'CLP',date:'2026-06-21T12:00:00'},
+    {id:'c24',cardId:'bci',amount:5850,desc:'PARKING 24jun',cuotas:1,currency:'CLP',date:'2026-06-24T12:00:00'},
+    {id:'c25j',cardId:'bci',amount:45320,desc:'FUERA 25jul',cuotas:1,currency:'CLP',date:'2026-07-25T12:00:00'}
+  ]));
+  localStorage.setItem('gastos_deudas_v1','[]');
+  localStorage.setItem('misgastos_billing_dates', JSON.stringify({bci:22}));
+  _conciliaCard='bci'; _conciliaPeriod='cerrado';
+  const periodo={desde:new Date(2026,5,20,0,0,0), hasta:new Date(2026,6,22,23,59,59)};
+  const esp=conciliaEsperadas('bci',-1,periodo).map(e=>e.tx.id);
+  const rows=[
+    {id:'r20',amount:10960,date:'2026-06-20T12:00:00',desc:'IKEA',cuotas:1},
+    {id:'r21',amount:3600,date:'2026-06-21T12:00:00',desc:'JUMBO',cuotas:1},
+    {id:'r24',amount:5850,date:'2026-06-24T12:00:00',desc:'PARKING',cuotas:1}
+  ];
+  rows.periodo=periodo;
+  conciliaMatch(rows);
+  const facturadas=_conciliaData.esperadas.filter(e=>e.match).length;
+  const sinFacturar=_conciliaData.esperadas.filter(e=>!e.match).length;
+  return JSON.stringify({
+    // se esperan las 3 de junio (no la del 25 jul); calzan las 3; NADIE va a aplazar; sin extras
+    pass: esp.indexOf('c20')>=0 && esp.indexOf('c21')>=0 && esp.indexOf('c24')>=0 && esp.indexOf('c25j')<0
+       && facturadas===3 && sinFacturar===0 && _conciliaData.extras.length===0,
+    esp, facturadas, sinFacturar, extras:_conciliaData.extras.length
+  });
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS
