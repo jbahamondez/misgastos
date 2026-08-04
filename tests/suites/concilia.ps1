@@ -161,6 +161,33 @@ Check 'FINANCIADO-SIN-CAMPO-FACTOR-1' @'
 })()
 '@
 
+Check 'MONTOFINANCIADO-LINEA' @'
+(function(){
+  const xia=montoFinanciadoLinea('EPARIS 299.990 351.030 58.505', 6); // con interes -> 351.030
+  const bci=montoFinanciadoLinea('MP SAMSONITE 79.995 79.995 26.665', 3); // 0% (total=precio) -> 0
+  const con=montoFinanciadoLinea('JUMBO 34.825 34.825', 1); // contado -> 0
+  return JSON.stringify({pass: xia===351030 && bci===0 && con===0, xia, bci, con});
+})()
+'@
+
+Check 'CONCILIA-APRENDE-INTERES' @'
+(function(){
+  const hoy=new Date().toISOString();
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([
+    {id:'xi',cardId:'scotia',amount:149995,desc:'ASPIRADORA XIAOMI',cuotas:6,currency:'CLP',date:hoy,splitWith:'Tamarindo',splitTotal:299990}
+  ]));
+  localStorage.setItem('gastos_deudas_v1', JSON.stringify([
+    {id:'d1',person:'Tamarindo',txId:'xi',desc:'ASPIRADORA XIAOMI',type:'credito',totalAmount:299990,cuotas:6,deudaPerCuota:24999.1667,deudaTotal:149995,currency:'CLP',date:hoy,paid:false,paidDate:null}
+  ]));
+  _conciliaCard='scotia'; _conciliaPeriod='actual';
+  // fila de cartola: precio 299.990 (match) y financiado 351.030 (interes a aprender)
+  conciliaMatch([{id:'r1',amount:299990,montoFinanciado:351030,date:hoy,desc:'EPARIS',rawDesc:'EPARIS 299.990 351.030 1/6 58.505',cuotas:6}]);
+  conciliaConfirm();
+  const tx=getC().find(t=>t.id==='xi')||{};
+  return JSON.stringify({pass: tx.montoFinanciado===351030 && Math.abs(factorFinanciado(tx)-1.170139)<0.001, mf:tx.montoFinanciado});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

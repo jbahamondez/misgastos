@@ -3228,6 +3228,16 @@ function montoLineaCartola(resto, cuotas){
   for(let k=vals.length-1;k>=0;k--){ if(vals[k]>=100) return vals[k]; }
   return 0;
 }
+// "Monto total a pagar" (financiado con interes) de una linea en cuotas formato
+// Cencosud [precio, total, cuota]: es el 2do monto, SOLO si supera al precio (hay
+// interes real). 0 si no hay interes (ej. BCI 0%: total=precio) o no es ese formato.
+function montoFinanciadoLinea(resto, cuotas){
+  if(cuotas<=1) return 0;
+  const vals=(resto.match(/\$?\s*\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\$\s*\d+/g)||[]).map(parseMonto);
+  if(vals.length<3) return 0;
+  const cuota=vals[vals.length-1], total=vals[vals.length-2], precio=vals.find(v=>v>=100)||0;
+  return (Math.abs(Math.round(total/cuotas)-cuota)<=2 && total>precio) ? total : 0;
+}
 
 // Extrae movimientos de un estado de cuenta PDF (texto digital, no escaneado).
 // Heuristica: reconstruye lineas por posicion vertical y toma las que tengan
@@ -3266,7 +3276,7 @@ async function parsePdfCartola(buf, bank){
     let desc=resto;
     tokens.forEach(t=>{ desc=desc.replace(t,' '); });
     desc=desc.replace(/[^\wÁÉÍÓÚÑáéíóúñ.*\- ]/g,' ').replace(/\s+/g,' ').trim()||'Movimiento PDF';
-    res.push({id:'pdf_'+Date.now()+'_'+i, bank, rawDesc:linea.slice(0,60), desc:desc.slice(0,40), cuotas, date:fecha.toISOString(), amount});
+    res.push({id:'pdf_'+Date.now()+'_'+i, bank, rawDesc:linea.slice(0,60), desc:desc.slice(0,40), cuotas, date:fecha.toISOString(), amount, montoFinanciado:montoFinanciadoLinea(resto, cuotas)});
   });
   return res;
 }
@@ -3336,11 +3346,16 @@ function renderConciliaReview(){
   const fmtF=d=>new Date(d).toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
   const sec=(titulo,color,cuerpo)=>`<div style="margin-bottom:18px"><div style="font-size:12px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${titulo}</div>${cuerpo}</div>`;
 
-  const okHTML=ok.length?ok.map(e=>fila(`
+  const okHTML=ok.length?ok.map(e=>{
+    // interes aprendido: financiado (cartola) menos el precio (lo que espera la app)
+    const interes=(e.match.montoFinanciado||0)-e.bankAmt;
+    const notaInt=interes>5?`<div style="font-size:11px;color:var(--accent2);margin-top:2px">💡 interés detectado: +${fmtCLP(interes)} — se aplicará al confirmar</div>`:'';
+    return fila(`
     <span style="color:var(--green);flex-shrink:0">✅</span>
     <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.tx.desc)}</div>
-    <div style="font-size:11px;color:var(--text2)">${fmtF(e.tx.date)}${e.cuotasTotal>1?' · cuota '+e.cuotaNum+'/'+e.cuotasTotal:''} · en cartola: "${esc((e.match.rawDesc||e.match.desc||'').slice(0,28))}"</div></div>
-    <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(e.bankAmt)}</span>`)).join('')
+    <div style="font-size:11px;color:var(--text2)">${fmtF(e.tx.date)}${e.cuotasTotal>1?' · cuota '+e.cuotaNum+'/'+e.cuotasTotal:''} · en cartola: "${esc((e.match.rawDesc||e.match.desc||'').slice(0,28))}"</div>${notaInt}</div>
+    <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(e.bankAmt)}</span>`);
+  }).join('')
     :'<div style="font-size:12px;color:var(--text2);padding:6px 0">Ninguna coincidencia</div>';
 
   const sfHTML=sinFacturar.length?sinFacturar.map((e,i)=>fila(`
@@ -3400,11 +3415,24 @@ function conciliaConfirm(){
     });
     saveC(c2);
   }
+  // 3) Aprender el interes: en las compras que calzaron, si la cartola trae un
+  // financiado mayor al precio, guardarlo (escala cuota + deuda con factorFinanciado)
+  let intAprendidos=0;
+  const conInteres=_conciliaData.esperadas.filter(e=>e.match && (e.match.montoFinanciado||0)>e.bankAmt+5);
+  if(conInteres.length){
+    const c3=getC();
+    conInteres.forEach(e=>{
+      const idx=c3.findIndex(t=>t.id===e.tx.id);
+      if(idx>=0){ c3[idx].montoFinanciado=e.match.montoFinanciado; intAprendidos++; }
+    });
+    if(intAprendidos) saveC(c3);
+  }
   closeConciliaModal();
   renderDashboard(); renderDebito(); renderHistorial(); renderDeudas();
   const partes=[];
   if(aplazarIds.length) partes.push(aplazarIds.length+' aplazada'+(aplazarIds.length!==1?'s':''));
   if(regIdx.length) partes.push(regIdx.length+' registrada'+(regIdx.length!==1?'s':''));
+  if(intAprendidos) partes.push(intAprendidos+' con interés aprendido');
   showToast(partes.length?('✅ Conciliación aplicada: '+partes.join(' · ')):'Conciliación revisada: sin cambios');
   // Preguntar si dividir cada compra recien registrada (igual que al importar cartola)
   if(splitItems.length>0){
