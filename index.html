@@ -389,6 +389,13 @@
       <input type="checkbox" id="split-lent" onchange="toggleSplitLent()" style="width:17px;height:17px;flex-shrink:0;margin-top:1px;accent-color:var(--accent)">
       <span>🤝 No es para mí (presté mi tarjeta): el 100% queda como deuda de la persona y no cuenta como gasto tuyo.</span>
     </label>
+    <div id="split-ciclo-row" style="display:none;margin-bottom:14px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">📅 ¿En qué ciclo va esta deuda?</div>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="split-ciclo-actual" onclick="setSplitCiclo('actual')" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer">Ciclo actual</button>
+        <button type="button" id="split-ciclo-anterior" onclick="setSplitCiclo('anterior')" style="flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer">Ciclo anterior</button>
+      </div>
+    </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeSplitModal()">No dividir</button>
       <button class="btn-save" id="btn-confirm-split" onclick="confirmSplit()">Dividir</button>

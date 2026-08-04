@@ -2114,7 +2114,25 @@ function saveExpense(){
 // ── Split modal logic ──────────────────────────────────────────────────────
 let _splitSelectedPersons=[];
 let _splitLent=false; // true = "presté mi tarjeta": el 100% es deuda de la persona, no gasto mio
+let _splitCiclo='actual'; // solo debito: en que ciclo cae la deuda ('actual' | 'anterior')
 function toggleSplitLent(){ _splitLent=document.getElementById('split-lent').checked; updateSplitPreview(); }
+function setSplitCiclo(c){
+  _splitCiclo=c;
+  const a=document.getElementById('split-ciclo-actual'), an=document.getElementById('split-ciclo-anterior');
+  const on='flex:1;padding:8px;border-radius:10px;border:1px solid var(--accent2);background:var(--accent2);color:#fff;font-size:12px;font-weight:600;cursor:pointer';
+  const off='flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer';
+  if(a) a.style.cssText=(c==='actual'?on:off);
+  if(an) an.style.cssText=(c==='anterior'?on:off);
+}
+// Offset de ciclo para meter una deuda de DEBITO en el ciclo elegido relativo a
+// HOY: 'actual' = ciclo vigente, 'anterior' = el que recien cerro. El debito usa
+// el dia de cierre global (mismo criterio que deudaInstallments para debito).
+function offsetCicloDeuda(fecha, ciclo){
+  const cut=getBillingDay();
+  const curIdx=queDeboCycleIndex(new Date(), cut);
+  const base=queDeboCycleIndex(fecha, cut);
+  return (curIdx - (ciclo==='anterior'?1:0)) - base;
+}
 
 // Matematica UNICA de una division (usada por el preview, confirmSplit y
 // splitApplyAll: si cambia el reparto/redondeo, cambia solo aqui y los tres
@@ -2134,7 +2152,9 @@ function calcularSplit(amount, cuotas, type, nPersonas, lent){
 // Aplica una division ya decidida: actualiza la tx (monto = tu parte, splitWith,
 // splitTotal, lent) y crea una deuda por persona. No renderiza ni notifica;
 // devuelve el calculo para que el llamador arme su toast.
-function aplicarSplit(item, personas, lent){
+// debtCycleOffset (opcional): corre la deuda de ciclo al crearla (para debito, el
+// usuario elige ciclo actual/anterior). 0/undefined = ciclo natural por su fecha.
+function aplicarSplit(item, personas, lent, debtCycleOffset){
   const s=calcularSplit(item.amount, item.cuotas, item.type, personas.length, lent);
   const txData=s.esDebito?getD():getC();
   const idx=txData.findIndex(t=>t.id===item.txId);
@@ -2154,13 +2174,15 @@ function aplicarSplit(item, personas, lent){
   const deudaCur=aPesos?'CLP':(item.currency||'CLP');
   const ds=getDeudas();
   personas.forEach(person=>{
-    ds.push({id:'deu_'+Date.now()+'_'+Math.random().toString(36).slice(2),
+    const deuda={id:'deu_'+Date.now()+'_'+Math.random().toString(36).slice(2),
       person,txId:item.txId,desc:item.desc,
       type:s.esDebito?'debito':'credito',
       totalAmount:item.amount*conv,cuotas:s.cuotasReal,
       deudaPerCuota:s.personSharePerCuota*conv,deudaTotal:s.personSharePerCuota*s.cuotasReal*conv,
       currency:deudaCur,date:item.txDate||new Date().toISOString(),
-      paid:false,paidDate:null});
+      paid:false,paidDate:null};
+    if(debtCycleOffset) deuda.cycleOffset=debtCycleOffset;
+    ds.push(deuda);
   });
   saveDeudas(ds);
   return s;
@@ -2205,6 +2227,10 @@ function openSplitModal(split){
   const lentChk=document.getElementById('split-lent'); if(lentChk) lentChk.checked=false;
   // Ocultar el toggle en modo importación (no aplica a una cartola completa)
   const lentRow=document.getElementById('split-lent-row'); if(lentRow) lentRow.style.display=_splitImportMode?'none':'flex';
+  // Selector de ciclo: solo para débito (crédito sigue el ciclo de la compra) y no en importación
+  _splitCiclo='actual';
+  const cicloRow=document.getElementById('split-ciclo-row');
+  if(cicloRow){ cicloRow.style.display=((split&&split.type==='debito')&&!_splitImportMode)?'block':'none'; setSplitCiclo('actual'); }
   renderPersonChips();
   updateSplitPreview();
   document.getElementById('split-new-person').value='';
@@ -2291,8 +2317,11 @@ function confirmSplit(){
   const amount=_pendingSplit.amount;
   const esUSD=(_pendingSplit.currency==='USD');
   const esPrestado=_splitLent;
+  // Débito: la deuda va en el ciclo elegido (actual/anterior); crédito sigue su ciclo.
+  const esDebito=(_pendingSplit.type||'credito')==='debito';
+  const debtOffset=esDebito?offsetCicloDeuda(_pendingSplit.txDate||new Date().toISOString(), _splitCiclo):0;
   // Actualiza el gasto y crea las deudas con la matematica unica del split.
-  const s=aplicarSplit(_pendingSplit, _splitSelectedPersons, esPrestado);
+  const s=aplicarSplit(_pendingSplit, _splitSelectedPersons, esPrestado, debtOffset);
 
   document.getElementById('split-modal-overlay').classList.remove('open');
   _pendingSplit=null;

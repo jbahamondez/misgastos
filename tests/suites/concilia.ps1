@@ -236,6 +236,49 @@ Check 'CONCILIA-PERIODO-CONTADO-CALZA' @'
 })()
 '@
 
+Check 'DEBITO-DEUDA-CICLO-ANTERIOR' @'
+(function(){
+  const hoy=new Date().toISOString();
+  localStorage.setItem('gastos_debito_v2', JSON.stringify([{id:'db1',bank:'bci',amount:20000,desc:'DEBITO HOGAR',currency:'CLP',date:hoy}]));
+  localStorage.setItem('gastos_deudas_v1','[]');
+  const offA=offsetCicloDeuda(hoy,'actual'), offAn=offsetCicloDeuda(hoy,'anterior');
+  aplicarSplit({txId:'db1',amount:20000,desc:'DEBITO HOGAR',cuotas:1,currency:'CLP',type:'debito',txDate:hoy},['Tamarindo'],false, offsetCicloDeuda(hoy,'anterior'));
+  const d=getDeudas().find(x=>x.txId==='db1');
+  const inst=deudaInstallments().filter(i=>i.d.id===d.id);
+  return JSON.stringify({pass: offA===0 && offAn===-1 && d.cycleOffset===-1 && inst.length===1 && inst[0].section==='anterior',
+    offA, offAn, cycleOffset:d.cycleOffset, sec:inst.length?inst[0].section:'?'});
+})()
+'@
+
+Check 'DEBITO-DEUDA-CICLO-ACTUAL-DEFAULT' @'
+(function(){
+  const hoy=new Date().toISOString();
+  localStorage.setItem('gastos_debito_v2', JSON.stringify([{id:'db2',bank:'bci',amount:15000,desc:'D2',currency:'CLP',date:hoy}]));
+  localStorage.setItem('gastos_deudas_v1','[]');
+  aplicarSplit({txId:'db2',amount:15000,desc:'D2',cuotas:1,currency:'CLP',type:'debito',txDate:hoy},['Tamarindo'],false, offsetCicloDeuda(hoy,'actual'));
+  const d=getDeudas().find(x=>x.txId==='db2');
+  const inst=deudaInstallments().filter(i=>i.d.id===d.id);
+  return JSON.stringify({pass: (d.cycleOffset===undefined||d.cycleOffset===0) && inst[0].section==='actual', cycleOffset:d.cycleOffset, sec:inst[0].section});
+})()
+'@
+
+Check 'SPLIT-CICLO-UI-SOLO-DEBITO' @'
+(function(){
+  _splitImportMode=false; _splitQueue=[];
+  _pendingSplit={txId:'x',amount:10000,desc:'D',cuotas:1,currency:'CLP',cardId:'bci',type:'debito',txDate:new Date().toISOString()};
+  openSplitModal(_pendingSplit);
+  const debVis=document.getElementById('split-ciclo-row').style.display!=='none';
+  const defActual=_splitCiclo==='actual';
+  setSplitCiclo('anterior'); const cambio=_splitCiclo==='anterior';
+  _pendingSplit={txId:'y',amount:10000,desc:'C',cuotas:1,currency:'CLP',cardId:'bci',type:'credito',txDate:new Date().toISOString()};
+  openSplitModal(_pendingSplit);
+  const credOculto=document.getElementById('split-ciclo-row').style.display==='none';
+  const reset=_splitCiclo==='actual';
+  document.getElementById('split-modal-overlay').classList.remove('open'); _pendingSplit=null;
+  return JSON.stringify({pass: debVis && defActual && cambio && credOculto && reset, debVis, credOculto, reset});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS
