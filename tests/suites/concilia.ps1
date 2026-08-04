@@ -34,6 +34,26 @@ Check 'MONTO-LINEA-NO-CENCOSUD-USA-ULTIMO' @'
 })()
 '@
 
+Check 'BCI-CONTADO-USA-MONTO' @'
+(function(){
+  // BCI contado (01/01 => 1 cuota): operacion=total=cargo, toma el monto tal cual
+  return JSON.stringify({pass: montoLineaCartola('SMART FIT GIMNASI SANTIAGO 29.900 29.900', 1)===29900
+    && montoLineaCartola('NETFLIX LAS CONDES 12.990 12.990', 1)===12990
+    && montoLineaCartola('LIDER.CL COMPRA DIR SANTIAGO 155.639 155.639', 1)===155639});
+})()
+'@
+
+Check 'BCI-CUOTAS-0-INTERES-USA-PRECIO' @'
+(function(){
+  // BCI en cuotas 0% interes: [operacion, total, cuota] con operacion=total y
+  // cuota=total/nº -> toma el PRECIO (operacion), que calza con lo guardado en la app
+  const sam=montoLineaCartola('MP SAMSONITE TASA INT 0,00 79.995 79.995 26.665', 3);
+  const tea=montoLineaCartola('MERCADOPAGO TEAGROU TASA INT 50.376 50.376 16.792', 3);
+  const ike=montoLineaCartola('IKEA OPEN KENNEDY TASA INT 0,00 91.860 91.860 30.620', 3);
+  return JSON.stringify({pass: sam===79995 && tea===50376 && ike===91860, sam, tea, ike});
+})()
+'@
+
 Check 'MONTOREAL-SPLIT-CON-SPLITTOTAL' @'
 (function(){
   const hoy=new Date().toISOString();
@@ -83,6 +103,28 @@ Check 'CONCILIA-XIAOMI-DIVIDIDA-CALZA' @'
   const e=_conciliaData.esperadas.find(x=>x.tx.id==='xia1');
   return JSON.stringify({pass: !!e && !!e.match && Math.abs(e.bankAmt-299990)<1 && _conciliaData.extras.length===0,
     bankAmt:e?e.bankAmt:null, matched:!!(e&&e.match), extras:_conciliaData.extras.length});
+})()
+'@
+
+Check 'CIERRE-MUEVE-COMPRA-Y-DEUDA-JUNTAS' @'
+(function(){
+  // Compra dia 20 en scotia, dividida 50/50 con Tamarindo (crea la deuda)
+  const txDate='2026-07-20T12:00:00';
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([
+    {id:'p20',cardId:'scotia',amount:50000,desc:'COMPRA DIA 20',cuotas:1,currency:'CLP',date:txDate}
+  ]));
+  localStorage.setItem('gastos_deudas_v1','[]');
+  aplicarSplit({txId:'p20',amount:50000,desc:'COMPRA DIA 20',cuotas:1,currency:'CLP',type:'credito',txDate:txDate},['Tamarindo'],false);
+  const tx=getC().find(t=>t.id==='p20');
+  const deuda=getDeudas().find(d=>d.txId==='p20');
+  const idxTx=c=>queDeboCycleIndex(tx.date,c)+(tx.cycleOffset||0);
+  const idxDeuda=c=>queDeboCycleIndex(deuda.date,c)+(deuda.cycleOffset||0);
+  const con19_tx=idxTx(19), con19_d=idxDeuda(19), con20_tx=idxTx(20), con20_d=idxDeuda(20);
+  return JSON.stringify({
+    // misma fecha; compra y deuda en el MISMO ciclo con 19 y con 20; y con 20 se adelantan 1 ciclo juntas
+    pass: deuda.date===tx.date && con19_tx===con19_d && con20_tx===con20_d && con20_tx===con19_tx-1,
+    mismaFecha:deuda.date===tx.date, con19_tx, con19_d, con20_tx, con20_d
+  });
 })()
 '@
 
