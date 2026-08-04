@@ -1910,19 +1910,32 @@ function confirmEditTx(){
   if(!desc){showToast('La descripción no puede estar vacía','var(--yellow)');return;}
   if(!amount||amount<=0){showToast('Ingresa un monto válido','var(--yellow)');return;}
   const catId=document.getElementById('edit-cat').value||'';
-  if(_editTxType==='debito'){
-    const d=getD();
-    const idx=d.findIndex(t=>t.id===_editTxId);
-    if(idx>=0){d[idx].desc=desc;d[idx].amount=amount;d[idx].catId=catId;saveD(d);}
-  } else {
-    const c=getC();
-    const idx=c.findIndex(t=>t.id===_editTxId);
-    if(idx>=0){c[idx].desc=desc;c[idx].amount=amount;c[idx].catId=catId;saveC(c);}
+  // factor = cuanto cambio el monto; escala el total dividido y la(s) deuda(s)
+  // asociada(s) en la misma proporcion, para que la division quede consistente.
+  const arr=_editTxType==='debito'?getD():getC();
+  const idx=arr.findIndex(t=>t.id===_editTxId);
+  let factor=1;
+  if(idx>=0){
+    const oldAmount=arr[idx].amount;
+    factor=(oldAmount>0)?amount/oldAmount:1;
+    arr[idx].desc=desc; arr[idx].amount=amount; arr[idx].catId=catId;
+    if(arr[idx].splitTotal) arr[idx].splitTotal*=factor;
+    (_editTxType==='debito'?saveD:saveC)(arr);
   }
-  // Actualizar descripción en deuda asociada si existe
+  // Deuda(s) asociada(s): descripcion siempre; monto escalado si cambio el monto
   const deudas=getDeudas();
-  const dIdx=deudas.findIndex(d=>d.txId===_editTxId);
-  if(dIdx>=0){deudas[dIdx].desc=desc;saveDeudas(deudas);}
+  let dc=false;
+  deudas.forEach(d=>{
+    if(d.txId!==_editTxId) return;
+    d.desc=desc;
+    if(factor!==1){
+      d.deudaPerCuota=(d.deudaPerCuota||0)*factor;
+      d.deudaTotal=(d.deudaTotal||0)*factor;
+      d.totalAmount=(d.totalAmount||0)*factor;
+    }
+    dc=true;
+  });
+  if(dc) saveDeudas(deudas);
   closeEditModal();
   renderDashboard(); renderDebito(); renderHistorial(); renderDeudas();
   showToast('✅ Gasto actualizado');

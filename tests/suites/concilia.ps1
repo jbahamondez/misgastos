@@ -331,6 +331,41 @@ Check 'PRESTAMO-REVERT-LIMPIA-CAT' @'
 })()
 '@
 
+Check 'EDIT-ESCALA-DEUDA' @'
+(function(){
+  const hoy=new Date().toISOString();
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([
+    {id:'e1',cardId:'bci',amount:75000,desc:'COMPRA',cuotas:1,currency:'CLP',date:hoy,splitWith:'Tamarindo',splitTotal:150000}
+  ]));
+  localStorage.setItem('gastos_deudas_v1', JSON.stringify([
+    {id:'d1',person:'Tamarindo',txId:'e1',desc:'COMPRA',type:'credito',totalAmount:150000,cuotas:1,deudaPerCuota:75000,deudaTotal:75000,currency:'CLP',date:hoy,paid:false,paidDate:null}
+  ]));
+  _editTxId='e1'; _editTxType='credito';
+  document.getElementById('edit-desc').value='COMPRA';
+  document.getElementById('edit-amount').value='80000';
+  populateCatSelect('edit-cat',''); document.getElementById('edit-cat').value='';
+  confirmEditTx();
+  const tx=getC().find(t=>t.id==='e1'), d=getDeudas().find(x=>x.id==='d1');
+  // factor 80000/75000: splitTotal 150000->160000; deuda 75000->80000
+  return JSON.stringify({pass: tx.amount===80000 && Math.abs(tx.splitTotal-160000)<1 && Math.abs(d.deudaTotal-80000)<1 && Math.abs(d.deudaPerCuota-80000)<1,
+    amount:tx.amount, splitTotal:Math.round(tx.splitTotal), deudaTotal:Math.round(d.deudaTotal)});
+})()
+'@
+
+Check 'EDIT-SIN-DEUDA-OK' @'
+(function(){
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([{id:'e2',cardId:'bci',amount:20000,desc:'X',cuotas:1,currency:'CLP',date:new Date().toISOString()}]));
+  localStorage.setItem('gastos_deudas_v1','[]');
+  _editTxId='e2'; _editTxType='credito';
+  document.getElementById('edit-desc').value='X EDIT';
+  document.getElementById('edit-amount').value='25000';
+  populateCatSelect('edit-cat',''); document.getElementById('edit-cat').value='';
+  confirmEditTx();
+  const tx=getC().find(t=>t.id==='e2');
+  return JSON.stringify({pass: tx.amount===25000 && tx.desc==='X EDIT'});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS
