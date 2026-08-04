@@ -128,6 +128,39 @@ Check 'CIERRE-MUEVE-COMPRA-Y-DEUDA-JUNTAS' @'
 })()
 '@
 
+Check 'FINANCIADO-ESCALA-CUOTA-Y-DEUDA' @'
+(function(){
+  const hoy=new Date().toISOString();
+  // Xiaomi 50/50: precio 299.990, financiado 351.030 (factor 1,17). Cuota real
+  // completa = 58.505; tu mitad y la de Tamarindo = 29.252,5 c/u.
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([
+    {id:'xf',cardId:'scotia',amount:149995,desc:'XIAOMI',cuotas:6,currency:'CLP',date:hoy,splitWith:'Tamarindo',splitTotal:299990,montoFinanciado:351030}
+  ]));
+  localStorage.setItem('gastos_deudas_v1', JSON.stringify([
+    {id:'df',person:'Tamarindo',txId:'xf',desc:'XIAOMI',type:'credito',totalAmount:299990,cuotas:6,deudaPerCuota:24999.1667,deudaTotal:149995,currency:'CLP',date:hoy,paid:false,paidDate:null}
+  ]));
+  const f=factorFinanciado(getC()[0]);
+  const act=cuotasActivasCiclo('scotia',0).filter(x=>x.tx.id==='xf');
+  const tuCuota=act.length?act[0].cuotaAmt:0;
+  const inst=deudaInstallments().filter(i=>i.d.id==='df');
+  const deudaCuota=inst.length?inst[0].amt:0;
+  return JSON.stringify({
+    pass: Math.abs(f-1.170139)<0.001 && Math.abs(tuCuota-29252.5)<1 && Math.abs(deudaCuota-29252.5)<1,
+    f:Math.round(f*100000)/100000, tuCuota:Math.round(tuCuota), deudaCuota:Math.round(deudaCuota)
+  });
+})()
+'@
+
+Check 'FINANCIADO-SIN-CAMPO-FACTOR-1' @'
+(function(){
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([
+    {id:'xn',cardId:'scotia',amount:149995,desc:'XIAOMI',cuotas:6,currency:'CLP',date:new Date().toISOString(),splitWith:'Tamarindo',splitTotal:299990}
+  ]));
+  localStorage.setItem('gastos_deudas_v1','[]');
+  return JSON.stringify({pass: factorFinanciado(getC()[0])===1});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

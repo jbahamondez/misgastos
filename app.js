@@ -30,6 +30,18 @@ function setValorDolar(v){localStorage.setItem('misgastos_valor_dolar',String(v)
 // Lleva un monto a CLP: si es USD lo multiplica por el valor del dolar (0 => 0,
 // asi los USD no suman hasta que se define el valor). CLP queda igual.
 function aCLP(amount,currency){ return currency==='USD' ? amount*getValorDolar() : amount; }
+
+// Factor de interes de una compra en cuotas: si se aprendio el monto financiado
+// (total con interes, tomado de la cartola al conciliar) es financiado/precio; si
+// no, 1. Las cuotas y las deudas se multiplican por este factor (el interes se
+// reparte igual que el precio, opcion B). El match de conciliacion y el cupo
+// comprometido se quedan en el precio (el banco bloquea el precio y la cartola
+// muestra el precio). Sin montoFinanciado, factor 1 => todo igual que antes.
+function factorFinanciado(t){
+  if(!t || !t.montoFinanciado) return 1;
+  const precio=t.splitTotal||t.amount||0;
+  return precio>0 ? t.montoFinanciado/precio : 1;
+}
 function getDeudas(){try{return JSON.parse(localStorage.getItem(LS_DEUDAS)||'[]')}catch{return[]}}
 function saveDeudas(a,opts){localStorage.setItem(LS_DEUDAS,JSON.stringify(a));syncCollectionToCloud('debts',a,opts)}
 function getPersonas(){try{return JSON.parse(localStorage.getItem(LS_PERSONAS)||'["🤍 Tamarindo"]')}catch{return['🤍 Tamarindo']}}
@@ -306,7 +318,7 @@ function cuotasActivasCiclo(cardId, offset){
     // cycleOffset: "aplazar" corre toda la serie de cuotas hacia adelante (banco aun no factura)
     const base=queDeboCycleIndex(t.date, cutDay)+(t.cycleOffset||0);
     const k=targetIdx - base; // cuota 0-indexada que cae en el ciclo
-    if(k>=0 && k<n) out.push({tx:t, cuotaNum:k+1, cuotasTotal:n, cuotaAmt:t.amount/n});
+    if(k>=0 && k<n) out.push({tx:t, cuotaNum:k+1, cuotasTotal:n, cuotaAmt:(t.amount/n)*factorFinanciado(t)});
   });
   return out;
 }
@@ -912,16 +924,18 @@ function toggleCuotaPagada(debtId,k,val){
 // asigna al ciclo correcto. Fallback al global para deudas de debito o cuya
 // compra ya no existe (hoy es equivalente: todas cierran el mismo dia).
 function deudaInstallments(){
-  const cardDeTx={};
-  getC().forEach(t=>{cardDeTx[t.id]=t.cardId;});
+  const txById={};
+  getC().forEach(t=>{txById[t.id]=t;});
   const hoy=new Date();
   const out=[];
   getDeudas().forEach(d=>{
-    const cutDay=getBillingDay(cardDeTx[d.txId]);
+    const tx=txById[d.txId];
+    const cutDay=getBillingDay(tx&&tx.cardId);
     const curIdx=queDeboCycleIndex(hoy, cutDay);
     const n=Math.max(1,d.cuotas||1);
     const base=queDeboCycleIndex(d.date, cutDay)+(d.cycleOffset||0); // "aplazar" corre la deuda de ciclo
-    const per=(d.deudaPerCuota!=null?d.deudaPerCuota:(d.deudaTotal||0)/n);
+    // el interes se reparte: la deuda escala con el factor de la compra (opcion B)
+    const per=(d.deudaPerCuota!=null?d.deudaPerCuota:(d.deudaTotal||0)/n)*factorFinanciado(tx);
     for(let k=1;k<=n;k++){
       const idx=base+(k-1);
       if(idx>curIdx) break;             // cuota futura, aun no vencida
@@ -2563,7 +2577,7 @@ function cuotasMensuales(){
   getC().filter(t=>!esPrestada(t)).forEach(t=>{
     const n=Math.max(1,t.cuotas||1);
     const d=new Date(t.date);
-    const cuotaAmt=aCLP(t.amount,t.currency)/n;
+    const cuotaAmt=(aCLP(t.amount,t.currency)/n)*factorFinanciado(t);
     for(let k=0;k<n;k++){
       const m=d.getMonth()+(t.cycleOffset||0)+k;
       const ultDia=new Date(d.getFullYear(),m+1,0).getDate();
@@ -3039,7 +3053,7 @@ function renderQueDebo(){
 
   let totalCLP=0, totalUSD=0;
   items.forEach(({tx,cuotasTotal})=>{
-    const cuota=tx.amount/cuotasTotal;
+    const cuota=(tx.amount/cuotasTotal)*factorFinanciado(tx);
     if(tx.currency==='USD') totalUSD+=cuota; else totalCLP+=cuota;
   });
 
@@ -3057,12 +3071,13 @@ function renderQueDebo(){
 
   const vd=getValorDolar();
   const rows=items.map(({tx,card,cuotaNum,cuotasTotal})=>{
-    const cuota=tx.amount/cuotasTotal;
+    const f=factorFinanciado(tx);                 // interes aprendido de la cartola (1 si no hay)
+    const cuota=(tx.amount/cuotasTotal)*f;
     const esUSD=tx.currency==='USD';
     // USD: muestra el monto en dolares y, si hay valor definido, el estimado en pesos
     const montoCuota=esUSD?(fmtUSD(cuota)+(vd>0?` <span style="font-size:10px;color:var(--text2);font-weight:400">≈ ${fmtCLP(cuota*vd)}</span>`:'')):fmtCLP(cuota);
     const nCuotas=cuotasTotal>1?`cuota ${cuotaNum} de ${cuotasTotal}`:'Contado';
-    const montoFull=cuotasTotal>1?` · total ${esUSD?fmtUSD(tx.amount):fmtCLP(tx.amount)}`:'';
+    const montoFull=cuotasTotal>1?` · total ${esUSD?fmtUSD(tx.amount*f):fmtCLP(tx.amount*f)}`:'';
     const fecha=new Date(tx.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
     const off=tx.cycleOffset||0;
     return `<div style="padding:11px 0;border-bottom:1px solid var(--border)">
