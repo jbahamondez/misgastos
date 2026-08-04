@@ -61,6 +61,17 @@ const DEFAULT_CATS=[
 function getCategorias(){try{const s=localStorage.getItem(LS_CATS);return s?JSON.parse(s):DEFAULT_CATS.map(c=>({...c}))}catch{return DEFAULT_CATS.map(c=>({...c}))}}
 function saveCategorias(a){localStorage.setItem(LS_CATS,JSON.stringify(a));syncCollectionToCloud('categories',a)}
 function getCatById(id){return getCategorias().find(c=>c.id===id)||null}
+// Categoria "Préstamos": etiqueta para las compras que no son tuyas (prestaste la
+// tarjeta). Es solo un dato: como las prestadas se excluyen de los totales y del
+// analisis (esPrestada), esta categoria NO influye en informes ni metricas.
+// Se crea recien cuando marcas la primera compra como prestamo.
+function ensurePrestamosCat(){
+  const cats=getCategorias();
+  if(!cats.some(c=>c.id==='prestamos')){
+    cats.push({id:'prestamos',name:'Préstamos',emoji:'🤝',color:'#8b5cf6'});
+    saveCategorias(cats);
+  }
+}
 function getCatRules(){try{return JSON.parse(localStorage.getItem(LS_CAT_RULES)||'[]')}catch{return[]}}
 function saveCatRules(a){localStorage.setItem(LS_CAT_RULES,JSON.stringify(a));syncCollectionToCloud('category_rules',a)}
 
@@ -1745,7 +1756,7 @@ function closeServiciosReminderOutside(e){
 // ── Recordatorio: gastos sin clasificar (credito + debito, cualquier fecha) ──
 function checkSinClasificarReminder(){
   const pend=[...getC().map(t=>({...t,_tipo:'credito'})),...getD().map(t=>({...t,_tipo:'debito'}))]
-    .filter(t=>!t.catId)
+    .filter(t=>!t.catId && !esPrestada(t)) // las prestadas no son tu gasto: no se piden clasificar
     .sort((a,b)=>new Date(b.date)-new Date(a.date));
   if(!pend.length) return;
   const cats=getCategorias();
@@ -2162,7 +2173,8 @@ function aplicarSplit(item, personas, lent, debtCycleOffset){
     txData[idx].amount=s.userTotal;
     txData[idx].splitWith=personas.join(', ');
     txData[idx].splitTotal=item.amount;
-    if(lent) txData[idx].lent=true; else delete txData[idx].lent;
+    if(lent){ txData[idx].lent=true; ensurePrestamosCat(); txData[idx].catId='prestamos'; }
+    else { delete txData[idx].lent; if(txData[idx].catId==='prestamos') txData[idx].catId=''; }
     (s.esDebito?saveD:saveC)(txData);
   }
   // La deuda de un cobro en USD se genera en CLP (convertida al valor del dolar):

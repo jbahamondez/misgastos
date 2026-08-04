@@ -279,6 +279,58 @@ Check 'SPLIT-CICLO-UI-SOLO-DEBITO' @'
 })()
 '@
 
+Check 'PRESTAMO-CATEGORIA-AUTO' @'
+(function(){
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([{id:'p1',cardId:'bci',amount:50000,desc:'PRESTAMO AMIGO',cuotas:1,currency:'CLP',date:new Date().toISOString(),catId:''}]));
+  localStorage.setItem('gastos_deudas_v1','[]');
+  localStorage.removeItem('misgastos_categorias_v1');
+  const antes=getCategorias().some(c=>c.id==='prestamos');
+  aplicarSplit({txId:'p1',amount:50000,desc:'PRESTAMO AMIGO',cuotas:1,currency:'CLP',type:'credito',txDate:new Date().toISOString()},['Juan'], true);
+  const tx=getC().find(t=>t.id==='p1');
+  return JSON.stringify({pass: !antes && getCategorias().some(c=>c.id==='prestamos') && tx.catId==='prestamos' && tx.lent===true, catId:tx.catId});
+})()
+'@
+
+Check 'PRESTAMO-NO-INFLUYE-ANALISIS' @'
+(function(){
+  localStorage.setItem('misgastos_valor_dolar','0');
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([
+    {id:'p1',cardId:'bci',amount:50000,desc:'PRESTAMO',cuotas:1,currency:'CLP',date:new Date().toISOString(),catId:'prestamos',lent:true,splitWith:'Juan',splitTotal:50000},
+    {id:'g1',cardId:'bci',amount:30000,desc:'JUMBO',cuotas:1,currency:'CLP',date:new Date().toISOString(),catId:'super'}
+  ]));
+  _analisisModo='compras'; _analisisTxType='credito';
+  const {catData,grandTotal}=agruparPorCategoria(analisisTxsPeriodo(null,null));
+  // el prestamo NO suma ni aparece; solo el JUMBO (30000)
+  return JSON.stringify({pass: !catData.some(c=>c.id==='prestamos') && grandTotal===30000, grandTotal});
+})()
+'@
+
+Check 'PRESTAMO-NO-EN-RECORDATORIO' @'
+(function(){
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([
+    {id:'p1',cardId:'bci',amount:50000,desc:'PRESTAMOXYZ',cuotas:1,currency:'CLP',date:new Date().toISOString(),catId:'',lent:true},
+    {id:'s1',cardId:'bci',amount:10000,desc:'SINCATXYZ',cuotas:1,currency:'CLP',date:new Date().toISOString(),catId:''}
+  ]));
+  localStorage.setItem('gastos_debito_v2','[]');
+  checkSinClasificarReminder();
+  const overlay=document.getElementById('sinclasificar-reminder-overlay');
+  const cont=document.getElementById('sinclasificar-reminder-list').textContent;
+  const pass = overlay.classList.contains('open') && cont.indexOf('SINCATXYZ')>=0 && cont.indexOf('PRESTAMOXYZ')<0;
+  overlay.classList.remove('open');
+  return JSON.stringify({pass});
+})()
+'@
+
+Check 'PRESTAMO-REVERT-LIMPIA-CAT' @'
+(function(){
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([{id:'p1',cardId:'bci',amount:50000,desc:'X',cuotas:1,currency:'CLP',date:new Date().toISOString(),catId:'prestamos',lent:true,splitWith:'Juan',splitTotal:50000}]));
+  localStorage.setItem('gastos_deudas_v1','[]');
+  aplicarSplit({txId:'p1',amount:50000,desc:'X',cuotas:1,currency:'CLP',type:'credito',txDate:new Date().toISOString()},['Juan'], false);
+  const tx=getC().find(t=>t.id==='p1');
+  return JSON.stringify({pass: tx.catId==='' && !tx.lent, catId:tx.catId, lent:tx.lent});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS
