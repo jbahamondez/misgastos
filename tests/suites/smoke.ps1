@@ -29,6 +29,43 @@ Check 'RENDER-TODAS-LAS-VISTAS' @'
 })()
 '@
 
+Check 'TOAST-SOLAPADOS-NO-CORTA' @'
+(async function(){
+  // varios toasts seguidos: el ultimo NO debe cortarse por el timer del primero
+  showToast("A");
+  await new Promise(r=>setTimeout(r,1000)); showToast("B");
+  await new Promise(r=>setTimeout(r,1000)); showToast("C");
+  await new Promise(r=>setTimeout(r,900)); // ~2900 desde A
+  const visEnMedio=document.getElementById("toast").classList.contains("show");
+  await new Promise(r=>setTimeout(r,3200));
+  const alFinal=document.getElementById("toast").classList.contains("show");
+  return JSON.stringify({pass: visEnMedio && !alFinal, visEnMedio, alFinal});
+})()
+'@
+
+Check 'TOAST-HIDE-EN-BACKGROUND' @'
+(function(){
+  showToast("X");
+  const antes=document.getElementById("toast").classList.contains("show");
+  hideToast(); // lo que dispara el handler de visibilitychange al pasar a segundo plano
+  const despues=document.getElementById("toast").classList.contains("show");
+  return JSON.stringify({pass: antes && !despues && _toastTimer===null});
+})()
+'@
+
+Check 'TOAST-VISIBILITYCHANGE-OCULTA' @'
+(function(){
+  showToast("Y");
+  let ok=false;
+  try{
+    Object.defineProperty(document,"visibilityState",{configurable:true,get:()=>"hidden"});
+    document.dispatchEvent(new Event("visibilitychange"));
+    ok=!document.getElementById("toast").classList.contains("show");
+  } finally { try{ delete document.visibilityState; }catch(e){} }
+  return JSON.stringify({pass:ok});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

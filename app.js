@@ -2465,12 +2465,18 @@ function clearData(){
     showToast('Gastos eliminados','var(--red)');
   }
 }
+let _toastTimer=null;
+function hideToast(){ const t=document.getElementById('toast'); if(t) t.classList.remove('show'); if(_toastTimer){clearTimeout(_toastTimer);_toastTimer=null;} }
 function showToast(msg,color){
   color=color||'var(--green)';
   const t=document.getElementById('toast');
   t.textContent=msg;t.style.background=color;
   t.style.color=color==='var(--green)'?'#0f1117':'white';
-  t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2800);
+  t.classList.add('show');
+  // UN solo timer: toasts seguidos no se cortan entre si (antes el timeout del
+  // primero ocultaba el del ultimo antes de tiempo).
+  if(_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer=setTimeout(function(){t.classList.remove('show');_toastTimer=null;},2800);
 }
 // ── Sincronización desde Google Apps Script API ───────────────────────────────
 const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbwxWhRJehKodrfiPFu5iG6gwaMq2JtX6sRwm5ngKTjduB2v6W2d14p-WD9mF4swUoFj/exec';
@@ -3532,6 +3538,9 @@ document.addEventListener('DOMContentLoaded',function(){
   syncFromSheets();
   document.addEventListener('visibilitychange',function(){
     if(document.visibilityState==='visible') syncFromSheets();
+    // Al pasar a segundo plano el navegador congela el setTimeout del toast y
+    // quedaba pegado (franja verde arriba) al volver: lo ocultamos de una.
+    else hideToast();
   });
   setTimeout(function(){
     checkPaymentReminder();
