@@ -1893,8 +1893,38 @@ function openEditModal(txId, txType){
     splitSection.innerHTML=`
       <button onclick="splitExistingTx()" style="width:100%;padding:11px;border-radius:10px;border:1px dashed var(--accent2);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Dividir este gasto</button>`;
   }
+  // Control de ciclo (aplazar/adelantar): solo credito. Permite alinear compras
+  // en cuotas que el banco factura un ciclo despues (desfase), sin depender de
+  // que aparezcan en "no aparece" al conciliar. Mueve la compra Y sus deudas.
+  const cicloSection=document.getElementById('edit-ciclo-section');
+  if(cicloSection){
+    if(txType!=='debito'){ cicloSection.style.display=''; renderEditCiclo(); }
+    else { cicloSection.style.display='none'; cicloSection.innerHTML=''; }
+  }
   document.getElementById('edit-modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('edit-desc').focus(), 300);
+}
+function renderEditCiclo(){
+  const sec=document.getElementById('edit-ciclo-section');
+  if(!sec || !_editTxId) return;
+  const off=cycleOffsetDeTx(_editTxId);
+  const estado = off>0 ? ('⏳ Aplazada '+off+' ciclo'+(off>1?'s':'')) : 'En su ciclo normal';
+  const b='flex:1;padding:8px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);font-size:12px;font-weight:600;cursor:pointer';
+  sec.innerHTML=`
+    <div style="background:var(--bg3);border-radius:10px;padding:12px">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:2px">📅 Ciclo de facturación</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">${estado}</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="editAplazar(-1)" style="${b}${off<=0?';opacity:.4':''}">↩️ Un ciclo antes</button>
+        <button onclick="editAplazar(1)" style="${b}">⏳ Aplazar 1 ciclo</button>
+      </div>
+      <div style="font-size:10px;color:var(--text2);margin-top:6px;line-height:1.4">Si el banco cobra la primera cuota un ciclo después de la compra, aplázala para que calce con la cartola.</div>
+    </div>`;
+}
+function editAplazar(delta){
+  if(!_editTxId) return;
+  aplazarCompra(_editTxId, delta); // mueve la compra + sus deudas y re-renderiza las listas
+  renderEditCiclo();               // refresca el estado dentro del modal
 }
 function closeEditModal(){
   document.getElementById('edit-modal-overlay').classList.remove('open');

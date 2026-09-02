@@ -366,6 +366,51 @@ Check 'EDIT-SIN-DEUDA-OK' @'
 })()
 '@
 
+Check 'EDIT-APLAZAR-CICLO' @'
+(function(){
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([
+    {id:'rv',cardId:'bci',amount:50376,desc:'Regalo Vale',cuotas:3,currency:'CLP',date:'2026-05-21T04:00:00.000Z'}
+  ]));
+  localStorage.setItem('gastos_deudas_v1','[]');
+  openEditModal('rv','credito');
+  const visible=document.getElementById('edit-ciclo-section').style.display!=='none';
+  const off0=getC().find(t=>t.id==='rv').cycleOffset||0;
+  editAplazar(1); const off1=getC().find(t=>t.id==='rv').cycleOffset||0;
+  editAplazar(1); const off2=getC().find(t=>t.id==='rv').cycleOffset||0;
+  editAplazar(-1); const off1b=getC().find(t=>t.id==='rv').cycleOffset||0;
+  closeEditModal();
+  return JSON.stringify({pass: visible && off0===0 && off1===1 && off2===2 && off1b===1, visible, off0, off1, off2, off1b});
+})()
+'@
+
+Check 'EDIT-APLAZAR-MUEVE-COMPRA-Y-DEUDA' @'
+(function(){
+  const f='2026-05-21T04:00:00.000Z';
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([
+    {id:'rv2',cardId:'bci',amount:50376,desc:'Regalo',cuotas:3,currency:'CLP',date:f,splitWith:'Tamarindo',splitTotal:100752}
+  ]));
+  localStorage.setItem('gastos_deudas_v1', JSON.stringify([
+    {id:'d',person:'Tamarindo',txId:'rv2',desc:'Regalo',type:'credito',totalAmount:100752,cuotas:3,deudaPerCuota:16792,deudaTotal:50376,currency:'CLP',date:f,paid:false}
+  ]));
+  openEditModal('rv2','credito');
+  editAplazar(1);
+  const txOff=getC().find(t=>t.id==='rv2').cycleOffset;
+  const dOff=getDeudas().find(x=>x.id==='d').cycleOffset;
+  closeEditModal();
+  return JSON.stringify({pass: txOff===1 && dOff===1, txOff, dOff});
+})()
+'@
+
+Check 'EDIT-CICLO-OCULTO-EN-DEBITO' @'
+(function(){
+  localStorage.setItem('gastos_debito_v2', JSON.stringify([{id:'db',bank:'bci',amount:10000,desc:'X',currency:'CLP',date:new Date().toISOString()}]));
+  openEditModal('db','debito');
+  const hidden=document.getElementById('edit-ciclo-section').style.display==='none';
+  closeEditModal();
+  return JSON.stringify({pass:hidden});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS
