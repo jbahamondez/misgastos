@@ -3367,13 +3367,21 @@ async function parsePdfCartola(buf, bank){
   for(let p=1;p<=pdf.numPages;p++){
     const page=await pdf.getPage(p);
     const tc=await page.getTextContent();
-    const porY={};
-    tc.items.forEach(it=>{
-      const y=Math.round(it.transform[5]/2)*2; // agrupa items a la misma altura (+-2pt)
-      (porY[y]=porY[y]||[]).push({x:it.transform[4],str:it.str});
+    // Reconstruye filas agrupando items por CERCANIA vertical (no por cubetas
+    // fijas): en iOS/Safari algunos items de una misma fila caian en cubetas
+    // distintas y la fila se partia (perdiendo fecha o monto, ej. compras en
+    // cuotas). Con tolerancia por proximidad la fila queda entera.
+    const its=tc.items.map(it=>({x:it.transform[4], y:it.transform[5], str:it.str}))
+      .filter(it=>it.str && it.str.trim())
+      .sort((a,b)=> (b.y-a.y) || (a.x-b.x));
+    const grupos=[];
+    its.forEach(it=>{
+      const g=grupos[grupos.length-1];
+      if(g && Math.abs(g.y-it.y)<=3) g.items.push(it);
+      else grupos.push({y:it.y, items:[it]});
     });
-    Object.keys(porY).map(Number).sort((a,b)=>b-a).forEach(y=>{
-      const linea=porY[y].sort((a,b)=>a.x-b.x).map(i=>i.str).join(' ').replace(/\s+/g,' ').trim();
+    grupos.forEach(g=>{
+      const linea=g.items.sort((a,b)=>a.x-b.x).map(o=>o.str).join(' ').replace(/\s+/g,' ').trim();
       if(linea) lineas.push(linea);
     });
   }
@@ -3398,6 +3406,9 @@ async function parsePdfCartola(buf, bank){
     res.push({id:'pdf_'+Date.now()+'_'+i, bank, rawDesc:linea.slice(0,60), desc:desc.slice(0,40), cuotas, date:fecha.toISOString(), amount, montoFinanciado:montoFinanciadoLinea(resto, cuotas)});
   });
   res.periodo=parsePeriodoCartola(lineas); // periodo real de la cartola (o null)
+  // Debug para soporte: guarda las lineas crudas extraidas y lo parseado, para
+  // diagnosticar diferencias de lectura del PDF entre dispositivos (ej. iOS).
+  try{ window.__cartolaDebug={lineas:lineas.slice(), rows:res.map(r=>({d:r.desc,a:r.amount,c:r.cuotas,f:(r.date||'').slice(0,10)}))}; }catch(e){}
   return res;
 }
 
@@ -3500,7 +3511,8 @@ function renderConciliaReview(){
     ${sec('⏳ No aparecen en la cartola — aplazar al próximo ciclo ('+sinFacturar.length+')','var(--yellow)',sfHTML)}
     ${sec('➕ En la cartola sin registrar — ¿registrar como gasto? ('+extras.length+')','var(--accent2)',exHTML)}
     <button onclick="conciliaConfirm()" class="btn-save" style="width:100%;margin-top:6px">Aplicar conciliación</button>
-    <div style="font-size:11px;color:var(--text2);margin-top:10px;line-height:1.5">ℹ️ Marca/desmarca lo que corresponda. Las aplazadas se mueven (compra + deuda) al ciclo siguiente. Las registradas se agregan como gasto de ${CARDS[_conciliaCard].bank} (puedes corregir la descripción) y luego se te preguntará si quieres dividirlas.</div>`;
+    <div style="font-size:11px;color:var(--text2);margin-top:10px;line-height:1.5">ℹ️ Marca/desmarca lo que corresponda. Las aplazadas se mueven (compra + deuda) al ciclo siguiente. Las registradas se agregan como gasto de ${CARDS[_conciliaCard].bank} (puedes corregir la descripción) y luego se te preguntará si quieres dividirlas.</div>
+    ${(function(){try{const d=window.__cartolaDebug;if(!d)return '';const t=(d.lineas||[]).join('\n');return '<details style="margin-top:14px"><summary style="font-size:11px;color:var(--text2);cursor:pointer">🐞 Detalle técnico (para soporte)</summary><textarea readonly onclick="this.select()" style="width:100%;height:180px;margin-top:6px;font-size:10px;font-family:monospace;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px;box-sizing:border-box">'+esc(t)+'</textarea></details>';}catch(e){return '';}})()}`;
 }
 
 function conciliaConfirm(){
