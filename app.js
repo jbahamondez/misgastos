@@ -1387,7 +1387,7 @@ function renderAjustes(){
           onblur="updateValorDolar(this.value)" onkeydown="if(event.key==='Enter'){this.blur()}" />
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v10</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v11</div>`;
   }
 }
 function updateValorDolar(v){
@@ -3413,12 +3413,33 @@ async function parsePdfCartola(buf, bank){
   return res;
 }
 
+// Recuadro de diagnostico (temporal) para ver por que una cartola no se lee bien
+// en algun dispositivo: info del archivo, etapa/errores y lo que extrajo el parser.
+function debugConciliaHTML(){
+  try{
+    const c=window.__conciliaDebug||{}; const d=window.__cartolaDebug;
+    let t='=== ARCHIVO ===\n';
+    t+='nombre: '+(c.name||'?')+'\n';
+    t+='tipo: '+(c.type||'?')+'  |  bytes: '+(c.size!=null?c.size:'?')+'\n';
+    t+='isPDF: '+c.isPDF+'  |  isCSV: '+c.isCSV+'  |  etapa: '+(c.stage||'?')+(c.count!=null?'  |  filas: '+c.count:'')+'\n';
+    if(c.error) t+='ERROR: '+c.error+'\n';
+    if(d){
+      const rows=(d.rows||[]).map(r=>r.a+' | '+r.c+'c | '+(r.f||'')+' | '+(r.d||'')).join('\n');
+      t+='\n=== PARSEADO ('+(d.rows||[]).length+') ===\n'+rows+'\n\n=== LINEAS CRUDAS ('+(d.lineas||[]).length+') ===\n'+(d.lineas||[]).join('\n');
+    } else if(c.isPDF){ t+='\n(el parser PDF no dejó datos)'; }
+    return '<div style="border:2px solid var(--red);border-radius:10px;padding:10px;margin-bottom:14px"><div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:6px">🐞 DEBUG — toca el cuadro, copia TODO y envíamelo</div><textarea readonly onclick="this.select()" style="width:100%;height:240px;font-size:10px;font-family:monospace;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px;box-sizing:border-box">'+esc(t)+'</textarea></div>';
+  }catch(e){ return '<div style="color:red;font-size:11px">debug err: '+esc(String(e&&e.message||e))+'</div>'; }
+}
 function conciliaFile(evt){
   const file=evt.target.files[0];
   if(!file) return;
   const name=file.name.toLowerCase();
   const isCSV=name.endsWith('.csv');
-  const isPDF=name.endsWith('.pdf');
+  const isPDF=name.endsWith('.pdf') || file.type==='application/pdf'; // iOS a veces no da la extension
+  window.__conciliaDebug={name:file.name, type:file.type||'(sin tipo)', size:file.size, isPDF, isCSV, stage:'leyendo'};
+  window.__cartolaDebug=null;
+  const mostrarDebug=()=>{ try{ document.getElementById('concilia-content').innerHTML=
+    '<button onclick="renderConciliaSetup()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-bottom:12px">← Volver</button>'+debugConciliaHTML(); }catch(e){} };
   const reader=new FileReader();
   reader.onload=async function(e){
     try{
@@ -3437,14 +3458,18 @@ function conciliaFile(evt){
         }
         parsed=parseCartola(rows,_conciliaCard);
       }
-      if(!parsed.length){ showToast(isPDF?'No se pudieron extraer movimientos del PDF (¿escaneado?)':'No se encontraron movimientos en el archivo','var(--yellow)'); return; }
+      window.__conciliaDebug.stage='parseado'; window.__conciliaDebug.count=parsed.length;
+      if(!parsed.length){ showToast(isPDF?'No se pudieron extraer movimientos del PDF (¿escaneado?)':'No se encontraron movimientos en el archivo','var(--yellow)'); mostrarDebug(); return; }
       conciliaMatch(parsed);
     }catch(err){
+      window.__conciliaDebug.stage='ERROR'; window.__conciliaDebug.error=String(err&&(err.message||err.name)||err);
       console.error('concilia:',err);
       const msg=String(err&&err.name==='PasswordException'?'El PDF tiene contraseña; guárdalo sin clave e intenta de nuevo':('Error al leer el archivo: '+(err.message||err)));
       showToast(msg,'var(--red)');
+      mostrarDebug();
     }
   };
+  reader.onerror=function(){ window.__conciliaDebug.stage='ERROR-READER'; window.__conciliaDebug.error='FileReader: '+((reader.error&&reader.error.message)||'?'); showToast('No se pudo leer el archivo','var(--red)'); mostrarDebug(); };
   if(isCSV) reader.readAsText(file,'UTF-8'); else reader.readAsArrayBuffer(file);
   evt.target.value='';
 }
@@ -3506,11 +3531,7 @@ function renderConciliaReview(){
     <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(r.amount)}</span>`)).join('')
     :'<div style="font-size:12px;color:var(--text2);padding:6px 0">Nada sin registrar</div>';
 
-  const debugHTML=(function(){try{const d=window.__cartolaDebug;if(!d)return '';
-    const rows=(d.rows||[]).map(r=>r.a+' | '+r.c+'c | '+(r.f||'')+' | '+(r.d||'')).join('\n');
-    const t='=== PARSEADO ('+(d.rows||[]).length+' filas) ===\n'+rows+'\n\n=== LINEAS CRUDAS ('+(d.lineas||[]).length+') ===\n'+(d.lineas||[]).join('\n');
-    return '<div style="border:2px solid var(--red);border-radius:10px;padding:10px;margin-bottom:14px"><div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:6px">🐞 DEBUG — toca el cuadro, copia TODO y envíamelo</div><textarea readonly onclick="this.select()" style="width:100%;height:220px;font-size:10px;font-family:monospace;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px;box-sizing:border-box">'+esc(t)+'</textarea></div>';
-  }catch(e){return '';}})();
+  const debugHTML=debugConciliaHTML();
   document.getElementById('concilia-content').innerHTML=`
     <button onclick="renderConciliaSetup()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-bottom:12px">← Volver</button>
     ${debugHTML}
