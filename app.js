@@ -1387,7 +1387,7 @@ function renderAjustes(){
           onblur="updateValorDolar(this.value)" onkeydown="if(event.key==='Enter'){this.blur()}" />
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v11</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v12</div>`;
   }
 }
 function updateValorDolar(v){
@@ -3388,6 +3388,9 @@ async function parsePdfCartola(buf, bank){
   }
   const res=[];
   lineas.forEach((linea,i)=>{
+    // Saltar lineas de resumen/cupon de pago (no son transacciones), que si no
+    // se colaban como un "extra" espurio (ej. el "monto total facturado a pagar").
+    if(/FACTURADO A PAGAR|MONTO M[ÍI]NIMO|COSTO MONETARIO|PROXIMO PERIODO/i.test(linea)) return;
     const fm=linea.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
     if(!fm) return;
     const fecha=parseFecha(fm[0]);
@@ -3407,39 +3410,15 @@ async function parsePdfCartola(buf, bank){
     res.push({id:'pdf_'+Date.now()+'_'+i, bank, rawDesc:linea.slice(0,60), desc:desc.slice(0,40), cuotas, date:fecha.toISOString(), amount, montoFinanciado:montoFinanciadoLinea(resto, cuotas)});
   });
   res.periodo=parsePeriodoCartola(lineas); // periodo real de la cartola (o null)
-  // Debug para soporte: guarda las lineas crudas extraidas y lo parseado, para
-  // diagnosticar diferencias de lectura del PDF entre dispositivos (ej. iOS).
-  try{ window.__cartolaDebug={lineas:lineas.slice(), rows:res.map(r=>({d:r.desc,a:r.amount,c:r.cuotas,f:(r.date||'').slice(0,10)}))}; }catch(e){}
   return res;
 }
 
-// Recuadro de diagnostico (temporal) para ver por que una cartola no se lee bien
-// en algun dispositivo: info del archivo, etapa/errores y lo que extrajo el parser.
-function debugConciliaHTML(){
-  try{
-    const c=window.__conciliaDebug||{}; const d=window.__cartolaDebug;
-    let t='=== ARCHIVO ===\n';
-    t+='nombre: '+(c.name||'?')+'\n';
-    t+='tipo: '+(c.type||'?')+'  |  bytes: '+(c.size!=null?c.size:'?')+'\n';
-    t+='isPDF: '+c.isPDF+'  |  isCSV: '+c.isCSV+'  |  etapa: '+(c.stage||'?')+(c.count!=null?'  |  filas: '+c.count:'')+'\n';
-    if(c.error) t+='ERROR: '+c.error+'\n';
-    if(d){
-      const rows=(d.rows||[]).map(r=>r.a+' | '+r.c+'c | '+(r.f||'')+' | '+(r.d||'')).join('\n');
-      t+='\n=== PARSEADO ('+(d.rows||[]).length+') ===\n'+rows+'\n\n=== LINEAS CRUDAS ('+(d.lineas||[]).length+') ===\n'+(d.lineas||[]).join('\n');
-    } else if(c.isPDF){ t+='\n(el parser PDF no dejó datos)'; }
-    return '<div style="border:2px solid var(--red);border-radius:10px;padding:10px;margin-bottom:14px"><div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:6px">🐞 DEBUG — toca el cuadro, copia TODO y envíamelo</div><textarea readonly onclick="this.select()" style="width:100%;height:240px;font-size:10px;font-family:monospace;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px;box-sizing:border-box">'+esc(t)+'</textarea></div>';
-  }catch(e){ return '<div style="color:red;font-size:11px">debug err: '+esc(String(e&&e.message||e))+'</div>'; }
-}
 function conciliaFile(evt){
   const file=evt.target.files[0];
   if(!file) return;
   const name=file.name.toLowerCase();
   const isCSV=name.endsWith('.csv');
-  const isPDF=name.endsWith('.pdf') || file.type==='application/pdf'; // iOS a veces no da la extension
-  window.__conciliaDebug={name:file.name, type:file.type||'(sin tipo)', size:file.size, isPDF, isCSV, stage:'leyendo'};
-  window.__cartolaDebug=null;
-  const mostrarDebug=()=>{ try{ document.getElementById('concilia-content').innerHTML=
-    '<button onclick="renderConciliaSetup()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-bottom:12px">← Volver</button>'+debugConciliaHTML(); }catch(e){} };
+  const isPDF=name.endsWith('.pdf') || file.type==='application/pdf'; // iOS a veces no da la extension en el nombre
   const reader=new FileReader();
   reader.onload=async function(e){
     try{
@@ -3458,18 +3437,14 @@ function conciliaFile(evt){
         }
         parsed=parseCartola(rows,_conciliaCard);
       }
-      window.__conciliaDebug.stage='parseado'; window.__conciliaDebug.count=parsed.length;
-      if(!parsed.length){ showToast(isPDF?'No se pudieron extraer movimientos del PDF (¿escaneado?)':'No se encontraron movimientos en el archivo','var(--yellow)'); mostrarDebug(); return; }
+      if(!parsed.length){ showToast(isPDF?'No se pudieron extraer movimientos del PDF (¿escaneado?)':'No se encontraron movimientos en el archivo','var(--yellow)'); return; }
       conciliaMatch(parsed);
     }catch(err){
-      window.__conciliaDebug.stage='ERROR'; window.__conciliaDebug.error=String(err&&(err.message||err.name)||err);
       console.error('concilia:',err);
       const msg=String(err&&err.name==='PasswordException'?'El PDF tiene contraseña; guárdalo sin clave e intenta de nuevo':('Error al leer el archivo: '+(err.message||err)));
       showToast(msg,'var(--red)');
-      mostrarDebug();
     }
   };
-  reader.onerror=function(){ window.__conciliaDebug.stage='ERROR-READER'; window.__conciliaDebug.error='FileReader: '+((reader.error&&reader.error.message)||'?'); showToast('No se pudo leer el archivo','var(--red)'); mostrarDebug(); };
   if(isCSV) reader.readAsText(file,'UTF-8'); else reader.readAsArrayBuffer(file);
   evt.target.value='';
 }
@@ -3531,10 +3506,8 @@ function renderConciliaReview(){
     <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(r.amount)}</span>`)).join('')
     :'<div style="font-size:12px;color:var(--text2);padding:6px 0">Nada sin registrar</div>';
 
-  const debugHTML=debugConciliaHTML();
   document.getElementById('concilia-content').innerHTML=`
     <button onclick="renderConciliaSetup()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-bottom:12px">← Volver</button>
-    ${debugHTML}
     ${sec('✅ Facturadas ('+ok.length+')','var(--green)',okHTML)}
     ${sec('⏳ No aparecen en la cartola — aplazar al próximo ciclo ('+sinFacturar.length+')','var(--yellow)',sfHTML)}
     ${sec('➕ En la cartola sin registrar — ¿registrar como gasto? ('+extras.length+')','var(--accent2)',exHTML)}
