@@ -1000,6 +1000,15 @@ function markAllCyclePaid(){
   if(pend.length) showToast(pend.length+' cuota'+(pend.length!==1?'s':'')+' cobrada'+(pend.length!==1?'s':'')+' ✓');
   else showToast('No hay cuotas pendientes en este ciclo','var(--yellow)');
 }
+// Marca cobradas TODAS las cuotas pendientes de UNA persona dentro de un ciclo
+// (section: 'actual' | 'anterior' | 'antiguas'). Es reversible cuota por cuota.
+function markPersonSectionPaid(person, section){
+  const pend=deudaInstallments().filter(i=>i.d.person===person&&i.section===section&&!i.paid);
+  pend.forEach(i=>toggleCuotaPagada(i.d.id,i.k,true));
+  renderDeudas();renderDashboard();
+  if(pend.length) showToast(pend.length+' cuota'+(pend.length!==1?'s':'')+' de '+person+' cobrada'+(pend.length!==1?'s':'')+' ✓');
+  else showToast('No hay cuotas pendientes','var(--yellow)');
+}
 function renderDeudas(){
   const todasDeudas=getDeudas();
   const allInst=deudaInstallments();
@@ -1074,9 +1083,12 @@ function renderDeudas(){
       ?`<button class="btn-mark-all-cycle" onclick="markAllCyclePaid()">✓ Marcar todo cobrado (${unpaidCount})</button>`:'';
     const cardsHTML=Object.entries(byPerson).map(([person,pItems])=>{
       const pendTotal=pItems.filter(i=>!i.paid).reduce((s,i)=>s+i.amt,0);
+      const pendCount=pItems.filter(i=>!i.paid).length;
       const shareBtn=pendTotal>0?`<button onclick="compartirDeuda('${escJsAttr(person)}','${section}')" title="Compartir deudas de ${esc(person)}" style="background:var(--accent2);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;padding:5px 11px;cursor:pointer;flex-shrink:0">📤 Compartir</button>`:'';
+      // Cobrar de golpe todas las cuotas pendientes de esta persona en este ciclo.
+      const markPersonBtn=pendCount>0?`<button onclick="markPersonSectionPaid('${escJsAttr(person)}','${section}')" title="Marcar cobradas todas las deudas de ${esc(person)} en este ciclo" style="background:var(--green);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;padding:5px 11px;cursor:pointer;flex-shrink:0">✓ Cobrar todo (${pendCount})</button>`:'';
       return `<div class="deuda-person-card">
-        <div class="deuda-person-header"><h3>👤 ${esc(person)}</h3><div style="display:flex;align-items:center;gap:10px"><span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span>${shareBtn}</div></div>
+        <div class="deuda-person-header"><h3>👤 ${esc(person)}</h3><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end"><span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span>${markPersonBtn}${shareBtn}</div></div>
         ${pItems.sort((a,b)=>(new Date(b.d.date)-new Date(a.d.date))||a.k-b.k).map(renderInstItem).join('')}
       </div>`;
     }).join('');
@@ -1389,7 +1401,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v14</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v15</div>`;
   }
 }
 function updateValorDolar(v){
@@ -2327,7 +2339,9 @@ function splitApplyNone(){
 }
 
 function renderPersonChips(){
-  const personas=getPersonas();
+  // Tamarindo siempre de primera en la fila (es con quien se divide habitualmente),
+  // aunque no sea la primera en la lista de personas.
+  const personas=getPersonas().slice().sort((a,b)=>(/tamarindo/i.test(b)?1:0)-(/tamarindo/i.test(a)?1:0));
   document.getElementById('person-chips').innerHTML=personas.map(p=>
     `<button class="person-chip ${_splitSelectedPersons.includes(p)?'active':''}" onclick="selectPerson('${escJsAttr(p)}')">👤 ${esc(p)}</button>`
   ).join('');

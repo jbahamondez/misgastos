@@ -308,6 +308,35 @@ Check 'SPLIT-DEFAULT-SIN-TAMARINDO-CAE-A-PRIMERA' @'
 })()
 '@
 
+Check 'PERSON-CHIP-TAMARINDO-PRIMERO' @'
+(function(){
+  const prev=localStorage.getItem('deudas_personas_v1');
+  localStorage.setItem('deudas_personas_v1', JSON.stringify(['Juan','Ana','🤍 Tamarindo']));
+  _splitSelectedPersons=[];
+  renderPersonChips();
+  const first=document.querySelector('#person-chips .person-chip');
+  const txt=first?first.textContent:'';
+  if(prev===null) localStorage.removeItem('deudas_personas_v1'); else localStorage.setItem('deudas_personas_v1',prev);
+  return JSON.stringify({pass: /tamarindo/i.test(txt), txt});
+})()
+'@
+
+Check 'MARCAR-TODO-POR-PERSONA-CICLO' @'
+(function(){
+  const hoy=new Date().toISOString();
+  localStorage.setItem('gastos_credito_v2','[]');
+  localStorage.setItem('gastos_deudas_v1', JSON.stringify([
+    {id:'pa1',person:'Tamarindo',txId:'t1',desc:'A',type:'credito',cuotas:1,deudaPerCuota:1000,deudaTotal:1000,currency:'CLP',date:hoy,paid:false,paidDate:null},
+    {id:'pb1',person:'Juan',txId:'t2',desc:'B',type:'credito',cuotas:1,deudaPerCuota:500,deudaTotal:500,currency:'CLP',date:hoy,paid:false,paidDate:null}
+  ]));
+  markPersonSectionPaid('Tamarindo','actual');
+  const inst=deudaInstallments();
+  const tamPaid=inst.filter(i=>i.d.person==='Tamarindo').every(i=>i.paid);
+  const juanUnpaid=inst.filter(i=>i.d.person==='Juan').every(i=>!i.paid);
+  return JSON.stringify({pass: tamPaid && juanUnpaid, tam:inst.filter(i=>i.d.person==='Tamarindo').map(i=>i.paid), juan:inst.filter(i=>i.d.person==='Juan').map(i=>i.paid)});
+})()
+'@
+
 Check 'PRESTAMO-CATEGORIA-AUTO' @'
 (function(){
   localStorage.setItem('gastos_credito_v2', JSON.stringify([{id:'p1',cardId:'bci',amount:50000,desc:'PRESTAMO AMIGO',cuotas:1,currency:'CLP',date:new Date().toISOString(),catId:''}]));
