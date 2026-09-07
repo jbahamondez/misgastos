@@ -66,6 +66,51 @@ Check 'TOAST-VISIBILITYCHANGE-OCULTA' @'
 })()
 '@
 
+Check 'SYNC-MANUAL-403-AVISA' @'
+(async function(){
+  const of=window.fetch, os=window.showToast; let msg="";
+  window.fetch=async()=>({ok:false,status:403,text:async()=>"denied"});
+  window.showToast=(m)=>{msg=m||"";};
+  try{
+    const res=await syncFromSheets({manual:true});
+    return JSON.stringify({pass: res&&res.error==="http" && res.status===403 && /acceso|HTTP 403/i.test(msg), res, msg});
+  } finally { window.fetch=of; window.showToast=os; }
+})()
+'@
+
+Check 'SYNC-MANUAL-HTML-ACCESO-AVISA' @'
+(async function(){
+  const of=window.fetch, os=window.showToast; let msg="";
+  window.fetch=async()=>({ok:true,status:200,text:async()=>"<!DOCTYPE html><title>Acceso denegado</title>Necesitas acceso"});
+  window.showToast=(m)=>{msg=m||"";};
+  try{
+    const res=await syncFromSheets({manual:true});
+    return JSON.stringify({pass: res&&res.error==="parse" && /sesi|Cualquier persona/i.test(msg), res, msg});
+  } finally { window.fetch=of; window.showToast=os; }
+})()
+'@
+
+Check 'SYNC-MANUAL-SIN-NOVEDAD-AVISA' @'
+(async function(){
+  const of=window.fetch, os=window.showToast; let msg="";
+  window.fetch=async()=>({ok:true,status:200,text:async()=>JSON.stringify({rows:[]})});
+  window.showToast=(m)=>{msg=m||"";};
+  try{
+    const res=await syncFromSheets({manual:true});
+    return JSON.stringify({pass: res&&res.imported===0 && /nuevas|sincronizar/i.test(msg), res, msg});
+  } finally { window.fetch=of; window.showToast=os; }
+})()
+'@
+
+Check 'SYNC-BOTON-EN-AJUSTES' @'
+(function(){
+  renderAjustes();
+  const ok=/Sincronizar correos ahora/.test(document.getElementById("page-ajustes").innerHTML)
+        && typeof syncManual==="function";
+  return JSON.stringify({pass:ok});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

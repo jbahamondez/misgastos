@@ -1387,7 +1387,9 @@ function renderAjustes(){
           onblur="updateValorDolar(this.value)" onkeydown="if(event.key==='Enter'){this.blur()}" />
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v12</div>`;
+      <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
+      <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v13</div>`;
   }
 }
 function updateValorDolar(v){
@@ -2524,19 +2526,37 @@ function parseMontoCola(v){
   return parseFloat(s.indexOf(',')>=0 ? s.replace(/\./g,'').replace(',','.') : s)||0;
 }
 
-async function syncFromSheets(){
-  // Evitar sync si ya se hizo en los últimos 15 segundos
+// opts.manual=true: lo dispara el boton "Sincronizar ahora". En ese caso salta el
+// anti-rebote de 15s y AVISA con un toast si algo falla (para que un fallo del
+// endpoint no vuelva a ser silencioso, como el 403 de "Necesitas acceso").
+async function syncFromSheets(opts){
+  const manual=!!(opts&&opts.manual);
   const last=parseInt(localStorage.getItem(LS_SYNC)||'0');
-  if(Date.now()-last < 15000) return;
+  if(!manual && Date.now()-last < 15000) return {skipped:true};
   localStorage.setItem(LS_SYNC, Date.now().toString());
   try{
     const r=await fetch(APPS_SCRIPT_URL+'?action=getPending',{cache:'no-store'});
-    if(!r.ok){console.warn('syncFromSheets HTTP error:',r.status);return;}
+    if(!r.ok){
+      console.warn('syncFromSheets HTTP error:',r.status);
+      if(manual) showToast((r.status===403||r.status===401)
+        ? 'Sin acceso al sincronizador (HTTP '+r.status+'). Publica el Apps Script para "Cualquier persona".'
+        : 'No se pudo conectar con el sincronizador (HTTP '+r.status+')','var(--red)');
+      return {error:'http',status:r.status};
+    }
     const text=await r.text();
-    console.log('syncFromSheets raw response:',text.substring(0,200));
     let data;
-    try{data=JSON.parse(text);}catch(pe){console.warn('syncFromSheets JSON parse error:',pe,text);return;}
-    if(!data.rows||!data.rows.length){console.log('syncFromSheets: no pending rows');return;}
+    try{data=JSON.parse(text);}catch(pe){
+      console.warn('syncFromSheets JSON parse error:',pe,text.substring(0,200));
+      if(manual) showToast(/Necesitas acceso|Acceso denegado|accounts\.google|Sign in/i.test(text)
+        ? 'El sincronizador pide iniciar sesión: publica el Apps Script para "Cualquier persona".'
+        : 'El sincronizador respondió algo inesperado. Intenta otra vez.','var(--red)');
+      return {error:'parse'};
+    }
+    if(!data.rows||!data.rows.length){
+      console.log('syncFromSheets: no pending rows');
+      if(manual) showToast('No hay compras nuevas por sincronizar','var(--yellow)');
+      return {imported:0};
+    }
     const pendingSplits=[];
     let imported=0;
     const toasts=[];
@@ -2587,8 +2607,24 @@ async function syncFromSheets(){
         }, delay);
       }
     }
+    return {imported};
   }catch(e){
     console.warn('syncFromSheets error:',e);
+    if(manual) showToast('Error al sincronizar: '+(e&&e.message||e),'var(--red)');
+    return {error:'exception'};
+  }
+}
+
+// Boton "Sincronizar ahora" (Ajustes): fuerza la lectura de la Cola de correos.
+async function syncManual(btn){
+  const orig=btn?btn.textContent:'';
+  if(btn){ btn.disabled=true; btn.textContent='🔄 Sincronizando…'; }
+  try{
+    const res=await syncFromSheets({manual:true});
+    // Los toasts de éxito (📩 por compra) y de error los emite syncFromSheets.
+    return res;
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent=orig||'🔄 Sincronizar correos ahora'; }
   }
 }
 

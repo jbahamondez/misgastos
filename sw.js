@@ -1,5 +1,5 @@
-const CACHE_NAME = 'misgastos-cache-v12';
-const ASSETS = ['./', './index.html', './styles.css?v=12', './app.js?v=12', './firebase.js', './manifest.json', './icon-180-v3.png', './icon-192-v3.png', './icon-512-v3.png'];
+const CACHE_NAME = 'misgastos-cache-v13';
+const ASSETS = ['./', './index.html', './styles.css?v=13', './app.js?v=13', './firebase.js', './manifest.json', './icon-180-v3.png', './icon-192-v3.png', './icon-512-v3.png'];
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
