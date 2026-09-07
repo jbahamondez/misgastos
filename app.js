@@ -1084,12 +1084,16 @@ function renderDeudas(){
     const cardsHTML=Object.entries(byPerson).map(([person,pItems])=>{
       const pendTotal=pItems.filter(i=>!i.paid).reduce((s,i)=>s+i.amt,0);
       const pendCount=pItems.filter(i=>!i.paid).length;
-      const shareBtn=pendTotal>0?`<button onclick="compartirDeuda('${escJsAttr(person)}','${section}')" title="Compartir deudas de ${esc(person)}" style="background:var(--accent2);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;padding:5px 11px;cursor:pointer;flex-shrink:0">📤 Compartir</button>`:'';
-      // Cobrar de golpe todas las cuotas pendientes de esta persona en este ciclo.
-      const markPersonBtn=pendCount>0?`<button onclick="markPersonSectionPaid('${escJsAttr(person)}','${section}')" title="Marcar cobradas todas las deudas de ${esc(person)} en este ciclo" style="background:var(--green);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:600;padding:5px 11px;cursor:pointer;flex-shrink:0">✓ Cobrar todo (${pendCount})</button>`:'';
+      // Acciones al pie de la tarjeta (fila propia, botones parejos): cobrar de golpe
+      // todas las cuotas pendientes de esta persona en este ciclo, y compartir.
+      const actions=pendCount>0?`<div class="deuda-person-actions">
+        <button class="dp-btn dp-btn-cobrar" onclick="markPersonSectionPaid('${escJsAttr(person)}','${section}')">✓ Cobrar todo (${pendCount})</button>
+        <button class="dp-btn dp-btn-share" onclick="compartirDeuda('${escJsAttr(person)}','${section}')">📤 Compartir</button>
+      </div>`:'';
       return `<div class="deuda-person-card">
-        <div class="deuda-person-header"><h3>👤 ${esc(person)}</h3><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end"><span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span>${markPersonBtn}${shareBtn}</div></div>
+        <div class="deuda-person-header"><h3>👤 ${esc(person)}</h3><span class="deuda-total">${pendTotal>0?fmtCLP(pendTotal):'Al día ✅'}</span></div>
         ${pItems.sort((a,b)=>(new Date(b.d.date)-new Date(a.d.date))||a.k-b.k).map(renderInstItem).join('')}
+        ${actions}
       </div>`;
     }).join('');
     return `<div class="cycle-section">
@@ -1401,7 +1405,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v15</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v16</div>`;
   }
 }
 function updateValorDolar(v){
