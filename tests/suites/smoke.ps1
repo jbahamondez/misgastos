@@ -111,6 +111,46 @@ Check 'SYNC-BOTON-EN-AJUSTES' @'
 })()
 '@
 
+Check 'SYNC-DEDUP-MISMO-CORREO-DOS-FILAS' @'
+(async function(){
+  const of=window.fetch, os=window.showToast;
+  localStorage.setItem("gastos_credito_v2","[]");
+  window.showToast=function(){};
+  window.fetch=async function(u){
+    if(String(u).indexOf("getPending")>=0) return {ok:true,status:200,text:async()=>JSON.stringify({rows:[
+      ["sheet_5_23990_2026-09-05T14:30:00","bci","credito",23990,"JUMBO",1,"CLP","2026-09-05T14:30:00"],
+      ["sheet_9_23990_2026-09-05T14:30:00","bci","credito",23990,"JUMBO",1,"CLP","2026-09-05T14:30:00"]
+    ]})};
+    return {ok:true,status:200,text:async()=>"{}"};
+  };
+  try{
+    await syncFromSheets({manual:true});
+    const jumbos=getC().filter(t=>t.desc==="JUMBO");
+    return JSON.stringify({pass: jumbos.length===1, n:jumbos.length});
+  } finally { window.fetch=of; window.showToast=os; localStorage.setItem("gastos_credito_v2","[]"); }
+})()
+'@
+
+Check 'SYNC-NO-BORRA-COMPRAS-DISTINTAS' @'
+(async function(){
+  const of=window.fetch, os=window.showToast;
+  localStorage.setItem("gastos_credito_v2","[]");
+  window.showToast=function(){};
+  window.fetch=async function(u){
+    if(String(u).indexOf("getPending")>=0) return {ok:true,status:200,text:async()=>JSON.stringify({rows:[
+      ["sheet_5_23990_2026-09-05T14:30:00","bci","credito",23990,"JUMBO",1,"CLP","2026-09-05T14:30:00"],
+      ["sheet_6_23990_2026-09-05T18:05:00","bci","credito",23990,"JUMBO",1,"CLP","2026-09-05T18:05:00"]
+    ]})};
+    return {ok:true,status:200,text:async()=>"{}"};
+  };
+  try{
+    await syncFromSheets({manual:true});
+    const jumbos=getC().filter(t=>t.desc==="JUMBO");
+    return JSON.stringify({pass: jumbos.length===2, n:jumbos.length});
+  } finally { window.fetch=of; window.showToast=os; localStorage.setItem("gastos_credito_v2","[]"); }
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

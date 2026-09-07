@@ -1405,7 +1405,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v16</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v17</div>`;
   }
 }
 function updateValorDolar(v){
@@ -2547,6 +2547,15 @@ function parseMontoCola(v){
   return parseFloat(s.indexOf(',')>=0 ? s.replace(/\./g,'').replace(',','.') : s)||0;
 }
 
+// Clave de CONTENIDO de una compra de la Cola. El id del Apps Script es
+// "sheet_<fila>_<monto>_<fecha>"; al quitar el nro de fila, dos filas del MISMO
+// correo (que el Apps Script haya apendado dos veces) colapsan a la misma clave,
+// evitando importar el gasto duplicado. Se antepone el tipo para no confundir un
+// cargo de credito con uno de debito del mismo monto y minuto.
+function emailContentKey(tipo, id){ return (tipo==='debito'?'debito':'credito')+'_'+String(id).replace(/^sheet_\d+_/,''); }
+// Tipo de una tx guardada: las de credito tienen cardId; las de debito, bank.
+function txTipo(t){ return t && t.cardId!==undefined ? 'credito' : 'debito'; }
+
 // opts.manual=true: lo dispara el boton "Sincronizar ahora". En ese caso salta el
 // anti-rebote de 15s y AVISA con un toast si algo falla (para que un fallo del
 // endpoint no vuelva a ser silencioso, como el 403 de "Necesitas acceso").
@@ -2581,11 +2590,16 @@ async function syncFromSheets(opts){
     const pendingSplits=[];
     let imported=0;
     const toasts=[];
+    // Dedup por CONTENIDO (no solo por id exacto): si el Apps Script apendo el mismo
+    // correo en dos filas de la Cola, cada fila trae un id distinto (sheet_<fila>_...)
+    // pero el mismo monto+fecha; emailContentKey los colapsa y evita el duplicado.
+    const vistos=new Set([...getC(),...getD()].filter(t=>t&&t.id!=null).map(t=>emailContentKey(txTipo(t),t.id)));
     for(const row of data.rows){
       const[txId,bank,type,amount,desc,cuotas,currency,date]=row;
       if(!txId||!amount) continue;
-      const existing=[...getC(),...getD()].find(t=>t.id===txId);
-      if(existing) continue;
+      const clave=emailContentKey(type,txId);
+      if(vistos.has(clave)) continue;
+      vistos.add(clave);
       // Respeta la moneda que envia la cola (compras internacionales = USD). Antes
       // se forzaba 'CLP', por lo que los cobros en dolares (ej. Anthropic, OpenAI)
       // quedaban con moneda y magnitud equivocadas. Default CLP para filas sin
