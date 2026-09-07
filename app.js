@@ -1387,7 +1387,7 @@ function renderAjustes(){
           onblur="updateValorDolar(this.value)" onkeydown="if(event.key==='Enter'){this.blur()}" />
       </div>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v9</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v10</div>`;
   }
 }
 function updateValorDolar(v){
@@ -3506,14 +3506,19 @@ function renderConciliaReview(){
     <span style="font-size:13px;font-weight:700;flex-shrink:0">${fmtCLP(r.amount)}</span>`)).join('')
     :'<div style="font-size:12px;color:var(--text2);padding:6px 0">Nada sin registrar</div>';
 
+  const debugHTML=(function(){try{const d=window.__cartolaDebug;if(!d)return '';
+    const rows=(d.rows||[]).map(r=>r.a+' | '+r.c+'c | '+(r.f||'')+' | '+(r.d||'')).join('\n');
+    const t='=== PARSEADO ('+(d.rows||[]).length+' filas) ===\n'+rows+'\n\n=== LINEAS CRUDAS ('+(d.lineas||[]).length+') ===\n'+(d.lineas||[]).join('\n');
+    return '<div style="border:2px solid var(--red);border-radius:10px;padding:10px;margin-bottom:14px"><div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:6px">🐞 DEBUG — toca el cuadro, copia TODO y envíamelo</div><textarea readonly onclick="this.select()" style="width:100%;height:220px;font-size:10px;font-family:monospace;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px;box-sizing:border-box">'+esc(t)+'</textarea></div>';
+  }catch(e){return '';}})();
   document.getElementById('concilia-content').innerHTML=`
     <button onclick="renderConciliaSetup()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0;margin-bottom:12px">← Volver</button>
+    ${debugHTML}
     ${sec('✅ Facturadas ('+ok.length+')','var(--green)',okHTML)}
     ${sec('⏳ No aparecen en la cartola — aplazar al próximo ciclo ('+sinFacturar.length+')','var(--yellow)',sfHTML)}
     ${sec('➕ En la cartola sin registrar — ¿registrar como gasto? ('+extras.length+')','var(--accent2)',exHTML)}
     <button onclick="conciliaConfirm()" class="btn-save" style="width:100%;margin-top:6px">Aplicar conciliación</button>
-    <div style="font-size:11px;color:var(--text2);margin-top:10px;line-height:1.5">ℹ️ Marca/desmarca lo que corresponda. Las aplazadas se mueven (compra + deuda) al ciclo siguiente. Las registradas se agregan como gasto de ${CARDS[_conciliaCard].bank} (puedes corregir la descripción) y luego se te preguntará si quieres dividirlas.</div>
-    ${(function(){try{const d=window.__cartolaDebug;if(!d)return '';const t=(d.lineas||[]).join('\n');return '<details style="margin-top:14px"><summary style="font-size:11px;color:var(--text2);cursor:pointer">🐞 Detalle técnico (para soporte)</summary><textarea readonly onclick="this.select()" style="width:100%;height:180px;margin-top:6px;font-size:10px;font-family:monospace;background:var(--bg3);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px;box-sizing:border-box">'+esc(t)+'</textarea></details>';}catch(e){return '';}})()}`;
+    <div style="font-size:11px;color:var(--text2);margin-top:10px;line-height:1.5">ℹ️ Marca/desmarca lo que corresponda. Las aplazadas se mueven (compra + deuda) al ciclo siguiente. Las registradas se agregan como gasto de ${CARDS[_conciliaCard].bank} (puedes corregir la descripción) y luego se te preguntará si quieres dividirlas.</div>`;
 }
 
 function conciliaConfirm(){
