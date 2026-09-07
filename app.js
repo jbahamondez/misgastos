@@ -1405,7 +1405,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v17</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v18</div>`;
   }
 }
 function updateValorDolar(v){

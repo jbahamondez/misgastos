@@ -173,14 +173,14 @@
     .empty svg{width:56px;height:56px;margin-bottom:14px;opacity:.25}
     .empty h3{font-size:17px;color:var(--text);margin-bottom:6px}
     .empty p{font-size:13px}
-    .toast{position:fixed;top:calc(var(--safe-top) + 8px);left:50%;transform:translateX(-50%) translateY(-80px);background:var(--green);color:#0f1117;padding:9px 18px;border-radius:20px;font-size:13px;font-weight:600;z-index:999;transition:transform .3s ease;white-space:nowrap}
+    .toast{position:fixed;top:calc(var(--safe-top) + 8px);left:50%;transform:translateX(-50%) translateY(-80px);background:var(--green);color:#0f1117;padding:9px 18px;border-radius:20px;font-size:13px;font-weight:600;z-index:999;transition:transform .3s ease,opacity .3s ease,visibility .3s ease;white-space:nowrap;opacity:0;visibility:hidden}
     .sync-badge{position:fixed;top:calc(var(--safe-top) + 12px);right:18px;width:30px;height:30px;border-radius:50%;display:none;align-items:center;justify-content:center;font-size:14px;z-index:60;pointer-events:none;border:1px solid transparent;transition:opacity .3s ease}
     .sync-badge.show{display:flex}
     .sync-badge.synced{background:rgba(52,211,153,.14);border-color:rgba(52,211,153,.32)}
     .sync-badge.syncing{background:rgba(251,191,36,.14);border-color:rgba(251,191,36,.32);animation:syncPulse 1s ease-in-out infinite}
     .sync-badge.off{background:rgba(148,163,184,.12);border-color:rgba(148,163,184,.28)}
     @keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.45}}
-    .toast.show{transform:translateX(-50%) translateY(0)}
+    .toast.show{transform:translateX(-50%) translateY(0);opacity:1;visibility:visible}
     .pb14{padding-bottom:14px}
 
     /* ── Menú contextual tx ────────────────────────────────────── */
