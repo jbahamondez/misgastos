@@ -279,6 +279,35 @@ Check 'SPLIT-CICLO-UI-SOLO-DEBITO' @'
 })()
 '@
 
+Check 'SPLIT-DEFAULT-TAMARINDO' @'
+(function(){
+  const prev=localStorage.getItem('deudas_personas_v1');
+  // Tamarindo NO va primera, para probar que igual queda pre-seleccionada
+  localStorage.setItem('deudas_personas_v1', JSON.stringify(['Juan','Ana','🤍 Tamarindo']));
+  _splitImportMode=false; _splitQueue=[];
+  _pendingSplit={txId:'z',amount:10000,desc:'X',cuotas:1,currency:'CLP',cardId:'bci',type:'credito',txDate:new Date().toISOString()};
+  openSplitModal(_pendingSplit);
+  const sel=_splitSelectedPersons.slice();
+  document.getElementById('split-modal-overlay').classList.remove('open'); _pendingSplit=null;
+  if(prev===null) localStorage.removeItem('deudas_personas_v1'); else localStorage.setItem('deudas_personas_v1',prev);
+  return JSON.stringify({pass: sel.length===1 && /tamarindo/i.test(sel[0]), sel});
+})()
+'@
+
+Check 'SPLIT-DEFAULT-SIN-TAMARINDO-CAE-A-PRIMERA' @'
+(function(){
+  const prev=localStorage.getItem('deudas_personas_v1');
+  localStorage.setItem('deudas_personas_v1', JSON.stringify(['Juan','Ana']));
+  _splitImportMode=false; _splitQueue=[];
+  _pendingSplit={txId:'z2',amount:10000,desc:'X',cuotas:1,currency:'CLP',cardId:'bci',type:'credito',txDate:new Date().toISOString()};
+  openSplitModal(_pendingSplit);
+  const sel=_splitSelectedPersons.slice();
+  document.getElementById('split-modal-overlay').classList.remove('open'); _pendingSplit=null;
+  if(prev===null) localStorage.removeItem('deudas_personas_v1'); else localStorage.setItem('deudas_personas_v1',prev);
+  return JSON.stringify({pass: sel.length===1 && sel[0]==='Juan', sel});
+})()
+'@
+
 Check 'PRESTAMO-CATEGORIA-AUTO' @'
 (function(){
   localStorage.setItem('gastos_credito_v2', JSON.stringify([{id:'p1',cardId:'bci',amount:50000,desc:'PRESTAMO AMIGO',cuotas:1,currency:'CLP',date:new Date().toISOString(),catId:''}]));
