@@ -1405,7 +1405,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v19</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v20</div>`;
   }
 }
 function updateValorDolar(v){
@@ -3555,20 +3555,30 @@ function conciliaFile(evt){
 
 // Match: el monto debe calzar (tolerancia +-5 CLP, por redondeos de cuotas del
 // banco) y entre candidatos con el mismo monto gana la fecha mas cercana.
+// Dos pasadas: (1) por el PRECIO completo del producto — asi vienen las compras
+// en el estado de cuenta PDF; (2) las compras en CUOTAS que quedaron sin calzar
+// se buscan por el VALOR DE LA CUOTA del periodo (precio/nº cuotas), porque los
+// export de "movimientos"/CSV/Excel de BCI traen la cuota del mes, no el total.
 function conciliaMatch(rows){
   const offset=_conciliaPeriod==='cerrado'?-1:0;
   const esperadas=conciliaEsperadas(_conciliaCard,offset,rows.periodo);
   const used=new Array(rows.length).fill(false);
   const TOL=5;
-  esperadas.forEach(e=>{
+  const buscar=(e,objetivo)=>{
     let best=-1,bestDias=Infinity;
     rows.forEach((r,i)=>{
       if(used[i]) return;
-      if(Math.abs(r.amount-e.bankAmt)>TOL) return;
+      if(Math.abs(r.amount-objetivo)>TOL) return;
       const dias=Math.abs(new Date(r.date)-new Date(e.tx.date))/86400000;
       if(dias<bestDias){ bestDias=dias; best=i; }
     });
-    if(best>=0){ used[best]=true; e.match=rows[best]; }
+    return best;
+  };
+  esperadas.forEach(e=>{ const b=buscar(e,e.bankAmt); if(b>=0){ used[b]=true; e.match=rows[b]; } });
+  esperadas.forEach(e=>{
+    if(e.match || !(e.cuotasTotal>1)) return;
+    const b=buscar(e, e.bankAmt/e.cuotasTotal);
+    if(b>=0){ used[b]=true; e.match=rows[b]; }
   });
   _conciliaData={esperadas, extras:rows.filter((r,i)=>!used[i])};
   renderConciliaReview();

@@ -308,6 +308,36 @@ Check 'SPLIT-DEFAULT-SIN-TAMARINDO-CAE-A-PRIMERA' @'
 })()
 '@
 
+Check 'CONCILIA-CUOTA-MATCH-POR-VALOR-CUOTA' @'
+(function(){
+  var hoy=new Date().toISOString();
+  localStorage.setItem("misgastos_billing_dates", JSON.stringify({bci:20}));
+  localStorage.setItem("gastos_deudas_v1","[]");
+  localStorage.setItem("gastos_credito_v2", JSON.stringify([{id:"cuoT",desc:"CUOTATEST",amount:30000,cuotas:3,cardId:"bci",currency:"CLP",date:hoy,source:"email_auto",catId:"x"}]));
+  _conciliaCard="bci"; _conciliaPeriod="actual";
+  var rows=[{id:"r1",amount:10000,date:hoy,cuotas:1,desc:"CUOTATEST",rawDesc:"CUOTATEST"}];
+  rows.periodo=null;
+  conciliaMatch(rows);
+  var e=_conciliaData.esperadas.find(function(x){return x.tx.id==="cuoT";});
+  return JSON.stringify({pass: !!(e&&e.match) && _conciliaData.extras.length===0, cuota:e?e.cuotaNum+"/"+e.cuotasTotal:null, bankAmt:e?e.bankAmt:null});
+})()
+'@
+
+Check 'CONCILIA-CUOTA-MATCH-POR-PRECIO-TOTAL' @'
+(function(){
+  var hoy=new Date().toISOString();
+  localStorage.setItem("misgastos_billing_dates", JSON.stringify({bci:20}));
+  localStorage.setItem("gastos_deudas_v1","[]");
+  localStorage.setItem("gastos_credito_v2", JSON.stringify([{id:"cuoT2",desc:"CUOTATEST",amount:30000,cuotas:3,cardId:"bci",currency:"CLP",date:hoy,source:"email_auto",catId:"x"}]));
+  _conciliaCard="bci"; _conciliaPeriod="actual";
+  var rows=[{id:"r1",amount:30000,date:hoy,cuotas:3,desc:"CUOTATEST",rawDesc:"CUOTATEST"}];
+  rows.periodo=null;
+  conciliaMatch(rows);
+  var e=_conciliaData.esperadas.find(function(x){return x.tx.id==="cuoT2";});
+  return JSON.stringify({pass: !!(e&&e.match) && _conciliaData.extras.length===0});
+})()
+'@
+
 Check 'PERSON-CHIP-TAMARINDO-PRIMERO' @'
 (function(){
   const prev=localStorage.getItem('deudas_personas_v1');
