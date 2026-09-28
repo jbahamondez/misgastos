@@ -337,6 +337,47 @@ Check 'MARCAR-TODO-POR-PERSONA-CICLO' @'
 })()
 '@
 
+Check 'EDIT-MONEDA-USD-A-CLP-SIN-SPLIT' @'
+(function(){
+  const hoy=new Date().toISOString();
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([{id:'u1',cardId:'bci',amount:115790,desc:'LIDER',cuotas:1,currency:'USD',date:hoy,catId:''}]));
+  localStorage.setItem('gastos_deudas_v1','[]');
+  openEditModal('u1','credito');
+  const rowVis=document.getElementById('edit-currency-row').style.display!=='none';
+  const selUSD=document.getElementById('edit-currency').value==='USD';
+  document.getElementById('edit-currency').value='CLP';
+  confirmEditTx();
+  const tx=getC().find(t=>t.id==='u1');
+  return JSON.stringify({pass: rowVis && selUSD && tx.currency==='CLP' && tx.amount===115790, tx:{cur:tx.currency,amt:tx.amount}});
+})()
+'@
+
+Check 'EDIT-MONEDA-USD-A-CLP-CON-SPLIT-ARREGLA-DEUDA' @'
+(function(){
+  const hoy=new Date().toISOString();
+  localStorage.setItem('misgastos_valor_dolar','980');
+  localStorage.setItem('gastos_credito_v2', JSON.stringify([{id:'s1',cardId:'bci',amount:57895,desc:'LIDER',cuotas:1,currency:'USD',date:hoy,catId:'',splitWith:'Tamarindo',splitTotal:115790}]));
+  localStorage.setItem('gastos_deudas_v1', JSON.stringify([{id:'d_s1',person:'Tamarindo',txId:'s1',desc:'LIDER',type:'credito',totalAmount:115790*980,cuotas:1,deudaPerCuota:57895*980,deudaTotal:57895*980,currency:'CLP',date:hoy,paid:false,paidDate:null}]));
+  openEditModal('s1','credito');
+  document.getElementById('edit-currency').value='CLP';
+  confirmEditTx();
+  const tx=getC().find(t=>t.id==='s1');
+  const d=getDeudas().find(x=>x.txId==='s1');
+  return JSON.stringify({pass: tx.currency==='CLP' && tx.amount===57895 && Math.round(d.deudaPerCuota)===57895 && Math.round(d.totalAmount)===115790 && d.currency==='CLP', tx:{cur:tx.currency,amt:tx.amount}, d:{per:d.deudaPerCuota,tot:d.totalAmount,cur:d.currency}});
+})()
+'@
+
+Check 'EDIT-MONEDA-SELECTOR-OCULTO-EN-DEBITO' @'
+(function(){
+  const hoy=new Date().toISOString();
+  localStorage.setItem('gastos_debito_v2', JSON.stringify([{id:'db1',bank:'bci',amount:5000,desc:'X',currency:'CLP',date:hoy,catId:''}]));
+  openEditModal('db1','debito');
+  const oculto=document.getElementById('edit-currency-row').style.display==='none';
+  document.getElementById('edit-modal-overlay').classList.remove('open');
+  return JSON.stringify({pass: oculto});
+})()
+'@
+
 Check 'PRESTAMO-CATEGORIA-AUTO' @'
 (function(){
   localStorage.setItem('gastos_credito_v2', JSON.stringify([{id:'p1',cardId:'bci',amount:50000,desc:'PRESTAMO AMIGO',cuotas:1,currency:'CLP',date:new Date().toISOString(),catId:''}]));

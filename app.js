@@ -1405,7 +1405,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v18</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v19</div>`;
   }
 }
 function updateValorDolar(v){
@@ -1893,6 +1893,13 @@ function openEditModal(txId, txType){
   if(!tx) return;
   document.getElementById('edit-desc').value=tx.desc||'';
   document.getElementById('edit-amount').value=tx.amount||'';
+  // Selector de moneda: solo credito (el debito siempre es CLP). Permite corregir
+  // compras que BCI etiqueta mal como USD (ej. comercio .CL "internacional").
+  const curRow=document.getElementById('edit-currency-row');
+  if(curRow){
+    if(txType==='debito'){ curRow.style.display='none'; }
+    else { curRow.style.display=''; document.getElementById('edit-currency').value=(tx.currency==='USD'?'USD':'CLP'); }
+  }
   populateCatSelect('edit-cat', tx.catId||'');
   const splitSection=document.getElementById('edit-split-section');
   if(tx.splitWith){
@@ -1959,31 +1966,57 @@ function confirmEditTx(){
   if(!desc){showToast('La descripción no puede estar vacía','var(--yellow)');return;}
   if(!amount||amount<=0){showToast('Ingresa un monto válido','var(--yellow)');return;}
   const catId=document.getElementById('edit-cat').value||'';
+  // Moneda: solo credito puede cambiarla (el debito siempre es CLP).
+  const curSel=document.getElementById('edit-currency');
+  const newCur=(_editTxType!=='debito' && curSel)?(curSel.value==='USD'?'USD':'CLP'):'CLP';
   // factor = cuanto cambio el monto; escala el total dividido y la(s) deuda(s)
   // asociada(s) en la misma proporcion, para que la division quede consistente.
   const arr=_editTxType==='debito'?getD():getC();
   const idx=arr.findIndex(t=>t.id===_editTxId);
-  let factor=1;
+  let factor=1, curChanged=false, txRef=null;
   if(idx>=0){
     const oldAmount=arr[idx].amount;
     factor=(oldAmount>0)?amount/oldAmount:1;
+    curChanged=(_editTxType!=='debito' && (arr[idx].currency||'CLP')!==newCur);
     arr[idx].desc=desc; arr[idx].amount=amount; arr[idx].catId=catId;
+    if(_editTxType!=='debito') arr[idx].currency=newCur;
     if(arr[idx].splitTotal) arr[idx].splitTotal*=factor;
     (_editTxType==='debito'?saveD:saveC)(arr);
+    txRef=arr[idx];
   }
-  // Deuda(s) asociada(s): descripcion siempre; monto escalado si cambio el monto
+  // Deuda(s) asociada(s): descripcion siempre. Si cambio la MONEDA, se recalculan
+  // desde el total dividido en la moneda nueva (asi la deuda de una compra que BCI
+  // marco mal como USD vuelve a pesos sin la conversion x valor dolar). Si solo
+  // cambio el monto, se escalan por el factor como antes.
   const deudas=getDeudas();
   let dc=false;
-  deudas.forEach(d=>{
-    if(d.txId!==_editTxId) return;
-    d.desc=desc;
-    if(factor!==1){
-      d.deudaPerCuota=(d.deudaPerCuota||0)*factor;
-      d.deudaTotal=(d.deudaTotal||0)*factor;
-      d.totalAmount=(d.totalAmount||0)*factor;
-    }
-    dc=true;
-  });
+  if(curChanged && txRef && txRef.splitTotal){
+    const nPers=txRef.splitWith?String(txRef.splitWith).split(/,\s*/).filter(Boolean).length:1;
+    const s=calcularSplit(txRef.splitTotal, txRef.cuotas, _editTxType, nPers, esPrestada(txRef));
+    const vd=getValorDolar();
+    const aPesos=(newCur==='USD' && vd>0);
+    const conv=aPesos?vd:1;
+    const deudaCur=aPesos?'CLP':newCur;
+    deudas.forEach(d=>{
+      if(d.txId!==_editTxId) return;
+      d.desc=desc; d.currency=deudaCur;
+      d.totalAmount=txRef.splitTotal*conv;
+      d.deudaPerCuota=s.personSharePerCuota*conv;
+      d.deudaTotal=s.personSharePerCuota*s.cuotasReal*conv;
+      dc=true;
+    });
+  } else {
+    deudas.forEach(d=>{
+      if(d.txId!==_editTxId) return;
+      d.desc=desc;
+      if(factor!==1){
+        d.deudaPerCuota=(d.deudaPerCuota||0)*factor;
+        d.deudaTotal=(d.deudaTotal||0)*factor;
+        d.totalAmount=(d.totalAmount||0)*factor;
+      }
+      dc=true;
+    });
+  }
   if(dc) saveDeudas(deudas);
   closeEditModal();
   renderDashboard(); renderDebito(); renderHistorial(); renderDeudas();
