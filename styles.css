@@ -23,6 +23,7 @@
     .card-bci{background:linear-gradient(135deg,#c0392b,#e63329)}
     .card-bchile{background:linear-gradient(135deg,#00205b,#003087)}
     .card-scotia{background:linear-gradient(135deg,#b50000,#ec111a)}
+    .card-santander{background:linear-gradient(135deg,#b00000,#ec0000)}
     .card-bank{font-size:10px;font-weight:600;opacity:.8;letter-spacing:1px;text-transform:uppercase}
     .card-num{font-size:12px;opacity:.7;margin-top:3px;letter-spacing:2px}
     .card-balance{font-size:26px;font-weight:700;margin-top:14px}
