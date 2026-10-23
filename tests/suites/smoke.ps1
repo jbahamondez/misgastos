@@ -151,6 +151,21 @@ Check 'SYNC-NO-BORRA-COMPRAS-DISTINTAS' @'
 })()
 '@
 
+Check 'SANTANDER-EN-TODAS-LAS-LISTAS' @'
+(function(){
+  renderAjustes();
+  var bill=document.getElementById("billing-dates-list").innerHTML.indexOf("Santander")>=0;
+  var pay=document.getElementById("payment-dates-list").innerHTML.indexOf("Santander")>=0;
+  var cupos=document.getElementById("settings-cards-list").innerHTML.indexOf("Santander")>=0;
+  activeDateFilter="todo"; activeFilter="all"; renderHistorial();
+  var filtro=document.getElementById("filter-row").innerHTML.toLowerCase().indexOf("santander")>=0;
+  var chip=!!document.getElementById("chip-santander");
+  var mcard=document.getElementById("m-card").innerHTML.indexOf("santander")>=0;
+  var enCards=!!CARDS.santander;
+  return JSON.stringify({pass: bill&&pay&&cupos&&filtro&&chip&&mcard&&enCards, bill:bill,pay:pay,cupos:cupos,filtro:filtro,chip:chip,mcard:mcard,enCards:enCards});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

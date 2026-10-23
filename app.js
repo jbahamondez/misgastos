@@ -634,7 +634,7 @@ function selectImportType(type){
 
 function selectImportBank(bank){
   importBank=bank;
-  ['bci','bchile','scotia'].forEach(b=>{
+  Object.keys(CARDS).forEach(b=>{
     const el=document.getElementById('chip-'+b);
     if(el) el.classList.toggle('active', b===bank);
   });
@@ -870,7 +870,7 @@ function renderHistorial(){
   ).join('');
 
   // Type filter chips
-  const filters=[{id:'all',label:'Todos'},{id:'credito',label:'Credito'},{id:'debito',label:'Debito'},{id:'bci',label:'BCI'},{id:'bchile',label:'Banco Chile'},{id:'scotia',label:'Scotia'}];
+  const filters=[{id:'all',label:'Todos'},{id:'credito',label:'Credito'},{id:'debito',label:'Debito'}].concat(Object.values(CARDS).map(c=>({id:c.id,label:c.bank})));
   document.getElementById('filter-row').innerHTML=filters.map(f=>`<button class="filter-chip ${activeFilter===f.id?'active':''}" onclick="setFilter('${f.id}')">${f.label}</button>`).join('');
 
   // Date range ('todo' => null, sin filtro)
@@ -1365,11 +1365,9 @@ function renderAjustes(){
   renderServiciosAjustes();
   // Fechas de facturación
   const billing=getBillingDates();
-  const tarjetas=[
-    {id:'bci',label:'💳 BCI'},
-    {id:'bchile',label:'💳 Banco Chile'},
-    {id:'scotia',label:'💳 Scotiabank'},
-  ];
+  // Derivado de CARDS: toda tarjeta (incluida Santander y futuras) aparece aquí
+  // con sus campos de día de cierre y día de vencimiento, sin hardcodear.
+  const tarjetas=Object.values(CARDS).map(c=>({id:c.id,label:'💳 '+c.bank}));
   document.getElementById('billing-dates-list').innerHTML=tarjetas.map(t=>`
     <div class="settings-row" style="align-items:center;gap:10px">
       <span class="row-label" style="flex:1">${t.label}</span>
@@ -1406,7 +1404,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v21</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v22</div>`;
   }
 }
 function updateValorDolar(v){

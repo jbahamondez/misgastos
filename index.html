@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="./icon-180-v3.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
-  <link rel="stylesheet" href="./styles.css?v=21" />
+  <link rel="stylesheet" href="./styles.css?v=22" />
 </head>
 <body>
 
@@ -56,6 +56,7 @@
     <button class="bank-chip active" id="chip-bci"    onclick="selectImportBank('bci')">BCI</button>
     <button class="bank-chip"        id="chip-bchile" onclick="selectImportBank('bchile')">Banco Chile</button>
     <button class="bank-chip"        id="chip-scotia" onclick="selectImportBank('scotia')">Scotia</button>
+    <button class="bank-chip"        id="chip-santander" onclick="selectImportBank('santander')">Santander</button>
   </div>
 
   <div class="import-box" onclick="document.getElementById('file-input').click()">
@@ -273,6 +274,7 @@
         <option value="bci">BCI ****6146</option>
         <option value="bchile">Banco Chile ****8447</option>
         <option value="scotia">ScotiabankCencosud</option>
+        <option value="santander">Santander</option>
       </select>
       <label>Cuotas</label>
       <select id="m-cuotas">
@@ -419,7 +421,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=21"></script>
+<script src="./app.js?v=22"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>
