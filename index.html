@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="./icon-180-v3.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
-  <link rel="stylesheet" href="./styles.css?v=30" />
+  <link rel="stylesheet" href="./styles.css?v=31" />
 </head>
 <body>
 
@@ -126,51 +126,72 @@
 <!-- AJUSTES -->
 <div class="page" id="page-ajustes">
   <div class="page-header"><h1>Ajustes</h1><p>Configuración y automatización</p></div>
-  <div class="settings-section"><h3>☁️ Sincronización en la nube</h3></div>
-  <div id="cloud-sync-section" style="padding:0 20px 14px"><span style="font-size:12px;color:var(--text2)">Cargando…</span></div>
-
-  <div class="settings-section"><h3>📲 Ingreso automático</h3></div>
-  <div id="ingest-section" style="padding:0 20px 14px"></div>
-  <div class="settings-section"><h3>💳 Mis tarjetas y cuentas</h3></div>
-  <div style="padding:0 20px 14px">
-    <div class="settings-list" id="settings-cards-list"></div>
-    <button onclick="openAddCardModal()" style="width:100%;margin-top:10px;padding:11px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar tarjeta o cuenta</button>
-  </div>
-  <div class="settings-section"><h3>📅 Fecha de facturación por tarjeta</h3></div>
-  <div style="padding:0 20px 14px" id="billing-dates-list"></div>
-  <div class="settings-section"><h3>💳 Día de vencimiento de pago</h3></div>
-  <div style="padding:0 20px 14px" id="payment-dates-list"></div>
-  <div class="settings-section"><h3>💵 Valor del dólar</h3></div>
-  <div style="padding:0 20px 14px" id="valor-dolar-row"></div>
-  <div class="settings-section"><h3>🏠 Servicios del hogar</h3></div>
-  <div style="padding:0 20px 14px" id="servicios-list"></div>
-  <div style="padding:0 20px 14px">
-    <button onclick="openAddServicioModal()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar servicio</button>
-  </div>
-  <div class="settings-section"><h3>🏷️ Categorías</h3></div>
-  <div style="padding:0 20px 14px" id="categorias-list"></div>
-  <div style="padding:0 20px 14px">
-    <button onclick="openAddCatModal()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar categoría</button>
-  </div>
-  <div class="settings-section"><h3>🔑 Reglas de auto-categorización</h3></div>
-  <div style="padding:0 20px 4px" id="cat-rules-list"></div>
-  <div style="padding:0 20px 14px">
-    <button onclick="openAddRuleModal()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar regla</button>
-  </div>
-  <div class="settings-section"><h3>👤 Personas para dividir gastos</h3></div>
-  <div style="padding:0 20px 14px" id="personas-list"></div>
-  <div class="settings-section"><h3>🧾 Conciliación</h3>
+  <details class="settings-group">
+    <summary>☁️ Sincronización en la nube</summary>
+    <div id="cloud-sync-section" style="padding:0 20px 14px"><span style="font-size:12px;color:var(--text2)">Cargando…</span></div>
+  </details>
+  <details class="settings-group">
+    <summary>📲 Ingreso automático</summary>
+    <div id="ingest-section" style="padding:0 20px 14px"></div>
+  </details>
+  <details class="settings-group">
+    <summary>💳 Mis tarjetas y cuentas</summary>
+    <div style="padding:0 20px 14px">
+      <div class="settings-list" id="settings-cards-list"></div>
+      <button onclick="openAddCardModal()" style="width:100%;margin-top:10px;padding:11px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar tarjeta o cuenta</button>
+    </div>
+  </details>
+  <details class="settings-group">
+    <summary>📅 Fecha de facturación por tarjeta</summary>
+    <div style="padding:0 20px 14px" id="billing-dates-list"></div>
+  </details>
+  <details class="settings-group">
+    <summary>💳 Día de vencimiento de pago</summary>
+    <div style="padding:0 20px 14px" id="payment-dates-list"></div>
+  </details>
+  <details class="settings-group">
+    <summary>💵 Valor del dólar</summary>
+    <div style="padding:0 20px 14px" id="valor-dolar-row"></div>
+  </details>
+  <details class="settings-group">
+    <summary>🏠 Servicios del hogar</summary>
+    <div style="padding:0 20px 14px" id="servicios-list"></div>
+    <div style="padding:0 20px 14px">
+      <button onclick="openAddServicioModal()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar servicio</button>
+    </div>
+  </details>
+  <details class="settings-group">
+    <summary>🏷️ Categorías</summary>
+    <div style="padding:0 20px 14px" id="categorias-list"></div>
+    <div style="padding:0 20px 14px">
+      <button onclick="openAddCatModal()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar categoría</button>
+    </div>
+  </details>
+  <details class="settings-group">
+    <summary>🔑 Reglas de auto-categorización</summary>
+    <div style="padding:0 20px 4px" id="cat-rules-list"></div>
+    <div style="padding:0 20px 14px">
+      <button onclick="openAddRuleModal()" style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar regla</button>
+    </div>
+  </details>
+  <details class="settings-group">
+    <summary>👤 Personas para dividir gastos</summary>
+    <div style="padding:0 20px 14px" id="personas-list"></div>
+  </details>
+  <details class="settings-group">
+    <summary>🧾 Conciliación</summary>
     <div class="settings-list">
       <div class="settings-row" onclick="openConciliaModal()"><span class="row-label">🧾 Conciliar cartola de crédito</span><span class="row-val">→</span></div>
     </div>
-  </div>
-  <div class="settings-section"><h3>Datos</h3>
+  </details>
+  <details class="settings-group">
+    <summary>🗄️ Datos</summary>
     <div class="settings-list">
       <div class="settings-row" onclick="exportData()"><span class="row-label">📤 Exportar respaldo (JSON)</span><span class="row-val">→</span></div>
       <div class="settings-row" onclick="importData()"><span class="row-label">📥 Importar respaldo (JSON)</span><span class="row-val">→</span></div>
       <div class="settings-row" onclick="clearData()"><span class="row-label" style="color:var(--red)">🗑️ Borrar todos los gastos</span><span class="row-val">→</span></div>
     </div>
-  </div>
+  </details>
   <div style="height:20px"></div>
 </div>
 
@@ -484,7 +505,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=30"></script>
+<script src="./app.js?v=31"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>
