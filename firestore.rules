@@ -12,6 +12,14 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == uid;
     }
 
+    // Tokens de ingreso automático (push → Vercel). Cada usuario crea/borra solo
+    // los suyos (el doc debe apuntar a su propio uid). El backend los lee con
+    // Admin SDK (ignora estas reglas). Nadie puede leer el token de otro.
+    match /ingest_tokens/{token} {
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow read, update, delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
     // Todo lo demás queda denegado por defecto (reglas v2).
   }
 }
