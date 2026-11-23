@@ -1,11 +1,43 @@
 'use strict';
 
-const CARDS = {
-  bci:    {id:'bci',    bank:'BCI',                num:'****6146',color:'#e63329',gradient:'card-bci',    limitCLP:9519000,limitUSD:470.74,emoji:'🔴'},
-  bchile: {id:'bchile', bank:'Banco Chile',        num:'****8447',color:'#003087',gradient:'card-bchile', limitCLP:9519000,limitUSD:470.74,emoji:'🔵'},
-  scotia: {id:'scotia', bank:'ScotiabankCencosud', num:'****',    color:'#fbbf24',gradient:'card-scotia', limitCLP:1470000,limitUSD:0,     emoji:'🟡'},
-  santander:{id:'santander',bank:'Santander',     num:'****8785',color:'#ec0000',gradient:'card-santander',limitCLP:5000000,limitUSD:0,     emoji:'🟥'}
-};
+// Tarjetas/cuentas del usuario. Antes era un objeto fijo; ahora se construye
+// desde los datos del usuario (localStorage 'misgastos_cards', sincronizado),
+// para que cada persona configure las suyas. DEFAULT_CARDS es solo la semilla
+// inicial (las de este dispositivo) para no perder nada en la migración.
+const DEFAULT_CARDS = [
+  {id:'bci',      bank:'BCI',                num:'****6146',color:'#e63329',limitCLP:9519000,limitUSD:470.74,emoji:'🔴',tipo:'credito'},
+  {id:'bchile',   bank:'Banco Chile',        num:'****8447',color:'#003087',limitCLP:9519000,limitUSD:470.74,emoji:'🔵',tipo:'credito'},
+  {id:'scotia',   bank:'ScotiabankCencosud', num:'****',    color:'#fbbf24',limitCLP:1470000,limitUSD:0,     emoji:'🟡',tipo:'credito'},
+  {id:'santander',bank:'Santander',          num:'****8785',color:'#ec0000',limitCLP:5000000,limitUSD:0,     emoji:'🟥',tipo:'credito'}
+];
+function getCards(){
+  try{
+    const raw=localStorage.getItem('misgastos_cards');
+    if(raw){ const a=JSON.parse(raw); if(Array.isArray(a)) return a; }
+  }catch(e){}
+  // Primera vez (migración): siembra las tarjetas por defecto y las persiste.
+  localStorage.setItem('misgastos_cards',JSON.stringify(DEFAULT_CARDS));
+  return DEFAULT_CARDS.slice();
+}
+function buildCardsObject(arr){
+  const o={};
+  (arr||[]).forEach(c=>{ if(c&&c.id) o[c.id]=c; });
+  return o;
+}
+// CARDS mantiene la MISMA forma de antes (objeto keyed por id) para que todos
+// los usos existentes (CARDS[id], Object.values(CARDS)) sigan funcionando.
+let CARDS = buildCardsObject(getCards());
+function saveCards(arr){
+  localStorage.setItem('misgastos_cards',JSON.stringify(arr));
+  CARDS = buildCardsObject(arr);
+  if(typeof syncSettingsToCloud==='function') syncSettingsToCloud();
+}
+// Reemplaza CARDS desde datos de la nube (sin re-sincronizar, para evitar bucle).
+function applyCardsFromCloud(arr){
+  if(!Array.isArray(arr)) return;
+  localStorage.setItem('misgastos_cards',JSON.stringify(arr));
+  CARDS = buildCardsObject(arr);
+}
 
 const ICONS = {
   TICKETMASTER:'🎟️',TRAVEL:'✈️',UBER:'🚗',RAPPI:'🛵',CABIFY:'🚗',
@@ -140,7 +172,7 @@ function syncCollectionToCloud(collName,localArray,opts){
 
 function syncSettingsToCloud(){
   if(!window._fb||!window._fb.syncEnabled) return;
-  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
+  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),cards:getCards(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
 }
 
 const LOCAL_GETTERS = {
@@ -180,6 +212,7 @@ window.applyCloudCollection=function(collName,cloudArray){
 window.applyCloudSettings=function(data){
   if(data.sueldo!==undefined) localStorage.setItem(LS_S,String(data.sueldo));
   if(data.valorDolar!==undefined) localStorage.setItem('misgastos_valor_dolar',String(data.valorDolar));
+  if(Array.isArray(data.cards)) applyCardsFromCloud(data.cards);
   if(data.billingDates) localStorage.setItem('misgastos_billing_dates',JSON.stringify(data.billingDates));
   if(data.paymentDates) localStorage.setItem('misgastos_payment_dates',JSON.stringify(data.paymentDates));
   if(data.paidFlags) localStorage.setItem('misgastos_paid_flags',JSON.stringify(data.paidFlags));
@@ -228,6 +261,7 @@ window.dataStore = {
   async getSettings(){
     return {
       sueldo: getSueldo(),
+      cards: getCards(),
       billingDates: getBillingDates(),
       paymentDates: getPaymentDates(),
       paidFlags: getPaidFlags(),
@@ -236,6 +270,7 @@ window.dataStore = {
   },
   async updateSettings(patch){
     if(patch.sueldo!==undefined) setSueldo(patch.sueldo);
+    if(Array.isArray(patch.cards)) saveCards(patch.cards);
     if(patch.billingDates) saveBillingDates(Object.assign({},getBillingDates(),patch.billingDates));
     if(patch.paymentDates) savePaymentDates(Object.assign({},getPaymentDates(),patch.paymentDates));
     if(patch.paidFlags) savePaidFlags(Object.assign({},getPaidFlags(),patch.paidFlags));
