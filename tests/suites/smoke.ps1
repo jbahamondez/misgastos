@@ -166,6 +166,23 @@ Check 'SANTANDER-EN-TODAS-LAS-LISTAS' @'
 })()
 '@
 
+Check 'DEBITO-CUENTAS-CONFIGURABLES' @'
+(function(){
+  renderAjustes();
+  var md=document.getElementById("m-debit-bank").innerHTML;
+  var listHTML=document.getElementById("settings-cards-list").innerHTML;
+  var mdDinamico = md.indexOf("BCI")>=0;                 // selector poblado desde DEBITS
+  var listaDebito = listHTML.indexOf("Cuentas de d")>=0; // sección de débito en Ajustes
+  var seedOK = !!DEBITS.bci;                             // cuentas sembradas
+  // agregar una cuenta nueva y comprobar que entra
+  saveDebits(getDebits().concat([{id:"acct_test",bank:"TestBank",color:"#123456",emoji:"🏦",tipo:"debito"}]));
+  var agregada = !!DEBITS.acct_test;
+  // un gasto de débito con esa cuenta debe resolver su nombre
+  var nombreOK = debitMeta("acct_test") && debitMeta("acct_test").bank==="TestBank";
+  return JSON.stringify({pass: mdDinamico&&listaDebito&&seedOK&&agregada&&nombreOK, mdDinamico:mdDinamico,listaDebito:listaDebito,seedOK:seedOK,agregada:agregada,nombreOK:!!nombreOK});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

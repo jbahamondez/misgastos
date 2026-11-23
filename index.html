@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="./icon-180-v3.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
-  <link rel="stylesheet" href="./styles.css?v=25" />
+  <link rel="stylesheet" href="./styles.css?v=26" />
 </head>
 <body>
 
@@ -91,10 +91,10 @@
   <div class="page-header"><h1>Ajustes</h1><p>Configuración y automatización</p></div>
   <div class="settings-section"><h3>☁️ Sincronización en la nube</h3></div>
   <div id="cloud-sync-section" style="padding:0 20px 14px"><span style="font-size:12px;color:var(--text2)">Cargando…</span></div>
-  <div class="settings-section"><h3>💳 Mis tarjetas</h3></div>
+  <div class="settings-section"><h3>💳 Mis tarjetas y cuentas</h3></div>
   <div style="padding:0 20px 14px">
     <div class="settings-list" id="settings-cards-list"></div>
-    <button onclick="openAddCardModal()" style="width:100%;margin-top:10px;padding:11px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar tarjeta</button>
+    <button onclick="openAddCardModal()" style="width:100%;margin-top:10px;padding:11px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar tarjeta o cuenta</button>
   </div>
   <div class="settings-section"><h3>📅 Fecha de facturación por tarjeta</h3></div>
   <div style="padding:0 20px 14px" id="billing-dates-list"></div>
@@ -182,8 +182,12 @@
         <input id="card-emoji-input" type="text" placeholder="💳" maxlength="2" style="width:52px;text-align:center;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:20px"/>
         <input id="card-bank-input" type="text" placeholder="Banco (ej: BCI)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"/>
       </div>
+      <select id="card-tipo-input" onchange="onCardTipoChange()" style="padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px">
+        <option value="credito">💳 Tarjeta de crédito</option>
+        <option value="debito">🏦 Cuenta de débito</option>
+      </select>
       <input id="card-num-input" type="text" placeholder="Últimos 4 (ej: ****1234)" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"/>
-      <div style="display:flex;gap:10px">
+      <div id="card-cupo-wrap" style="display:flex;gap:10px">
         <div style="flex:1"><div style="font-size:12px;color:var(--text2);margin-bottom:4px">Cupo CLP</div>
           <input id="card-limitclp-input" type="number" inputmode="numeric" placeholder="Ej: 5000000" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box"/></div>
         <div style="flex:1"><div style="font-size:12px;color:var(--text2);margin-bottom:4px">Cupo USD (opc.)</div>
@@ -440,7 +444,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=25"></script>
+<script src="./app.js?v=26"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>

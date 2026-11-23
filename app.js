@@ -39,6 +39,41 @@ function applyCardsFromCloud(arr){
   CARDS = buildCardsObject(arr);
 }
 
+// Cuentas de DÉBITO (configurables por usuario, modelo propio y separado de
+// CARDS para no contaminar las vistas que son solo de crédito: cupos, cuotas,
+// ciclos, proyecciones). Los gastos de débito guardan su id en t.bank, así que
+// las cuentas por defecto conservan los ids históricos (bci/bchile/scotia) y NO
+// hay que migrar transacciones. Las nuevas cuentas usan un id único.
+const DEFAULT_DEBITS = [
+  {id:'bci',    bank:'BCI',                num:'cta. cte.',color:'#e63329',emoji:'🔴',tipo:'debito'},
+  {id:'bchile', bank:'Banco Chile',        num:'cta. cte.',color:'#003087',emoji:'🔵',tipo:'debito'},
+  {id:'scotia', bank:'ScotiabankCencosud', num:'cta. cte.',color:'#fbbf24',emoji:'🟡',tipo:'debito'}
+];
+function getDebits(){
+  try{
+    const raw=localStorage.getItem('misgastos_debits');
+    if(raw){ const a=JSON.parse(raw); if(Array.isArray(a)) return a; }
+  }catch(e){}
+  const hayDatosPrevios = !!(localStorage.getItem('gastos_credito_v2')||localStorage.getItem('gastos_debito_v2'));
+  const seed = hayDatosPrevios ? DEFAULT_DEBITS.slice() : [];
+  localStorage.setItem('misgastos_debits',JSON.stringify(seed));
+  return seed;
+}
+let DEBITS = buildCardsObject(getDebits());
+function saveDebits(arr){
+  localStorage.setItem('misgastos_debits',JSON.stringify(arr));
+  DEBITS = buildCardsObject(arr);
+  if(typeof syncSettingsToCloud==='function') syncSettingsToCloud();
+}
+function applyDebitsFromCloud(arr){
+  if(!Array.isArray(arr)) return;
+  localStorage.setItem('misgastos_debits',JSON.stringify(arr));
+  DEBITS = buildCardsObject(arr);
+}
+// Metadatos de una cuenta de débito (prefiere DEBITS; cae a CARDS por si un id
+// histórico coincide con una tarjeta de crédito del mismo banco).
+function debitMeta(id){ return DEBITS[id]||CARDS[id]||null; }
+
 const ICONS = {
   TICKETMASTER:'🎟️',TRAVEL:'✈️',UBER:'🚗',RAPPI:'🛵',CABIFY:'🚗',
   SUPERMERCADO:'🛒',LIDER:'🛒',JUMBO:'🛒',UNIMARC:'🛒',
@@ -172,7 +207,7 @@ function syncCollectionToCloud(collName,localArray,opts){
 
 function syncSettingsToCloud(){
   if(!window._fb||!window._fb.syncEnabled) return;
-  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),cards:getCards(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
+  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),cards:getCards(),debits:getDebits(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
 }
 
 const LOCAL_GETTERS = {
@@ -213,6 +248,7 @@ window.applyCloudSettings=function(data){
   if(data.sueldo!==undefined) localStorage.setItem(LS_S,String(data.sueldo));
   if(data.valorDolar!==undefined) localStorage.setItem('misgastos_valor_dolar',String(data.valorDolar));
   if(Array.isArray(data.cards)) applyCardsFromCloud(data.cards);
+  if(Array.isArray(data.debits)) applyDebitsFromCloud(data.debits);
   if(data.billingDates) localStorage.setItem('misgastos_billing_dates',JSON.stringify(data.billingDates));
   if(data.paymentDates) localStorage.setItem('misgastos_payment_dates',JSON.stringify(data.paymentDates));
   if(data.paidFlags) localStorage.setItem('misgastos_paid_flags',JSON.stringify(data.paidFlags));
@@ -262,6 +298,7 @@ window.dataStore = {
     return {
       sueldo: getSueldo(),
       cards: getCards(),
+      debits: getDebits(),
       billingDates: getBillingDates(),
       paymentDates: getPaymentDates(),
       paidFlags: getPaidFlags(),
@@ -271,6 +308,7 @@ window.dataStore = {
   async updateSettings(patch){
     if(patch.sueldo!==undefined) setSueldo(patch.sueldo);
     if(Array.isArray(patch.cards)) saveCards(patch.cards);
+    if(Array.isArray(patch.debits)) saveDebits(patch.debits);
     if(patch.billingDates) saveBillingDates(Object.assign({},getBillingDates(),patch.billingDates));
     if(patch.paymentDates) savePaymentDates(Object.assign({},getPaymentDates(),patch.paymentDates));
     if(patch.paidFlags) savePaidFlags(Object.assign({},getPaidFlags(),patch.paidFlags));
@@ -905,7 +943,9 @@ function renderHistorial(){
   ).join('');
 
   // Type filter chips
-  const filters=[{id:'all',label:'Todos'},{id:'credito',label:'Credito'},{id:'debito',label:'Debito'}].concat(Object.values(CARDS).map(c=>({id:c.id,label:c.bank})));
+  const filters=[{id:'all',label:'Todos'},{id:'credito',label:'Credito'},{id:'debito',label:'Debito'}]
+    .concat(Object.values(CARDS).map(c=>({id:c.id,label:c.bank})))
+    .concat(Object.values(DEBITS).filter(d=>!CARDS[d.id]).map(d=>({id:d.id,label:d.bank})));
   document.getElementById('filter-row').innerHTML=filters.map(f=>`<button class="filter-chip ${activeFilter===f.id?'active':''}" onclick="setFilter('${f.id}')">${f.label}</button>`).join('');
 
   // Date range ('todo' => null, sin filtro)
@@ -918,7 +958,7 @@ function renderHistorial(){
   let all=[];
   if(activeFilter==='all'||activeFilter==='credito'||CARDS[activeFilter])
     all=[...all,...getC().filter(t=>activeFilter==='all'||activeFilter==='credito'||t.cardId===activeFilter)];
-  if(activeFilter==='all'||activeFilter==='debito'||CARDS[activeFilter])
+  if(activeFilter==='all'||activeFilter==='debito'||CARDS[activeFilter]||DEBITS[activeFilter])
     all=[...all,...getD().filter(t=>activeFilter==='all'||activeFilter==='debito'||t.bank===activeFilter).map(t=>({...t,_isDebit:true}))];
 
   // Apply date filter
@@ -1440,7 +1480,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v25</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v26</div>`;
   }
 }
 function updateValorDolar(v){
@@ -1629,7 +1669,13 @@ function deleteCat(id){
 
 // ── Gestión de tarjetas (configurables por usuario) ────────────────────────
 const CARD_COLORS=['#e63329','#003087','#ec0000','#fbbf24','#4CAF50','#9C27B0','#00BCD4','#FF9800','#607D8B','#795548','#009688','#3F51B5'];
-let _editCardId=null, _selectedCardColor=CARD_COLORS[0];
+let _editCardId=null, _editCardTipo='credito', _selectedCardColor=CARD_COLORS[0];
+// Muestra/oculta el cupo según el tipo elegido (débito no tiene cupo).
+function onCardTipoChange(){
+  const tipo=document.getElementById('card-tipo-input').value;
+  const wrap=document.getElementById('card-cupo-wrap');
+  if(wrap) wrap.style.display = tipo==='debito' ? 'none' : 'flex';
+}
 // Tarjetas de crédito (hoy todas son 'credito'; el débito se unifica en 2b).
 function creditCards(){ return Object.values(CARDS).filter(c=>(c.tipo||'credito')==='credito'); }
 
@@ -1638,14 +1684,20 @@ function renderCardsManager(){
   const el=document.getElementById('settings-cards-list');
   if(!el) return;
   const cc=creditCards();
-  el.innerHTML = cc.length ? cc.map(c=>`
+  const dd=Object.values(DEBITS);
+  // tipo va en el onclick porque un id de débito puede coincidir con uno de
+  // crédito del mismo banco (datos históricos del usuario original).
+  const row=(c,tipo)=>`
     <div class="settings-row" style="align-items:center;gap:8px">
-      <span class="row-label" style="flex:1">${esc(c.emoji||'💳')} ${esc(c.bank)} <span style="color:var(--text2);font-size:12px">${esc(c.num||'')}</span></span>
-      <span class="row-val" style="font-size:12px;color:var(--text2)">${fmtCLP(c.limitCLP||0)}</span>
-      <button onclick="openEditCardModal('${esc(c.id)}')" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px" title="Editar">✏️</button>
-      <button onclick="deleteCard('${esc(c.id)}')" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px" title="Eliminar">🗑️</button>
-    </div>`).join('')
-    : '<div style="font-size:13px;color:var(--text2);padding:4px 0">Aún no tienes tarjetas. Toca “+ Agregar tarjeta”.</div>';
+      <span class="row-label" style="flex:1">${esc(c.emoji||(tipo==='debito'?'🏦':'💳'))} ${esc(c.bank)} <span style="color:var(--text2);font-size:12px">${esc(c.num||'')}</span></span>
+      ${tipo==='debito'?'':`<span class="row-val" style="font-size:12px;color:var(--text2)">${fmtCLP(c.limitCLP||0)}</span>`}
+      <button onclick="openEditCardModal('${esc(c.id)}','${tipo}')" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px" title="Editar">✏️</button>
+      <button onclick="deleteCard('${esc(c.id)}','${tipo}')" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px" title="Eliminar">🗑️</button>
+    </div>`;
+  const parts=[];
+  parts.push(cc.length?cc.map(c=>row(c,'credito')).join(''):'<div style="font-size:13px;color:var(--text2);padding:4px 0">Sin tarjetas de crédito.</div>');
+  if(dd.length) parts.push('<div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 2px">Cuentas de débito</div>'+dd.map(c=>row(c,'debito')).join(''));
+  el.innerHTML=parts.join('');
 }
 
 // Llena los selectores que enumeran tarjetas: el <select> de nuevo gasto crédito
@@ -1657,6 +1709,13 @@ function populateCardSelectors(){
     const prev=mc.value;
     mc.innerHTML=cc.map(c=>`<option value="${esc(c.id)}">${esc(c.bank)} ${esc(c.num||'')}</option>`).join('');
     if(prev && cc.some(c=>c.id===prev)) mc.value=prev;
+  }
+  const md=document.getElementById('m-debit-bank');
+  if(md){
+    const dd=Object.values(DEBITS);
+    const prevD=md.value;
+    md.innerHTML=dd.map(c=>`<option value="${esc(c.id)}">${esc(c.bank)}</option>`).join('');
+    if(prevD && dd.some(c=>c.id===prevD)) md.value=prevD;
   }
   const chips=document.getElementById('import-bank-chips');
   if(chips){
@@ -1675,21 +1734,28 @@ function renderCardColorPicker(selected){
 function selectCardColor(c){ renderCardColorPicker(c); }
 
 function openAddCardModal(){
-  _editCardId=null;
-  document.getElementById('card-edit-title').textContent='Nueva tarjeta';
+  _editCardId=null; _editCardTipo='credito';
+  document.getElementById('card-edit-title').textContent='Nueva tarjeta/cuenta';
   ['card-emoji-input','card-bank-input','card-num-input','card-limitclp-input','card-limitusd-input'].forEach(id=>document.getElementById(id).value='');
+  const tipoSel=document.getElementById('card-tipo-input');
+  tipoSel.value='credito'; tipoSel.disabled=false; // el tipo solo se elige al crear
+  onCardTipoChange();
   renderCardColorPicker(CARD_COLORS[0]);
   document.getElementById('card-edit-overlay').classList.add('open');
 }
-function openEditCardModal(id){
-  const c=CARDS[id]; if(!c) return;
-  _editCardId=id;
-  document.getElementById('card-edit-title').textContent='Editar tarjeta';
+function openEditCardModal(id,tipo){
+  tipo=tipo||'credito';
+  const c=(tipo==='debito'?DEBITS[id]:CARDS[id]); if(!c) return;
+  _editCardId=id; _editCardTipo=tipo;
+  document.getElementById('card-edit-title').textContent='Editar '+(tipo==='debito'?'cuenta':'tarjeta');
   document.getElementById('card-emoji-input').value=c.emoji||'';
   document.getElementById('card-bank-input').value=c.bank||'';
   document.getElementById('card-num-input').value=c.num||'';
   document.getElementById('card-limitclp-input').value=c.limitCLP||'';
   document.getElementById('card-limitusd-input').value=c.limitUSD||'';
+  const tipoSel=document.getElementById('card-tipo-input');
+  tipoSel.value=tipo; tipoSel.disabled=true; // no se cambia el tipo al editar
+  onCardTipoChange();
   renderCardColorPicker(c.color||CARD_COLORS[0]);
   document.getElementById('card-edit-overlay').classList.add('open');
 }
@@ -1701,33 +1767,38 @@ function closeCardModal(e){
 function confirmSaveCard(){
   const bank=document.getElementById('card-bank-input').value.trim();
   if(!bank){ showToast('Ingresa el nombre del banco','var(--yellow)'); return; }
-  const emoji=document.getElementById('card-emoji-input').value.trim()||'💳';
+  const tipo=_editCardId ? _editCardTipo : document.getElementById('card-tipo-input').value;
+  const emoji=document.getElementById('card-emoji-input').value.trim()||(tipo==='debito'?'🏦':'💳');
   const num=document.getElementById('card-num-input').value.trim();
-  const limitCLP=parseInt(String(document.getElementById('card-limitclp-input').value).replace(/\D/g,''),10)||0;
-  const limitUSD=parseFloat(document.getElementById('card-limitusd-input').value)||0;
   const color=_selectedCardColor;
-  const arr=getCards();
+  const esDebito=tipo==='debito';
+  const limitCLP=esDebito?0:(parseInt(String(document.getElementById('card-limitclp-input').value).replace(/\D/g,''),10)||0);
+  const limitUSD=esDebito?0:(parseFloat(document.getElementById('card-limitusd-input').value)||0);
+  const store=esDebito?getDebits():getCards();
   if(_editCardId){
-    const i=arr.findIndex(c=>c.id===_editCardId);
-    if(i>=0) arr[i]={...arr[i],bank,num,emoji,limitCLP,limitUSD,color};
+    const i=store.findIndex(c=>c.id===_editCardId);
+    if(i>=0) store[i]={...store[i],bank,num,emoji,limitCLP,limitUSD,color,tipo};
   } else {
-    arr.push({id:'card_'+Date.now(),bank,num,emoji,limitCLP,limitUSD,color,tipo:'credito'});
+    store.push({id:(esDebito?'acct_':'card_')+Date.now(),bank,num,emoji,limitCLP,limitUSD,color,tipo});
   }
-  saveCards(arr);
+  esDebito?saveDebits(store):saveCards(store);
   closeCardModal();
   renderAjustes();
-  showToast('✅ Tarjeta guardada');
+  showToast('✅ '+(esDebito?'Cuenta':'Tarjeta')+' guardada');
 }
-function deleteCard(id){
-  const c=CARDS[id]; if(!c) return;
-  const n=getC().filter(t=>t.cardId===id).length;
+function deleteCard(id,tipo){
+  tipo=tipo||'credito';
+  const esDebito=tipo==='debito';
+  const c=esDebito?DEBITS[id]:CARDS[id]; if(!c) return;
+  const n=esDebito?getD().filter(t=>t.bank===id).length:getC().filter(t=>t.cardId===id).length;
+  const tipoTxt=esDebito?'cuenta':'tarjeta';
   const msg=n>0
-    ? `"${c.bank}" tiene ${n} gasto(s) de crédito asociados. Si la eliminas, esos gastos quedarán sin tarjeta. ¿Eliminar igual?`
-    : `¿Eliminar la tarjeta "${c.bank}"?`;
+    ? `"${c.bank}" tiene ${n} gasto(s) asociados. Si la eliminas, esos gastos quedarán sin ${tipoTxt}. ¿Eliminar igual?`
+    : `¿Eliminar la ${tipoTxt} "${c.bank}"?`;
   if(!confirm(msg)) return;
-  saveCards(getCards().filter(x=>x.id!==id));
+  esDebito?saveDebits(getDebits().filter(x=>x.id!==id)):saveCards(getCards().filter(x=>x.id!==id));
   renderAjustes();
-  showToast('Tarjeta eliminada');
+  showToast((esDebito?'Cuenta':'Tarjeta')+' eliminada');
 }
 
 function openAddRuleModal(){
@@ -2253,8 +2324,9 @@ function deleteTx(txId, txType){
 function txHTML(t){
   const isD=t._isDebit||t.bank!==undefined&&t.cardId===undefined;
   const c=isD?null:CARDS[t.cardId];
-  const color=isD?'var(--blue)':(c?.color||'#888');
-  const bank=isD?(t.bank?CARDS[t.bank]?.bank||t.bank:'Cuenta Corriente'):(c?.bank||'');
+  const dm=isD?debitMeta(t.bank):null;
+  const color=isD?(dm?.color||'var(--blue)'):(c?.color||'#888');
+  const bank=isD?(dm?.bank||(t.bank||'Cuenta Corriente')):(c?.bank||'');
   const date=new Date(t.date).toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
   // Filas expandidas por cuotasMensuales (detalle de Analisis): muestran la
   // cuota del mes (monto mensual + "cuota k/n"), no la compra completa.
@@ -2845,7 +2917,7 @@ function handleURLParams(){
   // desc se escapa al renderizar (esc en txHTML), asi nunca se interpreta HTML.
   const desc=String(p.get('desc')||'Gasto automático').replace(/[\u0000-\u001f]/g,' ').trim().slice(0,120)||'Gasto automático';
   const type=p.get('type')==='debito'?'debito':'credito';
-  const bank=CARDS[p.get('bank')]?p.get('bank'):'bci';
+  const bank=(CARDS[p.get('bank')]||DEBITS[p.get('bank')])?p.get('bank'):'bci';
   const cuotas=Math.min(48,Math.max(1,parseInt(p.get('cuotas')||1)||1));
   const currency=p.get('currency')==='USD'?'USD':'CLP';
   const rawDate=p.get('date');
@@ -3263,7 +3335,7 @@ async function generarInformePDF(){
   const pctTxt=v=>v.toFixed(1).replace('.',',')+'%';
 
   const fmtFechaPdf=d=>new Date(d).toLocaleDateString('es-CL',{day:'2-digit',month:'short',year:'numeric'});
-  const origenPdf=t=>t._tipo==='debito'?('Débito '+(CARDS[t.bank]?CARDS[t.bank].bank:'')).trim():(CARDS[t.cardId]?CARDS[t.cardId].bank:'Crédito');
+  const origenPdf=t=>t._tipo==='debito'?('Débito '+(debitMeta(t.bank)?debitMeta(t.bank).bank:'')).trim():(CARDS[t.cardId]?CARDS[t.cardId].bank:'Crédito');
 
   const resumenBloque={
     titulo:'Resumen del período',
