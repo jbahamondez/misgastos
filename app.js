@@ -1394,7 +1394,8 @@ function getBillingDates(){try{return JSON.parse(localStorage.getItem('misgastos
 function saveBillingDates(d){localStorage.setItem('misgastos_billing_dates',JSON.stringify(d));syncSettingsToCloud()}
 
 function renderAjustes(){
-  document.getElementById('settings-cards-list').innerHTML=Object.values(CARDS).map(c=>`<div class="settings-row"><span class="row-label">${c.emoji} ${c.bank} ${c.num}</span><span class="row-val">${fmtCLP(c.limitCLP)}</span></div>`).join('');
+  renderCardsManager();
+  populateCardSelectors();
   renderPersonasAjustes();
   renderCategoriasAjustes();
   renderServiciosAjustes();
@@ -1439,7 +1440,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v24</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v25</div>`;
   }
 }
 function updateValorDolar(v){
@@ -1624,6 +1625,109 @@ function deleteCat(id){
   saveCatRules(rules);
   renderCategoriasAjustes();
   showToast('Categoría eliminada');
+}
+
+// ── Gestión de tarjetas (configurables por usuario) ────────────────────────
+const CARD_COLORS=['#e63329','#003087','#ec0000','#fbbf24','#4CAF50','#9C27B0','#00BCD4','#FF9800','#607D8B','#795548','#009688','#3F51B5'];
+let _editCardId=null, _selectedCardColor=CARD_COLORS[0];
+// Tarjetas de crédito (hoy todas son 'credito'; el débito se unifica en 2b).
+function creditCards(){ return Object.values(CARDS).filter(c=>(c.tipo||'credito')==='credito'); }
+
+// Lista editable en Ajustes.
+function renderCardsManager(){
+  const el=document.getElementById('settings-cards-list');
+  if(!el) return;
+  const cc=creditCards();
+  el.innerHTML = cc.length ? cc.map(c=>`
+    <div class="settings-row" style="align-items:center;gap:8px">
+      <span class="row-label" style="flex:1">${esc(c.emoji||'💳')} ${esc(c.bank)} <span style="color:var(--text2);font-size:12px">${esc(c.num||'')}</span></span>
+      <span class="row-val" style="font-size:12px;color:var(--text2)">${fmtCLP(c.limitCLP||0)}</span>
+      <button onclick="openEditCardModal('${esc(c.id)}')" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px" title="Editar">✏️</button>
+      <button onclick="deleteCard('${esc(c.id)}')" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px" title="Eliminar">🗑️</button>
+    </div>`).join('')
+    : '<div style="font-size:13px;color:var(--text2);padding:4px 0">Aún no tienes tarjetas. Toca “+ Agregar tarjeta”.</div>';
+}
+
+// Llena los selectores que enumeran tarjetas: el <select> de nuevo gasto crédito
+// y los chips de importación de cartola. Antes eran HTML fijo.
+function populateCardSelectors(){
+  const cc=creditCards();
+  const mc=document.getElementById('m-card');
+  if(mc){
+    const prev=mc.value;
+    mc.innerHTML=cc.map(c=>`<option value="${esc(c.id)}">${esc(c.bank)} ${esc(c.num||'')}</option>`).join('');
+    if(prev && cc.some(c=>c.id===prev)) mc.value=prev;
+  }
+  const chips=document.getElementById('import-bank-chips');
+  if(chips){
+    if(!cc.some(c=>c.id===importBank)) importBank=cc.length?cc[0].id:'';
+    chips.innerHTML=cc.map(c=>`<button class="bank-chip${c.id===importBank?' active':''}" id="chip-${esc(c.id)}" onclick="selectImportBank('${esc(c.id)}')">${esc(c.bank)}</button>`).join('');
+  }
+}
+
+function renderCardColorPicker(selected){
+  _selectedCardColor=selected;
+  const el=document.getElementById('card-color-picker');
+  if(el) el.innerHTML=CARD_COLORS.map(c=>`
+    <div onclick="selectCardColor('${c}')" style="width:26px;height:26px;border-radius:50%;background:${c};cursor:pointer;border:3px solid ${c===selected?'#fff':'transparent'};box-sizing:border-box"></div>
+  `).join('');
+}
+function selectCardColor(c){ renderCardColorPicker(c); }
+
+function openAddCardModal(){
+  _editCardId=null;
+  document.getElementById('card-edit-title').textContent='Nueva tarjeta';
+  ['card-emoji-input','card-bank-input','card-num-input','card-limitclp-input','card-limitusd-input'].forEach(id=>document.getElementById(id).value='');
+  renderCardColorPicker(CARD_COLORS[0]);
+  document.getElementById('card-edit-overlay').classList.add('open');
+}
+function openEditCardModal(id){
+  const c=CARDS[id]; if(!c) return;
+  _editCardId=id;
+  document.getElementById('card-edit-title').textContent='Editar tarjeta';
+  document.getElementById('card-emoji-input').value=c.emoji||'';
+  document.getElementById('card-bank-input').value=c.bank||'';
+  document.getElementById('card-num-input').value=c.num||'';
+  document.getElementById('card-limitclp-input').value=c.limitCLP||'';
+  document.getElementById('card-limitusd-input').value=c.limitUSD||'';
+  renderCardColorPicker(c.color||CARD_COLORS[0]);
+  document.getElementById('card-edit-overlay').classList.add('open');
+}
+function closeCardModal(e){
+  if(e&&e.target!==document.getElementById('card-edit-overlay')) return;
+  document.getElementById('card-edit-overlay').classList.remove('open');
+  _editCardId=null;
+}
+function confirmSaveCard(){
+  const bank=document.getElementById('card-bank-input').value.trim();
+  if(!bank){ showToast('Ingresa el nombre del banco','var(--yellow)'); return; }
+  const emoji=document.getElementById('card-emoji-input').value.trim()||'💳';
+  const num=document.getElementById('card-num-input').value.trim();
+  const limitCLP=parseInt(String(document.getElementById('card-limitclp-input').value).replace(/\D/g,''),10)||0;
+  const limitUSD=parseFloat(document.getElementById('card-limitusd-input').value)||0;
+  const color=_selectedCardColor;
+  const arr=getCards();
+  if(_editCardId){
+    const i=arr.findIndex(c=>c.id===_editCardId);
+    if(i>=0) arr[i]={...arr[i],bank,num,emoji,limitCLP,limitUSD,color};
+  } else {
+    arr.push({id:'card_'+Date.now(),bank,num,emoji,limitCLP,limitUSD,color,tipo:'credito'});
+  }
+  saveCards(arr);
+  closeCardModal();
+  renderAjustes();
+  showToast('✅ Tarjeta guardada');
+}
+function deleteCard(id){
+  const c=CARDS[id]; if(!c) return;
+  const n=getC().filter(t=>t.cardId===id).length;
+  const msg=n>0
+    ? `"${c.bank}" tiene ${n} gasto(s) de crédito asociados. Si la eliminas, esos gastos quedarán sin tarjeta. ¿Eliminar igual?`
+    : `¿Eliminar la tarjeta "${c.bank}"?`;
+  if(!confirm(msg)) return;
+  saveCards(getCards().filter(x=>x.id!==id));
+  renderAjustes();
+  showToast('Tarjeta eliminada');
 }
 
 function openAddRuleModal(){
@@ -2189,6 +2293,7 @@ function openModal(){
   const mm=String(hoy.getMonth()+1).padStart(2,'0');
   const dd=String(hoy.getDate()).padStart(2,'0');
   document.getElementById('m-date').value=`${yyyy}-${mm}-${dd}`;
+  populateCardSelectors();
   populateCatSelect('m-cat','');
   document.getElementById('modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('m-amount').focus(),300);

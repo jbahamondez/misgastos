@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="./icon-180-v3.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
-  <link rel="stylesheet" href="./styles.css?v=24" />
+  <link rel="stylesheet" href="./styles.css?v=25" />
 </head>
 <body>
 
@@ -52,12 +52,7 @@
   </div>
 
   <!-- Banco -->
-  <div class="bank-select-row" style="margin-top:8px">
-    <button class="bank-chip active" id="chip-bci"    onclick="selectImportBank('bci')">BCI</button>
-    <button class="bank-chip"        id="chip-bchile" onclick="selectImportBank('bchile')">Banco Chile</button>
-    <button class="bank-chip"        id="chip-scotia" onclick="selectImportBank('scotia')">Scotia</button>
-    <button class="bank-chip"        id="chip-santander" onclick="selectImportBank('santander')">Santander</button>
-  </div>
+  <div class="bank-select-row" id="import-bank-chips" style="margin-top:8px"></div>
 
   <div class="import-box" onclick="document.getElementById('file-input').click()">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -96,7 +91,11 @@
   <div class="page-header"><h1>Ajustes</h1><p>Configuración y automatización</p></div>
   <div class="settings-section"><h3>☁️ Sincronización en la nube</h3></div>
   <div id="cloud-sync-section" style="padding:0 20px 14px"><span style="font-size:12px;color:var(--text2)">Cargando…</span></div>
-  <div class="settings-section"><h3>Tarjetas de Crédito</h3><div class="settings-list" id="settings-cards-list"></div></div>
+  <div class="settings-section"><h3>💳 Mis tarjetas</h3></div>
+  <div style="padding:0 20px 14px">
+    <div class="settings-list" id="settings-cards-list"></div>
+    <button onclick="openAddCardModal()" style="width:100%;margin-top:10px;padding:11px;border-radius:10px;border:1px dashed var(--border);background:transparent;color:var(--accent2);font-size:14px;font-weight:600;cursor:pointer">+ Agregar tarjeta</button>
+  </div>
   <div class="settings-section"><h3>📅 Fecha de facturación por tarjeta</h3></div>
   <div style="padding:0 20px 14px" id="billing-dates-list"></div>
   <div class="settings-section"><h3>💳 Día de vencimiento de pago</h3></div>
@@ -170,6 +169,31 @@
         <div id="cat-color-picker" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
       <button onclick="confirmSaveCat()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Agregar/Editar tarjeta -->
+<div class="modal-overlay" id="card-edit-overlay" onclick="closeCardModal(event)">
+  <div class="modal-box" style="max-width:360px">
+    <div class="modal-header"><h3 id="card-edit-title">Nueva tarjeta</h3><button class="modal-close" onclick="closeCardModal()">✕</button></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="card-emoji-input" type="text" placeholder="💳" maxlength="2" style="width:52px;text-align:center;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:20px"/>
+        <input id="card-bank-input" type="text" placeholder="Banco (ej: BCI)" style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"/>
+      </div>
+      <input id="card-num-input" type="text" placeholder="Últimos 4 (ej: ****1234)" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"/>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><div style="font-size:12px;color:var(--text2);margin-bottom:4px">Cupo CLP</div>
+          <input id="card-limitclp-input" type="number" inputmode="numeric" placeholder="Ej: 5000000" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box"/></div>
+        <div style="flex:1"><div style="font-size:12px;color:var(--text2);margin-bottom:4px">Cupo USD (opc.)</div>
+          <input id="card-limitusd-input" type="number" inputmode="decimal" placeholder="0" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box"/></div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Color</div>
+        <div id="card-color-picker" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+      <button onclick="confirmSaveCard()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Guardar</button>
     </div>
   </div>
 </div>
@@ -270,12 +294,7 @@
     </div>
     <div id="fields-credito">
       <label>Tarjeta</label>
-      <select id="m-card">
-        <option value="bci">BCI ****6146</option>
-        <option value="bchile">Banco Chile ****8447</option>
-        <option value="scotia">ScotiabankCencosud</option>
-        <option value="santander">Santander</option>
-      </select>
+      <select id="m-card"></select>
       <label>Cuotas</label>
       <select id="m-cuotas">
         <option value="1">1 cuota (contado)</option>
@@ -421,7 +440,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=24"></script>
+<script src="./app.js?v=25"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>
