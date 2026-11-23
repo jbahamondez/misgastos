@@ -7,3 +7,9 @@ after.txt
 
 # Perfil temporal del navegador de prueba (por si se crea dentro del repo)
 misgastos-test-profile/
+
+# Dependencias y artefactos de Vercel (backend /api)
+node_modules/
+.vercel/
+.env
+.env.local
