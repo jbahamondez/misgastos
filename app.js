@@ -1404,7 +1404,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v23</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v24</div>`;
   }
 }
 function updateValorDolar(v){
@@ -3449,7 +3449,7 @@ function montoFinanciadoLinea(resto, cuotas){
 // encuentra o el rango no parece un ciclo (~1 mes) => cae al dia de cierre fijo.
 function parsePeriodoCartola(lineas){
   const texto=(lineas||[]).join(' \n ');
-  const rx=/PERIODO\s+FACTURADO(?!\s+ANTERIOR)[\s\S]{0,40}?(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})[\s\S]{0,15}?(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/i;
+  const rx=/PER[IÍ]ODO\s+FACTURADO(?!\s+ANTERIOR)[\s\S]{0,40}?(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})[\s\S]{0,15}?(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/i;
   const m=texto.match(rx);
   if(!m) return null;
   const a=parseFecha(m[1]), b=parseFecha(m[2]);
@@ -3493,7 +3493,7 @@ async function parsePdfCartola(buf, bank){
   lineas.forEach((linea,i)=>{
     // Saltar lineas de resumen/cupon de pago (no son transacciones), que si no
     // se colaban como un "extra" espurio (ej. el "monto total facturado a pagar").
-    if(/FACTURADO A PAGAR|MONTO M[ÍI]NIMO|COSTO MONETARIO|PROXIMO PERIODO/i.test(linea)) return;
+    if(/FACTURADO A PAGAR|MONTO M[ÍI]NIMO|COSTO MONETARIO|PR[OÓ]XIMO PER[IÍ]ODO|TOTAL OPERACIONES|MOVIMIENTOS TARJETA/i.test(linea)) return;
     const fm=linea.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
     if(!fm) return;
     const fecha=parseFecha(fm[0]);
