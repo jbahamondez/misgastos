@@ -24,6 +24,8 @@
     .card-bchile{background:linear-gradient(135deg,#00205b,#003087)}
     .card-scotia{background:linear-gradient(135deg,#b50000,#ec111a)}
     .card-santander{background:linear-gradient(135deg,#b00000,#ec0000)}
+    .auth-spinner{width:30px;height:30px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;margin:10px auto 0;animation:auth-spin .8s linear infinite}
+    @keyframes auth-spin{to{transform:rotate(360deg)}}
     .card-bank{font-size:10px;font-weight:600;opacity:.8;letter-spacing:1px;text-transform:uppercase}
     .card-num{font-size:12px;opacity:.7;margin-top:3px;letter-spacing:2px}
     .card-balance{font-size:26px;font-weight:700;margin-top:14px}

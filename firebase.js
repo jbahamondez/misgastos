@@ -139,7 +139,15 @@ window.renderAuthGate=function(){
   const gate=document.getElementById('auth-gate');
   if(!gate) return;
   if(window._fb.user){ gate.style.display='none'; }
-  else { gate.style.display='flex'; setAuthMode(_authMode); }
+  else {
+    // Confirmado que NO hay sesión: recién ahí mostramos el formulario (antes se
+    // ve solo el splash, para no "parpadear" el login a quien sí tiene sesión).
+    gate.style.display='flex';
+    const sp=document.getElementById('auth-splash'), fm=document.getElementById('auth-form');
+    if(sp) sp.style.display='none';
+    if(fm) fm.style.display='block';
+    setAuthMode(_authMode);
+  }
 };
 function _authErr(err){
   const msgs={
