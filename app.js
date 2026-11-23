@@ -480,6 +480,7 @@ function renderCicloAnt(){
 
 function renderDashboard(){
   const now=new Date();
+  updateGreeting();
   document.getElementById('dash-fecha').textContent=now.toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'});
 
   // Totales
@@ -1480,7 +1481,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v26</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v27</div>`;
   }
 }
 function updateValorDolar(v){
@@ -1799,6 +1800,34 @@ function deleteCard(id,tipo){
   esDebito?saveDebits(getDebits().filter(x=>x.id!==id)):saveCards(getCards().filter(x=>x.id!==id));
   renderAjustes();
   showToast((esDebito?'Cuenta':'Tarjeta')+' eliminada');
+}
+
+// ── Onboarding de usuario nuevo ─────────────────────────────────────────────
+// Llamado tras autenticarse (desde firebase.js). Si la cuenta no tiene datos ni
+// tarjetas/cuentas, muestra la bienvenida que guía a configurarlas.
+window.maybeShowOnboarding=function(){
+  if(!window._fb||!window._fb.user) return;
+  const sinDatos = getC().length===0 && getD().length===0
+    && creditCards().length===0 && Object.keys(DEBITS).length===0;
+  if(sinDatos){
+    const o=document.getElementById('welcome-overlay');
+    if(o) o.classList.add('open');
+  }
+};
+function startOnboarding(){
+  const o=document.getElementById('welcome-overlay');
+  if(o) o.classList.remove('open');
+  showPage('ajustes');
+  setTimeout(()=>{ const el=document.getElementById('settings-cards-list'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); }, 150);
+}
+// Saludo del dashboard según el usuario (reemplaza el nombre fijo).
+function updateGreeting(){
+  const el=document.getElementById('dash-greeting');
+  if(!el) return;
+  const u=window._fb&&window._fb.user;
+  let nombre='';
+  if(u){ nombre=(u.displayName||'').trim() || (u.email||'').split('@')[0]; }
+  el.textContent = nombre ? ('👋 Hola, '+nombre) : '👋 Hola';
 }
 
 function openAddRuleModal(){

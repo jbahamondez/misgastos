@@ -183,6 +183,27 @@ Check 'DEBITO-CUENTAS-CONFIGURABLES' @'
 })()
 '@
 
+Check 'AUTH-GATE-Y-ONBOARDING' @'
+(function(){
+  var gate=document.getElementById("auth-gate");
+  window._fb=window._fb||{};
+  window._fb.user=null; renderAuthGate();
+  var visibleSinSesion = gate.style.display!=="none";
+  window._fb.user={email:"ana@correo.cl",uid:"u1"}; renderAuthGate();
+  var ocultoConSesion = gate.style.display==="none";
+  renderDashboard();
+  var saludoPersonal = document.getElementById("dash-greeting").textContent.indexOf("ana")>=0;
+  // onboarding: usuario sin datos ve la bienvenida
+  localStorage.setItem("gastos_credito_v2","[]"); localStorage.setItem("gastos_debito_v2","[]");
+  var _c=CARDS, _d=DEBITS; CARDS={}; DEBITS={};
+  document.getElementById("welcome-overlay").classList.remove("open");
+  maybeShowOnboarding();
+  var onboardingVisible = document.getElementById("welcome-overlay").classList.contains("open");
+  CARDS=_c; DEBITS=_d; window._fb.user=null; renderAuthGate();
+  return JSON.stringify({pass: visibleSinSesion&&ocultoConSesion&&saludoPersonal&&onboardingVisible, visibleSinSesion:visibleSinSesion,ocultoConSesion:ocultoConSesion,saludoPersonal:saludoPersonal,onboardingVisible:onboardingVisible});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut,
+  createUserWithEmailAndPassword, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   initializeFirestore, persistentLocalCache, persistentSingleTabManager,
@@ -15,6 +16,11 @@ const firebaseConfig = {
   messagingSenderId: "323378339609",
   appId: "1:323378339609:web:69f6ceca48198bc9a32f88"
 };
+
+// Código que un usuario nuevo debe ingresar para crear cuenta. Cámbialo por el
+// tuyo y entrégaselo solo a tus cercanos. Es una barrera "familiar" (vive en el
+// cliente), suficiente para evitar registros casuales de desconocidos.
+const INVITE_CODE = 'FAMILIA2026';
 
 const fbApp = initializeApp(firebaseConfig);
 const fbAuth = getAuth(fbApp);
@@ -110,7 +116,92 @@ onAuthStateChanged(fbAuth, async function(user){
   }
   window.updateSyncBadge&&window.updateSyncBadge();
   renderCloudStatus();
+  renderAuthGate();
+  if(user){ setTimeout(()=>window.maybeShowOnboarding&&window.maybeShowOnboarding(), 800); }
 });
+
+// ── Pantalla de acceso (login / registro con código) ───────────────────────
+let _authMode='login';
+window.setAuthMode=function(mode){
+  _authMode=mode;
+  const isSignup=mode==='signup';
+  document.getElementById('auth-code').style.display=isSignup?'block':'none';
+  document.getElementById('auth-submit').textContent=isSignup?'Crear cuenta':'Iniciar sesión';
+  document.getElementById('auth-error').textContent='';
+  const on='flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer';
+  const off='flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer';
+  document.getElementById('auth-tab-login').style.cssText=isSignup?off:on;
+  document.getElementById('auth-tab-signup').style.cssText=isSignup?on:off;
+  document.getElementById('auth-forgot').style.display=isSignup?'none':'block';
+  document.getElementById('auth-pass').setAttribute('autocomplete', isSignup?'new-password':'current-password');
+};
+window.renderAuthGate=function(){
+  const gate=document.getElementById('auth-gate');
+  if(!gate) return;
+  if(window._fb.user){ gate.style.display='none'; }
+  else { gate.style.display='flex'; setAuthMode(_authMode); }
+};
+function _authErr(err){
+  const msgs={
+    'auth/invalid-email':'El email no es válido',
+    'auth/invalid-credential':'Email o contraseña incorrectos',
+    'auth/wrong-password':'Email o contraseña incorrectos',
+    'auth/user-not-found':'Email o contraseña incorrectos',
+    'auth/email-already-in-use':'Ya existe una cuenta con ese email',
+    'auth/weak-password':'La contraseña debe tener al menos 6 caracteres',
+    'auth/user-disabled':'Esta cuenta está deshabilitada',
+    'auth/too-many-requests':'Demasiados intentos. Espera unos minutos',
+    'auth/network-request-failed':'Sin conexión. Revisa tu internet'
+  };
+  return msgs[err&&err.code]||'No se pudo completar. Intenta de nuevo';
+}
+window.submitAuth=async function(){
+  const email=document.getElementById('auth-email').value.trim();
+  const pass=document.getElementById('auth-pass').value;
+  const errEl=document.getElementById('auth-error');
+  errEl.textContent='';
+  if(!email||!pass){ errEl.textContent='Ingresa email y contraseña'; return; }
+  if(_authMode==='signup'){
+    const code=document.getElementById('auth-code').value.trim();
+    if(code!==INVITE_CODE){ errEl.textContent='Código de invitación inválido'; return; }
+    // Seguridad: si este dispositivo ya tiene datos, confirmar (evita pisar los
+    // datos de otra persona al crear una cuenta nueva en el mismo navegador).
+    const hasLocal = (typeof getC==='function' && getC().length>0) || (typeof getD==='function' && getD().length>0);
+    if(hasLocal && !confirm('Este dispositivo ya tiene datos. Si creas una cuenta NUEVA, esos datos se subirán a la cuenta nueva. ¿Continuar?')) return;
+    try{
+      const cred=await createUserWithEmailAndPassword(fbAuth,email,pass);
+      if(hasLocal){ await _migrateLocalToCloud(cred.user.uid); }
+      else { await setDoc(doc(fbDb,'users',cred.user.uid,'settings','migration'), {localStorageMigrated:true, migratedAt:Date.now(), cloudNative:true, version:1}); }
+      startCloudSync(cred.user.uid);
+      showToast('Cuenta creada ✓');
+    }catch(err){ errEl.textContent=_authErr(err); }
+  } else {
+    try{ await signInWithEmailAndPassword(fbAuth,email,pass); }
+    catch(err){ errEl.textContent=_authErr(err); }
+  }
+};
+window.authForgot=async function(){
+  const email=document.getElementById('auth-email').value.trim();
+  if(!email){ document.getElementById('auth-error').textContent='Escribe tu email y vuelve a tocar'; return; }
+  try{ await sendPasswordResetEmail(fbAuth,email); showToast('Te enviamos un correo para restablecer tu clave'); }
+  catch(err){ document.getElementById('auth-error').textContent=_authErr(err); }
+};
+// Sube los datos locales de este dispositivo a la cuenta indicada (no borra nada
+// local). Reutiliza el mismo mecanismo que la migración manual de Ajustes.
+async function _migrateLocalToCloud(uid){
+  const personas=getPersonas().map(name=>({id:slugify(name),name}));
+  const reglas=getCatRules().map(r=>({...r,id:slugify(r.keyword)+'_'+slugify(r.catId)}));
+  await migrateCollection(uid,'transactions_credit',getC());
+  await migrateCollection(uid,'transactions_debit',getD());
+  await migrateCollection(uid,'debts',getDeudas());
+  await migrateCollection(uid,'people',personas);
+  await migrateCollection(uid,'categories',getCategorias());
+  await migrateCollection(uid,'category_rules',reglas);
+  await migrateCollection(uid,'household_services',getServiciosHogar());
+  const settings=await window.dataStore.getSettings();
+  await setDoc(doc(fbDb,'users',uid,'settings','main'), settings, {merge:true});
+  await setDoc(doc(fbDb,'users',uid,'settings','migration'), {localStorageMigrated:true, migratedAt:Date.now(), version:1});
+}
 
 window.cloudLogin = async function(){
   const email = document.getElementById('cloud-email').value.trim();

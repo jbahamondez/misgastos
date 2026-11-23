@@ -11,13 +11,47 @@
   <link rel="apple-touch-icon" href="./icon-180-v3.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
-  <link rel="stylesheet" href="./styles.css?v=26" />
+  <link rel="stylesheet" href="./styles.css?v=27" />
 </head>
 <body>
 
+<!-- PANTALLA DE ACCESO (tapa la app hasta iniciar sesión) -->
+<div id="auth-gate" style="position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;overflow:auto">
+  <div style="width:100%;max-width:340px">
+    <div style="text-align:center;margin-bottom:22px">
+      <div style="font-size:42px;line-height:1">💳</div>
+      <h1 style="font-size:22px;margin:10px 0 4px">MisGastos</h1>
+      <p style="font-size:13px;color:var(--text2);margin:0">Tus finanzas, en todos tus dispositivos</p>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:16px">
+      <button id="auth-tab-login"  onclick="setAuthMode('login')"  style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer">Iniciar sesión</button>
+      <button id="auth-tab-signup" onclick="setAuthMode('signup')" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer">Crear cuenta</button>
+    </div>
+    <input id="auth-email" type="email" placeholder="Email" autocomplete="username" style="width:100%;margin-bottom:8px;padding:11px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box"/>
+    <input id="auth-pass" type="password" placeholder="Contraseña" autocomplete="current-password" style="width:100%;margin-bottom:8px;padding:11px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box"/>
+    <input id="auth-code" type="text" placeholder="Código de invitación" autocomplete="off" style="display:none;width:100%;margin-bottom:8px;padding:11px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box"/>
+    <button id="auth-submit" onclick="submitAuth()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Iniciar sesión</button>
+    <p id="auth-error" style="color:var(--red);font-size:12px;text-align:center;margin:10px 0 0;min-height:15px"></p>
+    <button id="auth-forgot" onclick="authForgot()" style="background:none;border:none;color:var(--accent2);font-size:12px;cursor:pointer;margin:6px auto 0;display:block">¿Olvidaste tu contraseña?</button>
+  </div>
+</div>
+
+<!-- BIENVENIDA / ONBOARDING (usuario nuevo sin datos) -->
+<div class="modal-overlay" id="welcome-overlay">
+  <div class="modal-box" style="max-width:360px">
+    <div style="padding:22px;text-align:center">
+      <div style="font-size:40px">🎉</div>
+      <h3 style="margin:8px 0 6px">¡Bienvenido a MisGastos!</h3>
+      <p style="font-size:13px;color:var(--text2);line-height:1.5;margin:0 0 18px">Para empezar, agrega tus <strong>tarjetas y cuentas</strong>, y configura tu <strong>sueldo</strong>. Toma menos de un minuto.</p>
+      <button onclick="startOnboarding()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Configurar mis tarjetas</button>
+      <button onclick="document.getElementById('welcome-overlay').classList.remove('open')" style="width:100%;margin-top:8px;padding:10px;border:none;background:transparent;color:var(--text2);font-size:13px;cursor:pointer">Lo haré después</button>
+    </div>
+  </div>
+</div>
+
 <!-- DASHBOARD -->
 <div class="page active" id="page-dashboard">
-  <div class="page-header"><h1>👋 Hola, Javier</h1><p id="dash-fecha"></p></div>
+  <div class="page-header"><h1 id="dash-greeting">👋 Hola</h1><p id="dash-fecha"></p></div>
   <div id="dash-main-widget" style="margin:16px 20px 0"></div>
   <div id="dash-chips" style="margin:12px 20px 0;display:flex;gap:10px"></div>
   <div class="salud-box" id="salud-box"></div>
@@ -444,7 +478,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=26"></script>
+<script src="./app.js?v=27"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>
