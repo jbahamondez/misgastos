@@ -4,11 +4,14 @@
 // desde los datos del usuario (localStorage 'misgastos_cards', sincronizado),
 // para que cada persona configure las suyas. DEFAULT_CARDS es solo la semilla
 // inicial (las de este dispositivo) para no perder nada en la migración.
+// Ejemplos genéricos (sin datos personales). Solo se usan como semilla histórica
+// de migración; los usuarios nuevos parten sin tarjetas y las crean en el
+// onboarding, y el usuario original ya tiene las suyas guardadas en la nube.
 const DEFAULT_CARDS = [
-  {id:'bci',      bank:'BCI',                num:'****6146',color:'#e63329',limitCLP:9519000,limitUSD:470.74,emoji:'🔴',tipo:'credito'},
-  {id:'bchile',   bank:'Banco Chile',        num:'****8447',color:'#003087',limitCLP:9519000,limitUSD:470.74,emoji:'🔵',tipo:'credito'},
-  {id:'scotia',   bank:'ScotiabankCencosud', num:'****',    color:'#fbbf24',limitCLP:1470000,limitUSD:0,     emoji:'🟡',tipo:'credito'},
-  {id:'santander',bank:'Santander',          num:'****8785',color:'#ec0000',limitCLP:5000000,limitUSD:0,     emoji:'🟥',tipo:'credito'}
+  {id:'bci',      bank:'BCI',                num:'****',color:'#e63329',limitCLP:1000000,limitUSD:0,emoji:'🔴',tipo:'credito'},
+  {id:'bchile',   bank:'Banco Chile',        num:'****',color:'#003087',limitCLP:1000000,limitUSD:0,emoji:'🔵',tipo:'credito'},
+  {id:'scotia',   bank:'ScotiabankCencosud', num:'****',color:'#fbbf24',limitCLP:1000000,limitUSD:0,emoji:'🟡',tipo:'credito'},
+  {id:'santander',bank:'Santander',          num:'****',color:'#ec0000',limitCLP:1000000,limitUSD:0,emoji:'🟥',tipo:'credito'}
 ];
 function getCards(){
   try{
@@ -112,7 +115,7 @@ function factorFinanciado(t){
 }
 function getDeudas(){try{return JSON.parse(localStorage.getItem(LS_DEUDAS)||'[]')}catch{return[]}}
 function saveDeudas(a,opts){localStorage.setItem(LS_DEUDAS,JSON.stringify(a));syncCollectionToCloud('debts',a,opts)}
-function getPersonas(){try{return JSON.parse(localStorage.getItem(LS_PERSONAS)||'["🤍 Tamarindo"]')}catch{return['🤍 Tamarindo']}}
+function getPersonas(){try{return JSON.parse(localStorage.getItem(LS_PERSONAS)||'[]')}catch{return[]}}
 function savePersonas(a){localStorage.setItem(LS_PERSONAS,JSON.stringify(a));syncCollectionToCloud('people',a)}
 const DEFAULT_CATS=[
   {id:'super',name:'Supermercado',emoji:'🛒',color:'#4CAF50'},
@@ -1481,7 +1484,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v28</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v29</div>`;
   }
 }
 function updateValorDolar(v){
