@@ -210,7 +210,7 @@ function syncCollectionToCloud(collName,localArray,opts){
 
 function syncSettingsToCloud(){
   if(!window._fb||!window._fb.syncEnabled) return;
-  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),cards:getCards(),debits:getDebits(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
+  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),cards:getCards(),debits:getDebits(),ingestToken:getIngestToken(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
 }
 
 const LOCAL_GETTERS = {
@@ -252,6 +252,7 @@ window.applyCloudSettings=function(data){
   if(data.valorDolar!==undefined) localStorage.setItem('misgastos_valor_dolar',String(data.valorDolar));
   if(Array.isArray(data.cards)) applyCardsFromCloud(data.cards);
   if(Array.isArray(data.debits)) applyDebitsFromCloud(data.debits);
+  if(typeof data.ingestToken==='string') setIngestTokenLocal(data.ingestToken);
   if(data.billingDates) localStorage.setItem('misgastos_billing_dates',JSON.stringify(data.billingDates));
   if(data.paymentDates) localStorage.setItem('misgastos_payment_dates',JSON.stringify(data.paymentDates));
   if(data.paidFlags) localStorage.setItem('misgastos_paid_flags',JSON.stringify(data.paidFlags));
@@ -1440,6 +1441,7 @@ function saveBillingDates(d){localStorage.setItem('misgastos_billing_dates',JSON
 function renderAjustes(){
   renderCardsManager();
   populateCardSelectors();
+  renderIngestSection();
   renderPersonasAjustes();
   renderCategoriasAjustes();
   renderServiciosAjustes();
@@ -1484,7 +1486,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v29</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v30</div>`;
   }
 }
 function updateValorDolar(v){
@@ -1831,6 +1833,59 @@ function updateGreeting(){
   let nombre='';
   if(u){ nombre=(u.displayName||'').trim() || (u.email||'').split('@')[0]; }
   el.textContent = nombre ? ('👋 Hola, '+nombre) : '👋 Hola';
+}
+
+// ── Ingreso automático (push del banco → Vercel → tu cuenta) ────────────────
+const INGEST_URL='https://misgastos-vercel.vercel.app/api/ingest';
+function getIngestToken(){ try{ return localStorage.getItem('misgastos_ingest_token')||''; }catch(e){ return ''; } }
+function setIngestTokenLocal(t){ try{ localStorage.setItem('misgastos_ingest_token',t||''); }catch(e){} }
+
+async function activarIngreso(){
+  if(!window._fb||!window._fb.user){ showToast('Inicia sesión primero','var(--red)'); return; }
+  let t=getIngestToken();
+  if(!t){
+    t='tok_'+((window.crypto&&crypto.randomUUID)?crypto.randomUUID().replace(/-/g,'')
+      :(Date.now().toString(36)+Math.random().toString(36).slice(2,12)));
+  }
+  const ok=await (window.registerIngestToken?window.registerIngestToken(t):Promise.resolve(false));
+  if(!ok){ showToast('No se pudo activar. Revisa tu conexión y que las reglas estén publicadas.','var(--red)'); return; }
+  setIngestTokenLocal(t);
+  if(typeof syncSettingsToCloud==='function') syncSettingsToCloud();
+  renderIngestSection();
+  showToast('Ingreso automático activado ✓');
+}
+async function regenerarIngreso(){
+  if(!confirm('Genera un token NUEVO. El atajo con el token viejo dejará de registrar hasta que lo actualices. ¿Continuar?')) return;
+  setIngestTokenLocal('');
+  await activarIngreso();
+}
+function copiarIngest(txt,msg){
+  if(navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>showToast(msg||'Copiado ✓')).catch(()=>showToast('No se pudo copiar','var(--yellow)'));
+}
+function renderIngestSection(){
+  const el=document.getElementById('ingest-section');
+  if(!el) return;
+  const t=getIngestToken();
+  if(!t){
+    el.innerHTML=`
+      <p style="font-size:12px;color:var(--text2);line-height:1.5;margin:0 0 10px">Registra tus compras automáticamente desde las notificaciones del banco (vía un atajo en tu iPhone). Actívalo para obtener tu token.</p>
+      <button onclick="activarIngreso()" style="width:100%;padding:11px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer">Activar ingreso automático</button>`;
+    return;
+  }
+  const field=(label,val,msg)=>`
+    <div style="margin-top:8px">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:4px">${label}</div>
+      <div style="display:flex;gap:6px">
+        <input readonly value="${esc(val)}" onclick="this.select()" style="flex:1;min-width:0;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:12px"/>
+        <button onclick="copiarIngest('${esc(val)}','${msg}')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer">Copiar</button>
+      </div>
+    </div>`;
+  el.innerHTML=`
+    <p style="font-size:12px;color:var(--green);margin:0 0 4px">✓ Activado</p>
+    ${field('URL para el atajo', INGEST_URL, 'URL copiada')}
+    ${field('Tu token', t, 'Token copiado')}
+    <p style="font-size:11px;color:var(--text2);line-height:1.5;margin:10px 0 0">En tu atajo de iOS → acción <strong>“Obtener contenido de URL”</strong>: pega la URL (Método <strong>POST</strong>, Cuerpo <strong>Formulario</strong>), con un campo <strong>token</strong> = tu token, y un campo <strong>texto</strong> = la variable <strong>🔔 Notificación</strong>. Deja <strong>Esperar 3 s</strong> al final.</p>
+    <button onclick="regenerarIngreso()" style="width:100%;margin-top:10px;padding:9px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;cursor:pointer">Regenerar token</button>`;
 }
 
 function openAddRuleModal(){

@@ -211,6 +211,17 @@ async function _migrateLocalToCloud(uid){
   await setDoc(doc(fbDb,'users',uid,'settings','migration'), {localStorageMigrated:true, migratedAt:Date.now(), version:1});
 }
 
+// Registra (o re-registra) el token de ingreso automático: ingest_tokens/{token}
+// → {uid}. El backend (Vercel) lo lee para saber a qué usuario pertenece un POST.
+window.registerIngestToken = async function(token){
+  const user=window._fb.user;
+  if(!user || !token) return false;
+  try{
+    await setDoc(doc(fbDb,'ingest_tokens',token), {uid:user.uid, createdAt:Date.now()}, {merge:true});
+    return true;
+  }catch(err){ console.warn('registerIngestToken',err); return false; }
+};
+
 window.cloudLogin = async function(){
   const email = document.getElementById('cloud-email').value.trim();
   const pass = document.getElementById('cloud-pass').value;
