@@ -1465,9 +1465,9 @@ function renderAjustes(){
     <div class="settings-row" style="align-items:center;gap:10px">
       <span class="row-label" style="flex:1">${t.label}</span>
       <span style="font-size:12px;color:var(--text2)">Día de cierre:</span>
-      <input type="number" min="1" max="31" inputmode="numeric" pattern="[0-9]*" value="${billing[t.id]||19}"
+      <input type="number" min="1" max="31" inputmode="numeric" pattern="[0-9]*" value="${billing[t.id]||''}" placeholder="19"
         style="width:52px;text-align:center;padding:6px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"
-        onblur="updateBillingDate('${t.id}',this.value||'19');this.value=getBillingDates()['${t.id}']||19"
+        onblur="updateBillingDate('${t.id}',this.value);this.value=getBillingDates()['${t.id}']||''"
         onkeydown="if(event.key==='Enter'){this.blur()}"
       />
     </div>`).join('');
@@ -1477,9 +1477,9 @@ function renderAjustes(){
     <div class="settings-row" style="align-items:center;gap:10px">
       <span class="row-label" style="flex:1">${t.label}</span>
       <span style="font-size:12px;color:var(--text2)">Día de pago:</span>
-      <input type="number" min="1" max="31" inputmode="numeric" pattern="[0-9]*" value="${payment[t.id]||5}"
+      <input type="number" min="1" max="31" inputmode="numeric" pattern="[0-9]*" value="${payment[t.id]||''}" placeholder="5"
         style="width:52px;text-align:center;padding:6px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px"
-        onblur="updatePaymentDate('${t.id}',this.value||'5');this.value=getPaymentDates()['${t.id}']||5"
+        onblur="updatePaymentDate('${t.id}',this.value);this.value=getPaymentDates()['${t.id}']||''"
         onkeydown="if(event.key==='Enter'){this.blur()}"
       />
     </div>`).join('');
@@ -1499,7 +1499,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v46';
+  if(ver) ver.textContent='MisGastos · v47';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
@@ -1537,14 +1537,15 @@ function renderServiciosAjustes(){
   const el=document.getElementById('servicios-list');
   if(!el) return;
   const servicios=getServiciosHogar();
-  el.innerHTML=servicios.map(s=>`
+  el.innerHTML = servicios.length ? servicios.map(s=>`
     <div class="settings-row" style="gap:10px">
       <span style="font-size:18px">${esc(s.emoji)}</span>
       <span class="row-label" style="flex:1">${esc(s.name)}</span>
       <span style="font-size:12px;color:var(--text2)">día ${s.day}</span>
       <button onclick="openEditServicioModal('${escJsAttr(s.id)}')" style="background:none;border:none;color:var(--text2);font-size:13px;cursor:pointer;padding:4px 6px">✏️</button>
       <button onclick="deleteServicio('${escJsAttr(s.id)}')" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 6px">🗑️</button>
-    </div>`).join('');
+    </div>`).join('')
+    : '<div style="padding:4px 0 2px;color:var(--text2);font-size:13px;line-height:1.5">Agrega los servicios que pagas cada mes (arriendo, luz, internet…) con su <strong style="color:var(--text)">día de cobro</strong> y te recordaremos pagarlos. ¿No pagas servicios fijos? Puedes <strong style="color:var(--text)">dejarlo vacío</strong> y omitirlo.</div>';
 }
 function openAddServicioModal(){
   _editServicioId=null;
@@ -1619,7 +1620,9 @@ function renderCategoriasAjustes(){
         <span class="row-label" style="flex:1">"${esc(r.keyword)}" → ${cat?esc(cat.name):'Desconocida'}</span>
         <button onclick="deleteRule(${i})" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 6px">🗑️</button>
       </div>`;
-    }).join(''):'<div style="padding:8px 0;color:var(--text2);font-size:13px">Sin reglas aún. Agrega una para auto-categorizar cartolas.</div>';
+    }).join(''):`<div style="padding:8px 0;color:var(--text2);font-size:13px;line-height:1.6">Aún no tienes reglas. Sirven para <strong style="color:var(--text)">categorizar solo</strong> tus compras.<br>
+      <span style="display:inline-block;margin-top:6px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text)">Ejemplo: "UBER" → 🚗 Transporte</span><br>
+      <span style="display:inline-block;margin-top:4px">Con esa regla, toda compra cuyo texto contenga <strong style="color:var(--text)">"UBER"</strong> se clasifica automáticamente como Transporte.</span></div>`;
   }
 }
 
@@ -2001,7 +2004,9 @@ function deleteRule(idx){
 
 function updateBillingDate(cardId, val){
   const d=getBillingDates();
-  d[cardId]=Math.min(31,Math.max(1,parseInt(val)||1));
+  const n=parseInt(val);
+  if(!n){ delete d[cardId]; saveBillingDates(d); return; } // en blanco = sin fecha propia (usa el default al calcular)
+  d[cardId]=Math.min(31,Math.max(1,n));
   saveBillingDates(d);
   showToast('Fecha de cierre actualizada');
 }
@@ -2022,13 +2027,21 @@ const DEFAULT_SERVICIOS=[
   {id:'club',emoji:'🏋️',name:'Club',day:8},
   {id:'tag',emoji:'🚗',name:'Tag',day:20},
 ];
-function getServiciosHogar(){try{const s=localStorage.getItem(LS_SERVICIOS);return s?JSON.parse(s):DEFAULT_SERVICIOS.map(s=>({...s}))}catch{return DEFAULT_SERVICIOS.map(s=>({...s}))}}
+function getServiciosHogar(){
+  try{const s=localStorage.getItem(LS_SERVICIOS); if(s) return JSON.parse(s);}catch(e){}
+  // Usuario nuevo: parte SIN servicios (los agrega quien los tenga). Solo el usuario
+  // original que migra (ya tiene gastos) recibe la lista por defecto como semilla.
+  const hayDatosPrevios=!!(localStorage.getItem('gastos_credito_v2')||localStorage.getItem('gastos_debito_v2'));
+  return hayDatosPrevios?DEFAULT_SERVICIOS.map(s=>({...s})):[];
+}
 function saveServiciosHogar(a){localStorage.setItem(LS_SERVICIOS,JSON.stringify(a));syncCollectionToCloud('household_services',a)}
 function getServiciosPaidFlags(){try{return JSON.parse(localStorage.getItem('misgastos_servicios_paid_flags')||'{}')}catch{return{}}}
 function saveServiciosPaidFlags(d){localStorage.setItem('misgastos_servicios_paid_flags',JSON.stringify(d));syncSettingsToCloud()}
 function updatePaymentDate(cardId,val){
   const d=getPaymentDates();
-  d[cardId]=Math.min(31,Math.max(1,parseInt(val)||1));
+  const n=parseInt(val);
+  if(!n){ delete d[cardId]; savePaymentDates(d); return; } // en blanco = sin fecha propia (usa el default al calcular)
+  d[cardId]=Math.min(31,Math.max(1,n));
   savePaymentDates(d);
   showToast('Día de pago actualizado');
 }
