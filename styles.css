@@ -21,6 +21,17 @@
     :root[data-accent="contorno"] .copy-btn,
     :root[data-accent="contorno"] .sueldo-input-row button{background:transparent;border:1.5px solid var(--accent);color:var(--text)}
     :root[data-accent="contorno"] .step-num{background:transparent;border:1px solid var(--accent);color:var(--text)}
+    /* Botón segmentado genérico (toggles de análisis, ¿qué debo?, conciliar) */
+    .seg{border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-weight:600;transition:all .15s}
+    .seg.flat{border:none}
+    .seg.on{background:var(--accent2);border-color:var(--accent2);color:var(--accent-ink)}
+    :root[data-accent="contorno"] .seg.on{background:transparent;border-color:var(--accent);color:var(--text)}
+    /* Botón de acción con acento (degradado) */
+    .btn-accent{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--accent-ink);border:none}
+    :root[data-accent="contorno"] .btn-accent{background:transparent;border:1.5px solid var(--accent);color:var(--text)}
+    /* Contorno para chips ya existentes (fecha/banco) */
+    :root[data-accent="contorno"] .hdf-chip.active,
+    :root[data-accent="contorno"] .bank-chip.active{background:transparent;border-color:var(--accent);color:var(--text)}
     /* Selector de estilo en Ajustes */
     .accent-swatches{display:flex;flex-wrap:wrap;gap:12px;padding:4px 0 2px}
     .accent-sw{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;border:none;background:none;padding:0}
@@ -172,7 +183,7 @@
     .debit-stat .dv{font-size:15px;font-weight:600}
     .bank-select-row{display:flex;gap:8px;margin:14px 20px 0}
     .bank-chip{flex:1;padding:9px;border-radius:10px;border:1px solid var(--border);background:none;color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;text-align:center;transition:all .2s}
-    .bank-chip.active{border-color:var(--accent);color:var(--accent2);background:rgba(108,99,255,.1)}
+    .bank-chip.active{border-color:var(--accent);color:var(--accent2);background:rgba(255,255,255,.06)}
     .import-box{margin:14px 20px 0;background:var(--bg2);border-radius:var(--radius);border:2px dashed var(--border);padding:20px;text-align:center;cursor:pointer;transition:border-color .2s}
     .import-box:hover{border-color:var(--accent)}
     .import-box svg{width:36px;height:36px;margin-bottom:10px;opacity:.4}
@@ -322,7 +333,7 @@
     /* Micro-interacciones: feedback táctil */
     .tx-item{transition:transform .12s ease,border-color .15s ease}
     .tx-item:active{transform:scale(.985)}
-    .btn-save{background:linear-gradient(135deg,var(--accent),#8b7cff);transition:transform .12s,filter .15s}
+    .btn-save{background:linear-gradient(135deg,var(--accent),var(--accent2));transition:transform .12s,filter .15s}
     .btn-save:active{transform:scale(.97);filter:brightness(1.12)}
     .btn-cancel,.filter-chip,.hdf-chip,.bank-chip,.person-chip,.modal-tab,.btn-paid,.btn-import,.btn-discard,.sueldo-edit-btn,.copy-btn{transition:all .15s ease}
     .btn-cancel:active,.filter-chip:active,.hdf-chip:active,.bank-chip:active,.person-chip:active,.modal-tab:active,.btn-paid:active,.btn-import:active,.btn-discard:active,.sueldo-edit-btn:active,.copy-btn:active{transform:scale(.96)}

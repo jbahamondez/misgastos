@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
   <script>try{var _a=localStorage.getItem('misgastos_accent');if(_a)document.documentElement.setAttribute('data-accent',_a);}catch(e){}</script>
-  <link rel="stylesheet" href="./styles.css?v=43" />
+  <link rel="stylesheet" href="./styles.css?v=44" />
 </head>
 <body>
 
@@ -27,13 +27,13 @@
     <div id="auth-splash" style="text-align:center"><div class="auth-spinner"></div></div>
     <div id="auth-form" style="display:none">
     <div style="display:flex;gap:6px;margin-bottom:16px">
-      <button id="auth-tab-login"  onclick="setAuthMode('login')"  style="flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer">Iniciar sesión</button>
+      <button id="auth-tab-login"  onclick="setAuthMode('login')"  class="btn-accent" style="flex:1;padding:10px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">Iniciar sesión</button>
       <button id="auth-tab-signup" onclick="setAuthMode('signup')" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:14px;font-weight:600;cursor:pointer">Crear cuenta</button>
     </div>
     <input id="auth-email" type="email" placeholder="Email" autocomplete="username" style="width:100%;margin-bottom:8px;padding:11px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box"/>
     <input id="auth-pass" type="password" placeholder="Contraseña" autocomplete="current-password" style="width:100%;margin-bottom:8px;padding:11px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box"/>
     <input id="auth-code" type="text" placeholder="Código de invitación" autocomplete="off" style="display:none;width:100%;margin-bottom:8px;padding:11px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box"/>
-    <button id="auth-submit" onclick="submitAuth()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Iniciar sesión</button>
+    <button id="auth-submit" onclick="submitAuth()" class="btn-accent" style="width:100%;padding:12px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">Iniciar sesión</button>
     <p id="auth-error" style="color:var(--red);font-size:12px;text-align:center;margin:10px 0 0;min-height:15px"></p>
     <button id="auth-forgot" onclick="authForgot()" style="background:none;border:none;color:var(--accent2);font-size:12px;cursor:pointer;margin:6px auto 0;display:block">¿Olvidaste tu contraseña?</button>
     </div>
@@ -47,7 +47,7 @@
       <div style="font-size:40px">🎉</div>
       <h3 style="margin:8px 0 6px">¡Bienvenido a MisGastos!</h3>
       <p style="font-size:13px;color:var(--text2);line-height:1.5;margin:0 0 18px">Para empezar, agrega tus <strong>tarjetas y cuentas</strong>, y configura tu <strong>sueldo</strong>. Toma menos de un minuto.</p>
-      <button onclick="startOnboarding()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Configurar mis tarjetas</button>
+      <button onclick="startOnboarding()" class="btn-accent" style="width:100%;padding:12px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">Configurar mis tarjetas</button>
       <button onclick="document.getElementById('welcome-overlay').classList.remove('open')" style="width:100%;margin-top:8px;padding:10px;border:none;background:transparent;color:var(--text2);font-size:13px;cursor:pointer">Lo haré después</button>
     </div>
   </div>
@@ -61,7 +61,7 @@
   <div class="salud-box" id="salud-box"></div>
   <div style="margin:14px 20px 4px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
     <button onclick="openQueDeboModal()" style="background:var(--bg2);border:1px solid var(--border);color:var(--text);border-radius:20px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">🧾 ¿Qué debo?</button>
-    <button onclick="openAnalisisModal()" style="background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border:none;border-radius:20px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">📊 Ver análisis</button>
+    <button onclick="openAnalisisModal()" class="btn-accent" style="border-radius:20px;padding:9px 18px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">📊 Ver análisis</button>
   </div>
   <div class="section-header"><h3>Últimos movimientos</h3><button onclick="showPage('historial')">Ver todos</button></div>
   <div class="tx-list pb14" id="recent-list"></div>
@@ -137,7 +137,7 @@
       <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:6px">Nombre para el saludo</label>
       <div style="display:flex;gap:8px">
         <input id="display-name-input" type="text" placeholder="Tu nombre" maxlength="30" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px">
-        <button onclick="saveDisplayName()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:14px;font-weight:600;cursor:pointer">Guardar</button>
+        <button onclick="saveDisplayName()" class="btn-accent" style="padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">Guardar</button>
       </div>
       <p style="font-size:11px;color:var(--text2);margin-top:8px">Aparece arriba en el inicio: "👋 Hola, …"</p>
     </div>
@@ -249,7 +249,7 @@
         <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Color</div>
         <div id="cat-color-picker" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
-      <button onclick="confirmSaveCat()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Guardar</button>
+      <button onclick="confirmSaveCat()" class="btn-accent" style="width:100%;padding:12px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">Guardar</button>
     </div>
   </div>
 </div>
@@ -278,7 +278,7 @@
         <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Color</div>
         <div id="card-color-picker" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
-      <button onclick="confirmSaveCard()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Guardar</button>
+      <button onclick="confirmSaveCard()" class="btn-accent" style="width:100%;padding:12px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">Guardar</button>
     </div>
   </div>
 </div>
@@ -296,7 +296,7 @@
         <div style="font-size:12px;color:var(--text2);margin-bottom:6px">Día de vencimiento</div>
         <input id="servicio-day-input" type="number" min="1" max="31" inputmode="numeric" placeholder="Ej: 5" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;box-sizing:border-box"/>
       </div>
-      <button onclick="confirmSaveServicio()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Guardar</button>
+      <button onclick="confirmSaveServicio()" class="btn-accent" style="width:100%;padding:12px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">Guardar</button>
     </div>
   </div>
 </div>
@@ -308,7 +308,7 @@
     <div style="padding:16px;display:flex;flex-direction:column;gap:12px">
       <input id="rule-keyword-input" type="text" placeholder="Palabra clave (ej: LIDER, COPEC)" style="padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;width:100%;box-sizing:border-box"/>
       <select id="rule-cat-select" style="padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;width:100%"></select>
-      <button onclick="confirmSaveRule()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:15px;font-weight:600;cursor:pointer">Guardar regla</button>
+      <button onclick="confirmSaveRule()" class="btn-accent" style="width:100%;padding:12px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">Guardar regla</button>
     </div>
   </div>
 </div>
@@ -555,7 +555,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=43"></script>
+<script src="./app.js?v=44"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>

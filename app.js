@@ -546,7 +546,7 @@ function renderDashboard(){
   // Recientes
   const recent=[...getC(),...getD().map(t=>({...t,_isDebit:true}))].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
   document.getElementById('recent-list').innerHTML=recent.length?recent.map(txHTML).join('')
-    :'<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg><h3>Sin gastos aún</h3><p>Toca + para agregar tu primer gasto</p><button onclick="openModal()" style="margin-top:14px;padding:10px 20px;border-radius:20px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:14px;font-weight:600;cursor:pointer">+ Agregar gasto</button></div>';
+    :'<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg><h3>Sin gastos aún</h3><p>Toca + para agregar tu primer gasto</p><button onclick="openModal()" class="btn-accent" style="margin-top:14px;padding:10px 20px;border-radius:20px;font-size:14px;font-weight:600;cursor:pointer">+ Agregar gasto</button></div>';
 }
 
 function renderSalud(totCred){
@@ -1499,7 +1499,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v43';
+  if(ver) ver.textContent='MisGastos · v44';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
@@ -3515,7 +3515,7 @@ function renderAnalisis(){
   ];
   document.getElementById('analisis-modo-switch').innerHTML=
     `<div style="display:flex;background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:3px">`
-    +modos.map(m=>`<button onclick="setAnalisisModo('${m.id}')" style="flex:1;padding:8px 4px;border-radius:9px;border:none;background:${_analisisModo===m.id?'var(--accent2)':'transparent'};color:${_analisisModo===m.id?'#fff':'var(--text2)'};font-size:12.5px;font-weight:600;cursor:pointer">${m.label}</button>`).join('')
+    +modos.map(m=>`<button onclick="setAnalisisModo('${m.id}')" class="seg flat${_analisisModo===m.id?' on':''}" style="flex:1;padding:8px 4px;border-radius:9px;font-size:12.5px">${m.label}</button>`).join('')
     +`</div>
     <div style="font-size:11px;color:var(--text2);margin-top:6px">${_analisisModo==='cuotas'
       ?'Lo que pagas en el período: incluye las cuotas de compras de meses anteriores.'
@@ -3529,7 +3529,7 @@ function renderAnalisis(){
     {id:'todo',label:'Todo'},
   ];
   document.getElementById('analisis-period-filters').innerHTML=periods.map(p=>
-    `<button onclick="setAnalisisPeriod('${p.id}')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:1px solid ${_analisisPeriod===p.id?'var(--accent2)':'var(--border)'};background:${_analisisPeriod===p.id?'var(--accent2)':'transparent'};color:${_analisisPeriod===p.id?'#fff':'var(--text2)'};font-size:13px;cursor:pointer">${p.label}</button>`
+    `<button onclick="setAnalisisPeriod('${p.id}')" class="seg${_analisisPeriod===p.id?' on':''}" style="flex-shrink:0;padding:6px 14px;border-radius:20px;font-size:13px">${p.label}</button>`
   ).join('');
 
   // Type filters
@@ -3539,7 +3539,7 @@ function renderAnalisis(){
     {id:'debito',label:'Débito'},
   ];
   document.getElementById('analisis-type-filters').innerHTML=`<div style="display:flex;gap:8px">`+types.map(t=>
-    `<button onclick="setAnalisisTxType('${t.id}')" style="flex:1;padding:7px;border-radius:10px;border:1px solid ${_analisisTxType===t.id?'var(--accent2)':'var(--border)'};background:${_analisisTxType===t.id?'var(--accent2)':'transparent'};color:${_analisisTxType===t.id?'#fff':'var(--text2)'};font-size:13px;cursor:pointer">${t.label}</button>`
+    `<button onclick="setAnalisisTxType('${t.id}')" class="seg${_analisisTxType===t.id?' on':''}" style="flex:1;padding:7px;border-radius:10px;font-size:13px">${t.label}</button>`
   ).join('')+'</div>'
   +`<div style="display:flex;justify-content:space-between;margin-top:10px">
       <button onclick="openComparativoMensual()" style="background:none;border:none;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;padding:0">📊 Comparativo mensual →</button>
@@ -3917,7 +3917,7 @@ function renderQueDebo(){
     {id:'actual',label:'Ciclo actual (en curso)'}
   ];
   document.getElementById('quedebo-tabs').innerHTML=tabs.map(t=>
-    `<button onclick="setQueDeboPeriod('${t.id}')" style="flex:1;padding:9px;border-radius:10px;border:1px solid ${period===t.id?'var(--accent2)':'var(--border)'};background:${period===t.id?'var(--accent2)':'transparent'};color:${period===t.id?'#fff':'var(--text2)'};font-size:12px;font-weight:600;cursor:pointer">${t.label}</button>`
+    `<button onclick="setQueDeboPeriod('${t.id}')" class="seg${period===t.id?' on':''}" style="flex:1;padding:9px;border-radius:10px;font-size:12px">${t.label}</button>`
   ).join('');
 
   // Recolecta las cuotas que caen en el ciclo elegido, usando la misma fuente
@@ -4028,12 +4028,12 @@ function renderConciliaSetup(){
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Compara lo que la app cree que te facturaron con la cartola real del banco. Las compras que no aparezcan podrás aplazarlas; las que falten, registrarlas.</div>
     <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Tarjeta</div>
     <div style="display:flex;gap:8px;margin-bottom:14px">
-      ${cards.map(c=>`<button onclick="setConciliaCard('${c.id}')" style="flex:1;padding:8px;border-radius:10px;border:1px solid ${_conciliaCard===c.id?'var(--accent2)':'var(--border)'};background:${_conciliaCard===c.id?'var(--accent2)':'transparent'};color:${_conciliaCard===c.id?'#fff':'var(--text2)'};font-size:12px;font-weight:600;cursor:pointer">${c.bank}</button>`).join('')}
+      ${cards.map(c=>`<button onclick="setConciliaCard('${c.id}')" class="seg${_conciliaCard===c.id?' on':''}" style="flex:1;padding:8px;border-radius:10px;font-size:12px">${c.bank}</button>`).join('')}
     </div>
     <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Ciclo a conciliar</div>
     <div style="display:flex;gap:8px;margin-bottom:6px">
-      <button onclick="setConciliaPeriod('cerrado')" style="flex:1;padding:8px;border-radius:10px;border:1px solid ${_conciliaPeriod==='cerrado'?'var(--accent2)':'var(--border)'};background:${_conciliaPeriod==='cerrado'?'var(--accent2)':'transparent'};color:${_conciliaPeriod==='cerrado'?'#fff':'var(--text2)'};font-size:12px;font-weight:600;cursor:pointer">Ciclo cerrado</button>
-      <button onclick="setConciliaPeriod('actual')" style="flex:1;padding:8px;border-radius:10px;border:1px solid ${_conciliaPeriod==='actual'?'var(--accent2)':'var(--border)'};background:${_conciliaPeriod==='actual'?'var(--accent2)':'transparent'};color:${_conciliaPeriod==='actual'?'#fff':'var(--text2)'};font-size:12px;font-weight:600;cursor:pointer">Ciclo actual</button>
+      <button onclick="setConciliaPeriod('cerrado')" class="seg${_conciliaPeriod==='cerrado'?' on':''}" style="flex:1;padding:8px;border-radius:10px;font-size:12px">Ciclo cerrado</button>
+      <button onclick="setConciliaPeriod('actual')" class="seg${_conciliaPeriod==='actual'?' on':''}" style="flex:1;padding:8px;border-radius:10px;font-size:12px">Ciclo actual</button>
     </div>
     <div style="font-size:11px;color:var(--accent2);margin-bottom:14px">📅 ${rango} · la app espera ${nEsperadas} cargo${nEsperadas!==1?'s':''}</div>
     <div class="import-box" style="margin:0" onclick="document.getElementById('concilia-file').click()">
