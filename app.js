@@ -1495,7 +1495,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v36</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v37</div>`;
   }
 }
 function updateValorDolar(v){
@@ -2767,12 +2767,14 @@ async function transcribeAudio(blob){
   if(!res.ok||!j.ok) throw new Error(j.error||('http '+res.status));
   return String(j.text||'').trim();
 }
+const MIC_WAVE_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px"><line x1="3" y1="12" x2="3" y2="12"/><line x1="6" y1="10" x2="6" y2="14"/><line x1="9" y1="7" x2="9" y2="17"/><line x1="12" y1="4" x2="12" y2="20"/><line x1="15" y1="8" x2="15" y2="16"/><line x1="18" y1="10.5" x2="18" y2="13.5"/><line x1="21" y1="11.5" x2="21" y2="12.5"/></svg>';
+const SPINNER_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" class="rec-spin" style="width:46px;height:46px"><path d="M12 3a9 9 0 1 0 9 9" opacity=".9"/></svg>';
 function showRecOverlay(mode){
   const ov=document.getElementById('rec-overlay'); if(!ov) return;
   const txt=document.getElementById('rec-overlay-text');
   const ic=document.getElementById('rec-overlay-ic');
-  if(mode==='transcribiendo'){ if(txt) txt.textContent='Transcribiendo…'; if(ic){ ic.textContent='⏳'; ic.classList.remove('listening'); } }
-  else { if(txt) txt.textContent='Escuchando… suelta para analizar'; if(ic){ ic.textContent='🎙️'; ic.classList.add('listening'); } }
+  if(mode==='transcribiendo'){ if(txt) txt.textContent='Transcribiendo…'; if(ic){ ic.innerHTML=SPINNER_SVG; ic.classList.remove('listening'); } }
+  else { if(txt) txt.textContent='Escuchando… suelta para analizar'; if(ic){ ic.innerHTML=MIC_WAVE_SVG; ic.classList.add('listening'); } }
   ov.classList.add('open');
 }
 function hideRecOverlay(){ const ov=document.getElementById('rec-overlay'); if(ov) ov.classList.remove('open'); }
