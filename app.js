@@ -1499,7 +1499,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v45';
+  if(ver) ver.textContent='MisGastos · v46';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
@@ -2133,10 +2133,15 @@ function closeServiciosReminderOutside(e){
 
 // ── Recordatorio: gastos sin clasificar (credito + debito, cualquier fecha) ──
 function checkSinClasificarReminder(){
+  // Si hay sesión con sync activo pero la nube aún no termina de bajar, esperamos:
+  // los datos locales todavía pueden estar sin categorizar y saldría un falso aviso.
+  const fb=window._fb;
+  if(fb && fb.user && fb.syncEnabled && !fb.firstSyncDone) return;
   const pend=[...getC().map(t=>({...t,_tipo:'credito'})),...getD().map(t=>({...t,_tipo:'debito'}))]
     .filter(t=>!t.catId && !esPrestada(t)) // las prestadas no son tu gasto: no se piden clasificar
     .sort((a,b)=>new Date(b.date)-new Date(a.date));
-  if(!pend.length) return;
+  const overlay=document.getElementById('sinclasificar-reminder-overlay');
+  if(!pend.length){ if(overlay) overlay.classList.remove('open'); return; } // cierra un aviso viejo si ya se categorizó en la nube
   const cats=getCategorias();
   const opts=cats.map(c=>`<option value="${c.id}">${c.emoji} ${c.name}</option>`).join('');
   document.getElementById('sinclasificar-reminder-list').innerHTML=pend.map((t,i)=>{
@@ -4384,16 +4389,27 @@ document.addEventListener('DOMContentLoaded',function(){
     else hideToast();
   });
   setTimeout(function(){
-    checkPaymentReminder();
-    if(!document.getElementById('payment-reminder-overlay').classList.contains('open')){
-      checkCobroReminder();
-      if(!document.getElementById('cobro-reminder-overlay').classList.contains('open')){
-        checkServiciosReminder();
-        if(!document.getElementById('servicios-reminder-overlay').classList.contains('open')) checkSinClasificarReminder();
-      }
-    }
+    // Con sesión + sync activo pero sin hidratar aún, esperamos: los datos locales
+    // todavía no reflejan la nube y el recordatorio saldría con datos viejos.
+    // onFirstSyncComplete los correrá cuando la nube termine de bajar.
+    const fb=window._fb;
+    if(fb && fb.user && fb.syncEnabled && !fb.firstSyncDone) return;
+    maybeRunReminders();
   },1200);
 });
+// Cadena de recordatorios (pago → cobro → servicios → sin clasificar), en orden
+// y sin encimarse: cada uno solo corre si el anterior no abrió su modal.
+function maybeRunReminders(){
+  checkPaymentReminder();
+  if(document.getElementById('payment-reminder-overlay').classList.contains('open')) return;
+  checkCobroReminder();
+  if(document.getElementById('cobro-reminder-overlay').classList.contains('open')) return;
+  checkServiciosReminder();
+  if(document.getElementById('servicios-reminder-overlay').classList.contains('open')) return;
+  checkSinClasificarReminder();
+}
+// Lo dispara firebase.js al terminar la PRIMERA descarga de la nube.
+window.onFirstSyncComplete=function(){ maybeRunReminders(); };
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
     navigator.serviceWorker.register('./sw.js');

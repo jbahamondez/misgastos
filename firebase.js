@@ -66,6 +66,11 @@ const SYNC_COLLECTIONS=['transactions_credit','transactions_debit','debts','peop
 function startCloudSync(uid){
   stopCloudSync();
   window._fb.cache={};
+  // Contamos las colecciones pendientes de su PRIMER snapshot. Mientras haya
+  // pendientes, los datos locales aún no reflejan la nube: los recordatorios
+  // (ej. "sin clasificar") deben esperar para no dispararse con datos viejos.
+  window._fb.firstSyncDone=false;
+  window._fb.firstSyncPending=SYNC_COLLECTIONS.length;
   SYNC_COLLECTIONS.forEach(name=>{
     window._fb.cache[name]=new Map();
     let hydrated=false;
@@ -76,6 +81,11 @@ function startCloudSync(uid){
       if(!hydrated){
         hydrated=true;
         window.reconcileFirstSync&&window.reconcileFirstSync(name);
+        window._fb.firstSyncPending--;
+        if(window._fb.firstSyncPending<=0 && !window._fb.firstSyncDone){
+          window._fb.firstSyncDone=true;
+          window.onFirstSyncComplete&&window.onFirstSyncComplete();
+        }
       }
       window.applyCloudCollection&&window.applyCloudCollection(name, Array.from(window._fb.cache[name].values()));
     });
@@ -97,9 +107,11 @@ function stopCloudSync(){
   window._fb.unsubscribers=[];
   window._fb.cache={};
   window._fb.syncEnabled=false;
+  window._fb.firstSyncDone=false;
 }
 
 window._fb.unsubscribers=[];
+window._fb.firstSyncDone=false;
 window._fb.cache={};
 window._fb.syncEnabled=false;
 
