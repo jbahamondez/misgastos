@@ -1495,7 +1495,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v32</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v33</div>`;
   }
 }
 function updateValorDolar(v){
@@ -2536,6 +2536,155 @@ function saveExpense(){
     _pendingSplit={txId,amount,desc,cuotas:1,currency:'CLP',cardId:bank,type:'debito',txDate};
     openSplitModal(_pendingSplit);
   }
+}
+
+// ── Ingreso por voz (habla o dicta un gasto) ───────────────────────────────
+// Plan B para bancos que no se capturan por notificación/correo. Convierte
+// "gasté 3 mil pesos en jumbo del costanera con tarjeta santander" en un gasto
+// prellenado que SIEMPRE se confirma en el modal (la voz no es perfecta).
+const VOICE_NUM = {
+  cero:0, un:1, uno:1, una:1, dos:2, tres:3, cuatro:4, cinco:5, seis:6, siete:7,
+  ocho:8, nueve:9, diez:10, once:11, doce:12, trece:13, catorce:14, quince:15,
+  dieciseis:16, 'dieciséis':16, diecisiete:17, dieciocho:18, diecinueve:19,
+  veinte:20, veintiuno:21, veintidos:22, 'veintidós':22, veintitres:23, 'veintitrés':23,
+  veinticuatro:24, veinticinco:25, veintiseis:26, 'veintiséis':26, veintisiete:27,
+  veintiocho:28, veintinueve:29, treinta:30, cuarenta:40, cincuenta:50, sesenta:60,
+  setenta:70, ochenta:80, noventa:90, cien:100, ciento:100, doscientos:200,
+  trescientos:300, cuatrocientos:400, quinientos:500, seiscientos:600,
+  setecientos:700, ochocientos:800, novecientos:900
+};
+// Interpreta un monto dicho en palabras y/o dígitos (español + jerga chilena:
+// "luca"=1.000, "palo"=1.000.000). Ej: "3 mil quinientos"→3500, "15 lucas"→15000.
+function parseSpanishAmount(str){
+  str=String(str||'');
+  const dig=str.match(/\d[\d.\,]*/);
+  const digitVal = dig ? (parseFloat(dig[0].replace(/\./g,'').replace(',','.'))||0) : 0;
+  const tokens=str.toLowerCase().replace(/[^0-9a-záéíóúñ ]/g,' ').split(/\s+/).filter(Boolean);
+  let total=0, cur=0, sawWord=false;
+  for(const w of tokens){
+    if(/^\d/.test(w)){ cur += parseFloat(w.replace(/\./g,'').replace(',','.'))||0; continue; }
+    if(w==='mil'){ cur=(cur===0?1:cur)*1000; total+=cur; cur=0; sawWord=true; continue; }
+    if(w==='millon'||w==='millón'||w==='millones'){ cur=(cur===0?1:cur)*1000000; total+=cur; cur=0; sawWord=true; continue; }
+    if(w==='luca'||w==='lucas'){ cur=(cur===0?1:cur)*1000; total+=cur; cur=0; sawWord=true; continue; }
+    if(w==='palo'||w==='palos'){ cur=(cur===0?1:cur)*1000000; total+=cur; cur=0; sawWord=true; continue; }
+    if(VOICE_NUM[w]!==undefined){ cur += VOICE_NUM[w]; sawWord=true; continue; }
+  }
+  const wordVal=total+cur;
+  if(sawWord && wordVal>0) return Math.round(wordVal);
+  return Math.round(digitVal||wordVal||0);
+}
+// Calza la tarjeta/cuenta nombrada con las del usuario (por id, nombre o alias).
+function matchAccountFromText(t, prefTipo){
+  const stop=new Set(['banco','tarjeta','cuenta','corriente','credito','crédito','debito','débito','con','mil']);
+  const norm=s=>String(s||'').toLowerCase();
+  const ALIAS={ bchile:['chile'], scotia:['scotia','cencosud'], falabella:['falabella','cmr'] };
+  const mk=(c,tipo)=>({ id:c.id, tipo, keys:[norm(c.id), ...norm(c.bank).split(/\s+/), ...(ALIAS[c.id]||[])].filter(k=>k&&k.length>=3&&!stop.has(k)) });
+  const credit=creditCards().map(c=>mk(c,'credito'));
+  const debit=Object.values(DEBITS).map(c=>mk(c,'debito'));
+  const order = prefTipo==='debito' ? debit.concat(credit) : credit.concat(debit);
+  for(const a of order){ if(a.keys.some(k=>t.includes(k))) return a; }
+  return null;
+}
+function parseVoiceExpense(text){
+  const t=' '+String(text||'').toLowerCase().replace(/\s+/g,' ').trim()+' ';
+  // Monto: lo buscamos en la parte previa al primer " en " (ahí suele ir el comercio).
+  const enIdx=t.indexOf(' en ');
+  let amount=parseSpanishAmount(enIdx>0?t.slice(0,enIdx):t);
+  if(!amount) amount=parseSpanishAmount(t);
+  // Cuotas
+  let cuotas=1;
+  const cuoM=t.match(/(\d+|[a-záéíóúñ]+)\s+cuotas?/);
+  if(cuoM){ const c=parseSpanishAmount(cuoM[1]); if(c>0&&c<=48) cuotas=c; }
+  // Tipo explícito (si lo dice)
+  let tipo = /\bd[eé]bito\b|cuenta corriente/.test(t) ? 'debito'
+           : /\bcr[eé]dito\b/.test(t) ? 'credito' : '';
+  // Tarjeta/cuenta
+  const match=matchAccountFromText(t, tipo);
+  let cardId='', bank='';
+  if(match){
+    if(match.tipo==='debito'){ bank=match.id; if(!tipo) tipo='debito'; }
+    else { cardId=match.id; if(!tipo) tipo='credito'; }
+  }
+  if(!tipo) tipo='credito';
+  if(tipo==='credito' && !cardId){ const cc=creditCards(); if(cc[0]) cardId=cc[0].id; }
+  if(tipo==='debito' && !bank){ const dv=Object.values(DEBITS); if(dv[0]) bank=dv[0].id; }
+  // Comercio: tras " en ", cortado en " con "/" pagando "/cuotas/tipo
+  let desc='';
+  if(enIdx>0){
+    let rest=t.slice(enIdx+4).split(/\bcon\b|\bpagando\b/)[0];
+    rest=rest.replace(/\b(en\s+)?\d+\s+cuotas?.*/,'').replace(/\b(cr[eé]dito|d[eé]bito)\b.*/,'');
+    desc=rest;
+  }
+  desc=desc.replace(/[^0-9a-záéíóúñ ]/gi,'').replace(/\s+/g,' ').trim();
+  desc=desc.replace(/\s+(en|de|con|por|a|el|la|los|las)$/i,'').trim(); // quita colgajos finales
+  if(desc) desc=desc.split(' ').map(w=>w?w.charAt(0).toUpperCase()+w.slice(1):w).join(' ');
+  return { amount, desc, tipo, cardId, bank, cuotas };
+}
+
+let _voiceRec=null, _voiceListening=false;
+function voiceSpeechSupported(){ return !!(window.SpeechRecognition||window.webkitSpeechRecognition); }
+function openVoiceModal(){
+  const ta=document.getElementById('voice-text'); if(ta) ta.value='';
+  setVoiceStatus(voiceSpeechSupported()?'Toca el micrófono y habla':'Toca el campo y usa el micrófono 🎤 del teclado');
+  updateVoiceMicUI();
+  document.getElementById('voice-modal-overlay').classList.add('open');
+  // Enfocar el campo: en iPhone esto abre el teclado con su dictado nativo.
+  setTimeout(()=>{ const el=document.getElementById('voice-text'); if(el) el.focus(); },300);
+}
+function closeVoiceModal(){
+  stopVoiceRec();
+  document.getElementById('voice-modal-overlay').classList.remove('open');
+}
+function closeVoiceModalOutside(e){ if(e.target===document.getElementById('voice-modal-overlay')) closeVoiceModal(); }
+function setVoiceStatus(msg){ const el=document.getElementById('voice-status'); if(el) el.textContent=msg; }
+function updateVoiceMicUI(){
+  const b=document.getElementById('voice-mic-btn'); if(!b) return;
+  b.classList.toggle('listening',_voiceListening);
+  b.textContent=_voiceListening?'⏹️':'🎤';
+}
+function toggleVoiceRec(){ if(_voiceListening) stopVoiceRec(); else startVoiceRec(); }
+function startVoiceRec(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ setVoiceStatus('Tu dispositivo no tiene micrófono web. Usa el 🎤 del teclado.'); const el=document.getElementById('voice-text'); if(el) el.focus(); return; }
+  try{
+    _voiceRec=new SR();
+    _voiceRec.lang='es-CL'; _voiceRec.interimResults=true; _voiceRec.continuous=false; _voiceRec.maxAlternatives=1;
+    _voiceRec.onresult=e=>{ let s=''; for(let i=0;i<e.results.length;i++) s+=e.results[i][0].transcript; const el=document.getElementById('voice-text'); if(el) el.value=s; };
+    _voiceRec.onend=()=>{ _voiceListening=false; updateVoiceMicUI(); setVoiceStatus('Listo. Revisa el texto y toca "Analizar".'); };
+    _voiceRec.onerror=ev=>{
+      _voiceListening=false; updateVoiceMicUI();
+      const er=ev&&ev.error;
+      if(er==='not-allowed'||er==='service-not-allowed'){ setVoiceStatus('Micrófono bloqueado. Usa el 🎤 del teclado.'); const el=document.getElementById('voice-text'); if(el) el.focus(); }
+      else if(er==='no-speech'){ setVoiceStatus('No te escuché. Intenta de nuevo o escribe/dicta.'); }
+      else { setVoiceStatus('No se pudo usar el micrófono. Usa el 🎤 del teclado.'); const el=document.getElementById('voice-text'); if(el) el.focus(); }
+    };
+    _voiceRec.start(); _voiceListening=true; updateVoiceMicUI(); setVoiceStatus('Escuchando… habla ahora');
+  }catch(e){ _voiceListening=false; updateVoiceMicUI(); const el=document.getElementById('voice-text'); if(el) el.focus(); }
+}
+function stopVoiceRec(){ try{ if(_voiceRec) _voiceRec.stop(); }catch(e){} _voiceListening=false; updateVoiceMicUI(); }
+function analyzeVoice(){
+  stopVoiceRec();
+  const text=(document.getElementById('voice-text').value||'').trim();
+  if(!text){ showToast('Dime o escribe el gasto','var(--yellow)'); return; }
+  const p=parseVoiceExpense(text);
+  if(!p.amount||p.amount<=0){ showToast('No entendí el monto. Revisa el texto.','var(--yellow)'); return; }
+  closeVoiceModal();
+  openModalPrefilled(p);
+}
+// Abre el modal de gasto manual ya prellenado con lo que entendió la voz.
+function openModalPrefilled(p){
+  switchModalTab(p.tipo==='debito'?'debito':'credito');
+  openModal(); // fija fecha, puebla selectores de tarjetas/categorías y abre el modal
+  const setVal=(id,v)=>{ const el=document.getElementById(id); if(el!=null&&v!=null&&v!=='') el.value=v; };
+  setVal('m-amount', p.amount);
+  setVal('m-desc', p.desc);
+  if(p.tipo==='debito'){ setVal('m-debit-bank', p.bank); }
+  else { setVal('m-card', p.cardId); setVal('m-cuotas', String(p.cuotas||1)); }
+  const auto=autoCategorize(p.desc); if(auto){ const c=document.getElementById('m-cat'); if(c) c.value=auto; }
+  const nom = p.tipo==='debito'
+    ? ((debitMeta(p.bank)&&debitMeta(p.bank).bank)||'cuenta')
+    : ((CARDS[p.cardId]&&CARDS[p.cardId].bank)||'tarjeta');
+  showToast('🎤 '+fmtCLP(p.amount)+(p.desc?(' · '+p.desc):'')+' · '+nom+' — revisa y guarda');
 }
 
 // ── Split modal logic ──────────────────────────────────────────────────────

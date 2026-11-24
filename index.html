@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="./icon-180-v3.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
-  <link rel="stylesheet" href="./styles.css?v=32" />
+  <link rel="stylesheet" href="./styles.css?v=33" />
 </head>
 <body>
 
@@ -357,6 +357,7 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Ajustes</button>
 </nav>
 
+<button class="fab fab-mic" onclick="openVoiceModal()" aria-label="Agregar gasto por voz">🎤</button>
 <button class="fab" onclick="openModal()">+</button>
 
 <!-- MODAL -->
@@ -399,6 +400,25 @@
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
       <button class="btn-save"   onclick="saveExpense()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL GASTO POR VOZ -->
+<div class="modal-overlay" id="voice-modal-overlay" onclick="closeVoiceModalOutside(event)">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>🎤 Gasto por voz</h2>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Di algo como: <em>"gasté 3 mil pesos en jumbo del costanera con tarjeta santander"</em></p>
+    <div style="display:flex;justify-content:center;margin-bottom:10px">
+      <button id="voice-mic-btn" class="voice-mic" onclick="toggleVoiceRec()">🎤</button>
+    </div>
+    <div id="voice-status" style="text-align:center;font-size:12px;color:var(--text2);margin-bottom:12px">Toca el micrófono y habla</div>
+    <label>Lo que dijiste (puedes corregirlo)</label>
+    <textarea id="voice-text" rows="2" placeholder="gasté 3 mil pesos en ... con tarjeta ..." style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:11px 13px;color:var(--text);font-size:15px;margin-bottom:12px;outline:none;resize:none;font-family:inherit"></textarea>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeVoiceModal()">Cancelar</button>
+      <button class="btn-save"   onclick="analyzeVoice()">Analizar →</button>
     </div>
   </div>
 </div>
@@ -516,7 +536,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=32"></script>
+<script src="./app.js?v=33"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>

@@ -204,6 +204,25 @@ Check 'AUTH-GATE-Y-ONBOARDING' @'
 })()
 '@
 
+Check 'VOZ-PARSEA-Y-PRELLENA' @'
+(function(){
+  var a=parseVoiceExpense("gasté 3 mil pesos en jumbo costanera con tarjeta santander");
+  var b=parseVoiceExpense("pague 15 lucas en uber con debito bci");
+  var c=parseVoiceExpense("compré 25990 en tienda en 6 cuotas con santander");
+  // prellenado del modal de gasto manual con lo que entendió la voz
+  openModalPrefilled(a);
+  var amt=document.getElementById("m-amount").value;
+  var card=document.getElementById("m-card").value;
+  var desc=document.getElementById("m-desc").value;
+  closeModal();
+  var ok = a.amount===3000 && a.cardId==="santander" && a.tipo==="credito" && a.desc.toLowerCase().indexOf("jumbo")>=0
+    && b.amount===15000 && b.tipo==="debito" && b.bank==="bci"
+    && c.amount===25990 && c.cuotas===6
+    && amt==="3000" && card==="santander" && desc.toLowerCase().indexOf("jumbo")>=0;
+  return JSON.stringify({pass:ok, a:a,b:b,c:c,amt:amt,card:card,desc:desc});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS
