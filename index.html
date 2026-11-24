@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="./icon-180-v3.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
-  <link rel="stylesheet" href="./styles.css?v=40" />
+  <link rel="stylesheet" href="./styles.css?v=41" />
 </head>
 <body>
 
@@ -203,6 +203,7 @@
       <div class="settings-row" onclick="clearData()"><span class="row-label" style="color:var(--red)">🗑️ Borrar todos los gastos</span><span class="row-val">→</span></div>
     </div>
   </details>
+  <div id="app-version" style="text-align:center;font-size:12px;color:var(--text2);font-weight:600;padding:22px 0 6px">MisGastos</div>
   <div style="height:20px"></div>
 </div>
 
@@ -546,7 +547,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=40"></script>
+<script src="./app.js?v=41"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>
