@@ -1497,7 +1497,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v41';
+  if(ver) ver.textContent='MisGastos · v42';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
