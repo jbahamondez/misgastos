@@ -26,7 +26,11 @@ function getDb() {
   return admin.firestore();
 }
 
-// Extrae monto, comercio y banco del texto de la notificación.
+// Extrae monto, comercio, banco (con alias) y tipo (crédito/débito) del texto de
+// la notificación. Soporta varios bancos; cada uno nombra las cosas distinto:
+//   Santander (detallada): "...en COMERCIO, el DD-MM-AAAA..."
+//   Falabella: "Compraste $MONTO en COMERCIO Con tu CMR Mastercard ... en 3420"
+//     (ojo: el texto NO dice "Falabella", se detecta por "CMR").
 function parseNotif(texto) {
   texto = String(texto || '');
   const mm = texto.match(/\$\s?([\d][\d.]*)/);
@@ -34,12 +38,34 @@ function parseNotif(texto) {
   const amount = parseInt(mm[1].replace(/\./g, ''), 10) || 0;
   if (amount <= 0) return { error: 'monto 0' };
 
-  let desc = '';
-  // Detallada Santander: "...en COMERCIO, el DD-MM-AAAA..."
-  const det = texto.match(/.*\ben\s+(.+?),?\s*el\s+\d/i);
-  if (det && det[1]) {
-    desc = det[1];
+  // Banco + alias para calzar la tarjeta/cuenta del usuario.
+  // "Compraste $X en ..." es el fraseo propio de Falabella (Santander usa "Compra
+  // por", BCI "Realizaste una compra"), así que sirve de respaldo cuando el atajo
+  // manda solo el título truncado, sin el "CMR" del cuerpo.
+  const esFalabella = /\bcmr\b|falabella|\bcompraste\b/i.test(texto);
+  let banco = 'Santander';
+  let aliases = ['santander'];
+  if (esFalabella) {
+    banco = 'Falabella';
+    aliases = ['falabella', 'cmr'];
   } else {
+    const mb = texto.match(/santander|bci|banco de chile|banco chile|scotia|ita[uú]|security|bice|estado|ripley|cencosud/i);
+    if (mb) { banco = mb[0]; aliases = [mb[0].toLowerCase()]; }
+  }
+
+  let desc = '';
+  if (esFalabella) {
+    // "Compraste $MONTO en COMERCIO Con tu CMR..." — el comercio va tras el 1er "en"
+    // y termina en "Con tu" / "Si no" / punto / fin de línea.
+    const f = texto.match(/\ben\s+(.+?)(?:\s+con\s+tu\b|\s+si\s+no\b|[.\n]|$)/i);
+    if (f && f[1]) desc = f[1];
+  }
+  if (!desc) {
+    // Santander detallada: "...en COMERCIO, el DD-MM-AAAA..."
+    const det = texto.match(/.*\ben\s+(.+?),?\s*el\s+\d/i);
+    if (det && det[1]) desc = det[1];
+  }
+  if (!desc) {
     desc = texto
       .replace(/Banco Santander Chile/ig, ' ')
       .replace(/Santander/ig, ' ')
@@ -53,12 +79,10 @@ function parseNotif(texto) {
     .replace(/[^0-9A-Za-zÁÉÍÓÚÑáéíóúñ)]+$/, '')
     .trim() || 'Gasto';
 
-  // Banco detectado (para elegir la tarjeta del usuario).
-  let banco = 'Santander';
-  const mb = texto.match(/santander|bci|banco de chile|banco chile|scotia|falabella|ita[uú]|security|bice|estado|ripley|cencosud/i);
-  if (mb) banco = mb[0];
+  // Tipo: CMR Mastercard = crédito; débito solo si el texto lo dice explícito.
+  const tipo = /d[eé]bito|cuenta\s*corriente|cuentafalabella/i.test(texto) ? 'debito' : 'credito';
 
-  return { amount, desc, banco };
+  return { amount, desc, banco, aliases, tipo };
 }
 
 export default async function handler(req, res) {
@@ -80,27 +104,37 @@ export default async function handler(req, res) {
     const parsed = parseNotif(texto);
     if (parsed.error) return res.status(200).json({ ok: false, error: parsed.error, texto });
 
-    // Elegir la tarjeta de crédito del usuario que calce con el banco detectado.
-    let cardId = 'santander';
+    const esDebito = parsed.tipo === 'debito';
+    const colName = esDebito ? 'transactions_debit' : 'transactions_credit';
+    const idField = esDebito ? 'bank' : 'cardId'; // débito usa "bank", crédito "cardId"
+    const aliases = (parsed.aliases && parsed.aliases.length) ? parsed.aliases : [parsed.banco.toLowerCase()];
+
+    // Elegir la tarjeta/cuenta del usuario que calce con el banco detectado.
+    let accountId = esDebito ? 'bci' : 'santander';
     try {
       const st = await db.doc(`users/${uid}/settings/main`).get();
-      const cards = (st.exists && Array.isArray(st.data().cards)) ? st.data().cards : [];
-      const credito = cards.filter(c => (c.tipo || 'credito') === 'credito');
-      const bl = parsed.banco.toLowerCase();
-      const match = credito.find(c => (c.bank || '').toLowerCase().includes(bl) || bl.includes((c.bank || '').toLowerCase()));
-      if (match) cardId = match.id;
-      else if (credito[0]) cardId = credito[0].id;
-    } catch (e) { /* usa 'santander' por defecto */ }
+      const data = st.exists ? st.data() : {};
+      const list = esDebito
+        ? (Array.isArray(data.debits) ? data.debits : [])
+        : (Array.isArray(data.cards) ? data.cards.filter(c => (c.tipo || 'credito') === 'credito') : []);
+      const match = list.find(c => {
+        const b = (c.bank || '').toLowerCase();
+        if (!b) return false;
+        return aliases.some(a => b.includes(a) || a.includes(b));
+      });
+      if (match) accountId = match.id;
+      else if (list[0]) accountId = list[0].id;
+    } catch (e) { /* usa el fallback */ }
 
-    // Anti-duplicado: misma tarjeta + mismo monto en los últimos 60 segundos
-    // (Santander manda dos notificaciones por compra).
-    const col = db.collection(`users/${uid}/transactions_credit`);
+    // Anti-duplicado: misma tarjeta/cuenta + mismo monto en los últimos 60 segundos
+    // (algunos bancos mandan dos notificaciones por compra).
+    const col = db.collection(`users/${uid}/${colName}`);
     const ahora = Date.now();
     const recent = await col.where('amount', '==', parsed.amount).limit(10).get();
     let dup = false;
     recent.forEach(d => {
       const t = d.data();
-      if (t.cardId === cardId && t.date) {
+      if (t[idField] === accountId && t.date) {
         const dt = new Date(t.date).getTime();
         if (!isNaN(dt) && Math.abs(ahora - dt) < 60000) dup = true;
       }
@@ -108,12 +142,15 @@ export default async function handler(req, res) {
     if (dup) return res.status(200).json({ ok: true, dup: true, amount: parsed.amount });
 
     const id = 'push_' + ahora + '_' + Math.floor(Math.random() * 1000);
-    await col.doc(id).set({
-      id, cardId, amount: parsed.amount, desc: parsed.desc, cuotas: 1,
+    const doc = {
+      id, amount: parsed.amount, desc: parsed.desc,
       currency: 'CLP', date: new Date().toISOString(), source: 'push', catId: '',
-    });
+    };
+    doc[idField] = accountId;
+    if (!esDebito) doc.cuotas = 1; // crédito guarda cuotas (débito no)
+    await col.doc(id).set(doc);
 
-    return res.status(200).json({ ok: true, amount: parsed.amount, desc: parsed.desc, cardId });
+    return res.status(200).json({ ok: true, amount: parsed.amount, desc: parsed.desc, tipo: parsed.tipo, banco: parsed.banco, account: accountId });
   } catch (err) {
     return res.status(500).json({ ok: false, error: String((err && err.message) || err) });
   }
