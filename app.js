@@ -1499,7 +1499,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v44';
+  if(ver) ver.textContent='MisGastos · v45';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
@@ -1871,6 +1871,7 @@ const ACCENTS=[
   {id:'teal',    name:'Teal',     sw:'#2dd4bf'},
   {id:'verde',   name:'Verde',    sw:'#34d399'},
   {id:'coral',   name:'Coral',    sw:'#fb7185'},
+  {id:'rosa',    name:'Rosado',   sw:'#ec4899'},
   {id:'contorno',name:'Contorno', sw:'#191b24', ring:true}
 ];
 function getAccent(){ try{ return localStorage.getItem('misgastos_accent')||''; }catch(e){ return ''; } }

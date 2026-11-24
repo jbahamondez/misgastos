@@ -11,6 +11,7 @@
     :root[data-accent="teal"]  {--accent:#2dd4bf;--accent2:#5eead4;--accent-ink:#05241f}
     :root[data-accent="verde"] {--accent:#34d399;--accent2:#6ee7b7;--accent-ink:#06261b}
     :root[data-accent="coral"] {--accent:#fb7185;--accent2:#fda4af;--accent-ink:#2a0a10}
+    :root[data-accent="rosa"]  {--accent:#ec4899;--accent2:#f9a8d4;--accent-ink:#ffffff}
     :root[data-accent="contorno"]{--accent:#e8eaf0;--accent2:#c3cad6;--accent-ink:#14161d}
     /* Estilo "Contorno": los rellenos de acento se vuelven borde (como el botón de voz). */
     :root[data-accent="contorno"] .fab{background:#191b24;border:1.5px solid rgba(255,255,255,.4);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.45)}
