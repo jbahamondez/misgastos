@@ -1495,7 +1495,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v33</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v34</div>`;
   }
 }
 function updateValorDolar(v){
@@ -2686,6 +2686,96 @@ function openModalPrefilled(p){
     : ((CARDS[p.cardId]&&CARDS[p.cardId].bank)||'tarjeta');
   showToast('🎤 '+fmtCLP(p.amount)+(p.desc?(' · '+p.desc):'')+' · '+nom+' — revisa y guarda');
 }
+function openVoiceModalWith(text){
+  openVoiceModal();
+  const ta=document.getElementById('voice-text'); if(ta) ta.value=text||'';
+  if(text) setVoiceStatus('Revisa el texto y toca "Analizar".');
+}
+
+// ── Hold-to-talk: grabar audio y transcribir en la nube ─────────────────────
+// Se mantiene apretado el botón 🎤 flotante: graba la voz (MediaRecorder, que sí
+// funciona en iPhone) y, al soltar, manda el audio a /api/transcribe (Vercel →
+// Groq/Whisper) y abre el modal de confirmación con el gasto ya entendido.
+const TRANSCRIBE_URL = INGEST_URL.replace('/ingest','/transcribe');
+let _rec = { active:false, mr:null, chunks:[], stream:null, start:0, cancelled:false, busy:false };
+function recCleanup(){
+  try{ if(_rec.stream) _rec.stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  _rec.stream=null; _rec.mr=null; _rec.active=false;
+}
+async function voiceHoldStart(ev){
+  if(ev){ if(ev.preventDefault) ev.preventDefault(); try{ ev.target.setPointerCapture&&ev.target.setPointerCapture(ev.pointerId); }catch(e){} }
+  if(_rec.active||_rec.busy) return;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ showToast('Tu dispositivo no permite grabar. Usa el teclado 🎤','var(--yellow)'); openVoiceModalWith(''); return; }
+  _rec.cancelled=false;
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    if(_rec.cancelled){ stream.getTracks().forEach(t=>t.stop()); return; } // soltó antes de obtener permiso
+    _rec.stream=stream;
+    const mr=new MediaRecorder(stream);
+    _rec.chunks=[];
+    mr.ondataavailable=e=>{ if(e.data&&e.data.size) _rec.chunks.push(e.data); };
+    mr.onstop=()=>{ const type=mr.mimeType||'audio/mp4'; const blob=new Blob(_rec.chunks,{type}); const cancel=_rec.cancelled; recCleanup(); if(!cancel) onRecordingDone(blob); };
+    _rec.mr=mr; _rec.active=true; _rec.start=Date.now();
+    mr.start();
+    showRecOverlay('escuchando');
+  }catch(e){
+    recCleanup();
+    showToast('Micrófono bloqueado. Usa el teclado 🎤','var(--yellow)');
+    openVoiceModalWith('');
+  }
+}
+function voiceHoldEnd(ev){
+  if(ev&&ev.preventDefault) ev.preventDefault();
+  if(!_rec.active){ _rec.cancelled=true; hideRecOverlay(); return; } // soltó durante el permiso
+  const dur=Date.now()-_rec.start;
+  if(dur<450){ _rec.cancelled=true; try{ _rec.mr.stop(); }catch(e){ recCleanup(); } hideRecOverlay(); showToast('Mantén apretado y habla','var(--yellow)'); return; }
+  showRecOverlay('transcribiendo');
+  try{ _rec.mr.stop(); }catch(e){ recCleanup(); hideRecOverlay(); }
+}
+async function onRecordingDone(blob){
+  _rec.busy=true;
+  try{
+    const text=await transcribeAudio(blob);
+    hideRecOverlay();
+    if(!text){ showToast('No se entendió el audio','var(--yellow)'); openVoiceModalWith(''); return; }
+    const p=parseVoiceExpense(text);
+    if(!p.amount||p.amount<=0){ showToast('No entendí el monto','var(--yellow)'); openVoiceModalWith(text); return; }
+    openModalPrefilled(p);
+  }catch(e){
+    hideRecOverlay();
+    const msg=String((e&&e.message)||e);
+    if(/GROQ|transcribe|500|falta/i.test(msg)) showToast('Falta configurar la transcripción. Usa el teclado 🎤','var(--yellow)');
+    else showToast('No se pudo transcribir. Escribe o dicta.','var(--yellow)');
+    openVoiceModalWith('');
+  }finally{ _rec.busy=false; }
+}
+function blobToBase64(blob){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onloadend=()=>resolve(String(r.result||'').replace(/^data:[^,]*,/,''));
+    r.onerror=reject;
+    r.readAsDataURL(blob);
+  });
+}
+async function transcribeAudio(blob){
+  const u=window._fb&&window._fb.user;
+  if(!u||!u.getIdToken) throw new Error('inicia sesión');
+  const idToken=await u.getIdToken();
+  const audio=await blobToBase64(blob);
+  const res=await fetch(TRANSCRIBE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idToken, audio, mime:blob.type||'audio/mp4'})});
+  let j={}; try{ j=await res.json(); }catch(e){}
+  if(!res.ok||!j.ok) throw new Error(j.error||('http '+res.status));
+  return String(j.text||'').trim();
+}
+function showRecOverlay(mode){
+  const ov=document.getElementById('rec-overlay'); if(!ov) return;
+  const txt=document.getElementById('rec-overlay-text');
+  const ic=document.getElementById('rec-overlay-ic');
+  if(mode==='transcribiendo'){ if(txt) txt.textContent='Transcribiendo…'; if(ic){ ic.textContent='⏳'; ic.classList.remove('listening'); } }
+  else { if(txt) txt.textContent='Escuchando… suelta para analizar'; if(ic){ ic.textContent='🎙️'; ic.classList.add('listening'); } }
+  ov.classList.add('open');
+}
+function hideRecOverlay(){ const ov=document.getElementById('rec-overlay'); if(ov) ov.classList.remove('open'); }
 
 // ── Split modal logic ──────────────────────────────────────────────────────
 let _splitSelectedPersons=[];

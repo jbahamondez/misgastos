@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="./icon-180-v3.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
-  <link rel="stylesheet" href="./styles.css?v=33" />
+  <link rel="stylesheet" href="./styles.css?v=34" />
 </head>
 <body>
 
@@ -357,8 +357,17 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Ajustes</button>
 </nav>
 
-<button class="fab fab-mic" onclick="openVoiceModal()" aria-label="Agregar gasto por voz">🎤</button>
+<button class="fab fab-mic" id="fab-mic"
+  onpointerdown="voiceHoldStart(event)" onpointerup="voiceHoldEnd(event)"
+  onpointercancel="voiceHoldEnd(event)" oncontextmenu="return false"
+  aria-label="Mantén apretado para dictar un gasto">🎤</button>
 <button class="fab" onclick="openModal()">+</button>
+
+<!-- OVERLAY GRABACIÓN (hold-to-talk) -->
+<div id="rec-overlay">
+  <div id="rec-overlay-ic" class="listening">🎙️</div>
+  <div id="rec-overlay-text">Escuchando… suelta para analizar</div>
+</div>
 
 <!-- MODAL -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModalOutside(event)">
@@ -536,7 +545,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=33"></script>
+<script src="./app.js?v=34"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>
