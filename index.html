@@ -11,7 +11,8 @@
   <link rel="apple-touch-icon" href="./icon-180-v3.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
-  <link rel="stylesheet" href="./styles.css?v=42" />
+  <script>try{var _a=localStorage.getItem('misgastos_accent');if(_a)document.documentElement.setAttribute('data-accent',_a);}catch(e){}</script>
+  <link rel="stylesheet" href="./styles.css?v=43" />
 </head>
 <body>
 
@@ -139,6 +140,13 @@
         <button onclick="saveDisplayName()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:14px;font-weight:600;cursor:pointer">Guardar</button>
       </div>
       <p style="font-size:11px;color:var(--text2);margin-top:8px">Aparece arriba en el inicio: "👋 Hola, …"</p>
+    </div>
+  </details>
+  <details class="settings-group">
+    <summary>🎨 Estilo y color</summary>
+    <div style="padding:0 20px 14px">
+      <p style="font-size:12px;color:var(--text2);margin:0 0 10px">Elige el color de acento de la app. Se guarda y te sigue en tus dispositivos.</p>
+      <div id="accent-picker" class="accent-swatches"></div>
     </div>
   </details>
   <details class="settings-group">
@@ -547,7 +555,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=42"></script>
+<script src="./app.js?v=43"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>

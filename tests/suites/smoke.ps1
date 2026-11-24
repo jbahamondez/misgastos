@@ -223,6 +223,20 @@ Check 'VOZ-PARSEA-Y-PRELLENA' @'
 })()
 '@
 
+Check 'ACENTO-SELECTOR' @'
+(function(){
+  renderAjustes();
+  var picker=document.getElementById("accent-picker");
+  var hasSw=picker && picker.querySelectorAll(".accent-sw").length>=6;
+  setAccent("blanco");
+  var applied=document.documentElement.getAttribute("data-accent")==="blanco";
+  var saved=localStorage.getItem("misgastos_accent")==="blanco";
+  setAccent("");
+  var cleared=!document.documentElement.getAttribute("data-accent");
+  return JSON.stringify({pass: hasSw&&applied&&saved&&cleared, hasSw:hasSw,applied:applied,saved:saved,cleared:cleared});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

@@ -214,7 +214,7 @@ function syncCollectionToCloud(collName,localArray,opts){
 
 function syncSettingsToCloud(){
   if(!window._fb||!window._fb.syncEnabled) return;
-  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),displayName:getDisplayName(),cards:getCards(),debits:getDebits(),ingestToken:getIngestToken(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
+  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),displayName:getDisplayName(),accent:getAccent(),cards:getCards(),debits:getDebits(),ingestToken:getIngestToken(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
 }
 
 const LOCAL_GETTERS = {
@@ -255,6 +255,7 @@ window.applyCloudSettings=function(data){
   if(data.sueldo!==undefined) localStorage.setItem(LS_S,String(data.sueldo));
   if(data.valorDolar!==undefined) localStorage.setItem('misgastos_valor_dolar',String(data.valorDolar));
   if(typeof data.displayName==='string') { try{ localStorage.setItem('misgastos_display_name',data.displayName); }catch(e){} }
+  if(typeof data.accent==='string') { setAccentLocal(data.accent); applyAccent(data.accent); }
   if(Array.isArray(data.cards)) applyCardsFromCloud(data.cards);
   if(Array.isArray(data.debits)) applyDebitsFromCloud(data.debits);
   if(typeof data.ingestToken==='string') setIngestTokenLocal(data.ingestToken);
@@ -1451,6 +1452,7 @@ function renderAjustes(){
   renderIngestSection();
   const dnInput=document.getElementById('display-name-input');
   if(dnInput) dnInput.value=getDisplayName();
+  renderAccentPicker();
   renderPersonasAjustes();
   renderCategoriasAjustes();
   renderServiciosAjustes();
@@ -1497,7 +1499,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v42';
+  if(ver) ver.textContent='MisGastos · v43';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
@@ -1859,6 +1861,42 @@ function updateGreeting(){
   el.textContent = nombre ? ('👋 Hola, '+nombre) : '👋 Hola';
 }
 
+// ── Estilo / color de acento (elegible por el usuario, default morado) ───────
+// Aplica un tema cambiando data-accent en <html>; el CSS hace el resto. Se guarda
+// por dispositivo y se sincroniza a la nube (sigue al usuario entre equipos).
+const ACCENTS=[
+  {id:'',        name:'Morado',   sw:'linear-gradient(135deg,#6c63ff,#a78bfa)'},
+  {id:'blanco',  name:'Blanco',   sw:'#eef1f6'},
+  {id:'azul',    name:'Azul',     sw:'#3b82f6'},
+  {id:'teal',    name:'Teal',     sw:'#2dd4bf'},
+  {id:'verde',   name:'Verde',    sw:'#34d399'},
+  {id:'coral',   name:'Coral',    sw:'#fb7185'},
+  {id:'contorno',name:'Contorno', sw:'#191b24', ring:true}
+];
+function getAccent(){ try{ return localStorage.getItem('misgastos_accent')||''; }catch(e){ return ''; } }
+function applyAccent(v){
+  v=(v==null?getAccent():v);
+  const r=document.documentElement;
+  if(v) r.setAttribute('data-accent',v); else r.removeAttribute('data-accent');
+}
+function setAccentLocal(v){ try{ localStorage.setItem('misgastos_accent',v||''); }catch(e){} }
+function setAccent(v){
+  setAccentLocal(v);
+  applyAccent(v);
+  if(typeof syncSettingsToCloud==='function') syncSettingsToCloud();
+  renderAccentPicker();
+}
+function renderAccentPicker(){
+  const el=document.getElementById('accent-picker'); if(!el) return;
+  const cur=getAccent();
+  el.innerHTML=ACCENTS.map(a=>`
+    <button class="accent-sw${a.id===cur?' sel':''}" onclick="setAccent('${a.id}')" aria-label="${a.name}">
+      <span class="dot" style="background:${a.sw}${a.ring?';border:1.5px solid rgba(255,255,255,.4)':''}"></span>
+      <span class="nm">${a.name}</span>
+    </button>`).join('');
+}
+applyAccent(); // aplica el tema guardado al cargar
+
 // ── Ingreso automático (push del banco → Vercel → tu cuenta) ────────────────
 const INGEST_URL='https://misgastos-vercel.vercel.app/api/ingest';
 function getIngestToken(){ try{ return localStorage.getItem('misgastos_ingest_token')||''; }catch(e){ return ''; } }
@@ -1893,7 +1931,7 @@ function renderIngestSection(){
   if(!t){
     el.innerHTML=`
       <p style="font-size:12px;color:var(--text2);line-height:1.5;margin:0 0 10px">Registra tus compras automáticamente desde las notificaciones del banco (vía un atajo en tu iPhone). Actívalo para obtener tu token.</p>
-      <button onclick="activarIngreso()" style="width:100%;padding:11px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer">Activar ingreso automático</button>`;
+      <button onclick="activarIngreso()" style="width:100%;padding:11px;border-radius:10px;border:none;background:var(--accent);color:var(--accent-ink);font-size:14px;font-weight:600;cursor:pointer">Activar ingreso automático</button>`;
     return;
   }
   const field=(label,val,msg)=>`
@@ -2870,7 +2908,7 @@ function toggleSplitLent(){ _splitLent=document.getElementById('split-lent').che
 function setSplitCiclo(c){
   _splitCiclo=c;
   const a=document.getElementById('split-ciclo-actual'), an=document.getElementById('split-ciclo-anterior');
-  const on='flex:1;padding:8px;border-radius:10px;border:1px solid var(--accent2);background:var(--accent2);color:#fff;font-size:12px;font-weight:600;cursor:pointer';
+  const on='flex:1;padding:8px;border-radius:10px;border:1px solid var(--accent2);background:var(--accent2);color:var(--accent-ink);font-size:12px;font-weight:600;cursor:pointer';
   const off='flex:1;padding:8px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer';
   if(a) a.style.cssText=(c==='actual'?on:off);
   if(an) an.style.cssText=(c==='anterior'?on:off);
