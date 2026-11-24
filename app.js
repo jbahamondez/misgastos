@@ -1495,7 +1495,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v35</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v36</div>`;
   }
 }
 function updateValorDolar(v){
@@ -2781,8 +2781,9 @@ function hideRecOverlay(){ const ov=document.getElementById('rec-overlay'); if(o
 // Mismo botón, dos gestos: si se arrastra (el dedo se mueve > umbral) se mueve
 // el botón y NO graba; si se mantiene quieto, graba (hold-to-talk). La posición
 // se guarda por dispositivo y se mantiene dentro de la pantalla.
-const MIC_DRAG_THRESHOLD = 12; // px
-let _mic = { candidate:false, dragging:false, downX:0, downY:0, offX:0, offY:0 };
+const MIC_DRAG_THRESHOLD = 12;  // px: a partir de aquí es "arrastrar"
+const MIC_HOLD_MS = 300;        // ms quieto presionado antes de empezar a grabar
+let _mic = { candidate:false, dragging:false, holding:false, downX:0, downY:0, offX:0, offY:0, timer:null };
 function cancelMicRecording(){
   _rec.cancelled=true;
   if(_rec.active){ try{ _rec.mr.stop(); }catch(e){ recCleanup(); } }
@@ -2790,53 +2791,73 @@ function cancelMicRecording(){
 }
 function micPointerDown(ev){
   const b=document.getElementById('fab-mic'); if(!b) return;
-  _mic.candidate=true; _mic.dragging=false;
+  _mic.candidate=true; _mic.dragging=false; _mic.holding=false;
   _mic.downX=ev.clientX; _mic.downY=ev.clientY;
   const r=b.getBoundingClientRect();
   _mic.offX=ev.clientX-r.left; _mic.offY=ev.clientY-r.top;
   try{ b.setPointerCapture(ev.pointerId); }catch(e){}
-  voiceHoldStart(ev); // arranca la grabación; si resulta ser arrastre, se cancela
+  if(ev.preventDefault) ev.preventDefault();
+  // La grabación NO arranca al tocar: solo si lo mantienes QUIETO 300 ms. Si antes
+  // de eso mueves el dedo, es un arrastre y nunca se activa el micrófono.
+  clearTimeout(_mic.timer);
+  _mic.timer=setTimeout(()=>{
+    if(!_mic.candidate || _mic.dragging) return;
+    _mic.holding=true;
+    voiceHoldStart();
+  }, MIC_HOLD_MS);
 }
 function micPointerMove(ev){
   if(!_mic.candidate) return;
   const dx=ev.clientX-_mic.downX, dy=ev.clientY-_mic.downY;
   if(!_mic.dragging && Math.hypot(dx,dy)>MIC_DRAG_THRESHOLD){
     _mic.dragging=true;
+    clearTimeout(_mic.timer);
     const b=document.getElementById('fab-mic'); if(b) b.classList.add('dragging');
-    cancelMicRecording(); // era un arrastre, no un dictado
+    if(_mic.holding) cancelMicRecording(); // por si alcanzó a grabar
   }
   if(_mic.dragging){ if(ev.preventDefault) ev.preventDefault(); positionMicButton(ev.clientX-_mic.offX, ev.clientY-_mic.offY); }
 }
 function micPointerUp(ev){
+  clearTimeout(_mic.timer);
   const b=document.getElementById('fab-mic');
   if(_mic.dragging){
     _mic.candidate=false; _mic.dragging=false;
     if(b) b.classList.remove('dragging');
-    saveMicPos();
+    flushMicPos(); saveMicPos();
     return; // se movió: no transcribe
   }
-  _mic.candidate=false;
-  voiceHoldEnd(ev); // quieto: flujo normal de dictado
+  const wasHolding=_mic.holding;
+  _mic.candidate=false; _mic.holding=false;
+  if(wasHolding) voiceHoldEnd(ev);           // quieto el tiempo suficiente: dictado
+  else showToast('Mantén apretado para dictar','var(--yellow)'); // tap corto
 }
+// Posicionamiento suave: coalesce a un update por frame (requestAnimationFrame).
+let _micRaf=null, _micPend=null, _micXY=null;
 function positionMicButton(left, top){
-  const b=document.getElementById('fab-mic'); if(!b) return;
+  _micPend=[left,top];
+  if(_micRaf==null) _micRaf=requestAnimationFrame(flushMicPos);
+}
+function flushMicPos(){
+  if(_micRaf!=null){ cancelAnimationFrame(_micRaf); _micRaf=null; }
+  if(!_micPend) return;
+  const b=document.getElementById('fab-mic'); if(!b){ _micPend=null; return; }
   const sz=b.offsetWidth||54, m=6;
-  left=Math.max(m, Math.min(left, window.innerWidth - sz - m));
-  top =Math.max(m, Math.min(top,  window.innerHeight - sz - m));
+  const left=Math.max(m, Math.min(_micPend[0], window.innerWidth - sz - m));
+  const top =Math.max(m, Math.min(_micPend[1], window.innerHeight - sz - m));
   b.style.left=left+'px'; b.style.top=top+'px'; b.style.right='auto'; b.style.bottom='auto';
+  _micXY=[left,top]; _micPend=null;
 }
 function saveMicPos(){
-  const b=document.getElementById('fab-mic'); if(!b) return;
-  const r=b.getBoundingClientRect();
-  try{ localStorage.setItem('misgastos_mic_pos', JSON.stringify({left:r.left, top:r.top})); }catch(e){}
+  if(!_micXY){ const b=document.getElementById('fab-mic'); if(!b) return; const r=b.getBoundingClientRect(); _micXY=[r.left,r.top]; }
+  try{ localStorage.setItem('misgastos_mic_pos', JSON.stringify({left:_micXY[0], top:_micXY[1]})); }catch(e){}
 }
 function applyMicPos(){
   const b=document.getElementById('fab-mic'); if(!b) return;
   let p=null; try{ p=JSON.parse(localStorage.getItem('misgastos_mic_pos')||'null'); }catch(e){}
-  if(p && typeof p.left==='number' && typeof p.top==='number') positionMicButton(p.left, p.top);
+  if(p && typeof p.left==='number' && typeof p.top==='number'){ positionMicButton(p.left, p.top); flushMicPos(); }
 }
 window.addEventListener('load', applyMicPos);
-window.addEventListener('resize', ()=>{ const b=document.getElementById('fab-mic'); if(b&&b.style.left) positionMicButton(parseFloat(b.style.left)||0, parseFloat(b.style.top)||0); });
+window.addEventListener('resize', ()=>{ if(_micXY){ positionMicButton(_micXY[0], _micXY[1]); flushMicPos(); } });
 
 // ── Split modal logic ──────────────────────────────────────────────────────
 let _splitSelectedPersons=[];
