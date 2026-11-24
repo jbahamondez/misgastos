@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="./icon-180-v3.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
-  <link rel="stylesheet" href="./styles.css?v=31" />
+  <link rel="stylesheet" href="./styles.css?v=32" />
 </head>
 <body>
 
@@ -129,6 +129,17 @@
   <details class="settings-group">
     <summary>☁️ Sincronización en la nube</summary>
     <div id="cloud-sync-section" style="padding:0 20px 14px"><span style="font-size:12px;color:var(--text2)">Cargando…</span></div>
+  </details>
+  <details class="settings-group">
+    <summary>🙋 Mi perfil</summary>
+    <div style="padding:0 20px 14px">
+      <label style="display:block;font-size:12px;color:var(--text2);margin-bottom:6px">Nombre para el saludo</label>
+      <div style="display:flex;gap:8px">
+        <input id="display-name-input" type="text" placeholder="Tu nombre" maxlength="30" style="flex:1;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px">
+        <button onclick="saveDisplayName()" style="padding:10px 16px;border-radius:10px;border:none;background:var(--accent2);color:#fff;font-size:14px;font-weight:600;cursor:pointer">Guardar</button>
+      </div>
+      <p style="font-size:11px;color:var(--text2);margin-top:8px">Aparece arriba en el inicio: "👋 Hola, …"</p>
+    </div>
   </details>
   <details class="settings-group">
     <summary>📲 Ingreso automático</summary>
@@ -505,7 +516,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=31"></script>
+<script src="./app.js?v=32"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>

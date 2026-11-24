@@ -18,9 +18,13 @@ function getCards(){
     const raw=localStorage.getItem('misgastos_cards');
     if(raw){ const a=JSON.parse(raw); if(Array.isArray(a)) return a; }
   }catch(e){}
-  // Primera vez (migración): siembra las tarjetas por defecto y las persiste.
-  localStorage.setItem('misgastos_cards',JSON.stringify(DEFAULT_CARDS));
-  return DEFAULT_CARDS.slice();
+  // Primera vez: solo sembramos las tarjetas por defecto si ya hay datos previos
+  // (usuario original migrando). Un usuario NUEVO parte sin tarjetas y las crea
+  // en Ajustes → Mis tarjetas y cuentas.
+  const hayDatosPrevios = !!(localStorage.getItem('gastos_credito_v2')||localStorage.getItem('gastos_debito_v2'));
+  const seed = hayDatosPrevios ? DEFAULT_CARDS.slice() : [];
+  localStorage.setItem('misgastos_cards',JSON.stringify(seed));
+  return seed;
 }
 function buildCardsObject(arr){
   const o={};
@@ -210,7 +214,7 @@ function syncCollectionToCloud(collName,localArray,opts){
 
 function syncSettingsToCloud(){
   if(!window._fb||!window._fb.syncEnabled) return;
-  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),cards:getCards(),debits:getDebits(),ingestToken:getIngestToken(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
+  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),displayName:getDisplayName(),cards:getCards(),debits:getDebits(),ingestToken:getIngestToken(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
 }
 
 const LOCAL_GETTERS = {
@@ -250,6 +254,7 @@ window.applyCloudCollection=function(collName,cloudArray){
 window.applyCloudSettings=function(data){
   if(data.sueldo!==undefined) localStorage.setItem(LS_S,String(data.sueldo));
   if(data.valorDolar!==undefined) localStorage.setItem('misgastos_valor_dolar',String(data.valorDolar));
+  if(typeof data.displayName==='string') { try{ localStorage.setItem('misgastos_display_name',data.displayName); }catch(e){} }
   if(Array.isArray(data.cards)) applyCardsFromCloud(data.cards);
   if(Array.isArray(data.debits)) applyDebitsFromCloud(data.debits);
   if(typeof data.ingestToken==='string') setIngestTokenLocal(data.ingestToken);
@@ -301,6 +306,7 @@ window.dataStore = {
   async getSettings(){
     return {
       sueldo: getSueldo(),
+      displayName: getDisplayName(),
       cards: getCards(),
       debits: getDebits(),
       billingDates: getBillingDates(),
@@ -311,6 +317,7 @@ window.dataStore = {
   },
   async updateSettings(patch){
     if(patch.sueldo!==undefined) setSueldo(patch.sueldo);
+    if(typeof patch.displayName==='string') { try{ localStorage.setItem('misgastos_display_name',patch.displayName); }catch(e){} }
     if(Array.isArray(patch.cards)) saveCards(patch.cards);
     if(Array.isArray(patch.debits)) saveDebits(patch.debits);
     if(patch.billingDates) saveBillingDates(Object.assign({},getBillingDates(),patch.billingDates));
@@ -1442,6 +1449,8 @@ function renderAjustes(){
   renderCardsManager();
   populateCardSelectors();
   renderIngestSection();
+  const dnInput=document.getElementById('display-name-input');
+  if(dnInput) dnInput.value=getDisplayName();
   renderPersonasAjustes();
   renderCategoriasAjustes();
   renderServiciosAjustes();
@@ -1486,7 +1495,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Los cobros en dólares (ej. suscripciones internacionales) se convierten a pesos con este valor y se suman a tus totales. Déjalo en blanco para no convertir. Es una <strong style="color:var(--text)">estimación</strong>: el banco factura con su propia tasa.</div>
       <button onclick="syncManual(this)" style="width:100%;margin-top:20px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🔄 Sincronizar correos ahora</button>
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>
-      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v31</div>`;
+      <div style="text-align:center;font-size:12px;color:var(--accent2);font-weight:700;margin-top:20px;padding-top:12px;border-top:1px solid var(--border)">MisGastos · v32</div>`;
   }
 }
 function updateValorDolar(v){
@@ -1826,12 +1835,26 @@ function startOnboarding(){
   setTimeout(()=>{ const el=document.getElementById('settings-cards-list'); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); }, 150);
 }
 // Saludo del dashboard según el usuario (reemplaza el nombre fijo).
+// Nombre para mostrar en el saludo del dashboard. Lo elige el usuario en Ajustes;
+// si no lo define, caemos al displayName/email de la cuenta.
+function getDisplayName(){ try{ return (localStorage.getItem('misgastos_display_name')||'').trim(); }catch(e){ return ''; } }
+function setDisplayName(v){
+  try{ localStorage.setItem('misgastos_display_name',(v||'').trim()); }catch(e){}
+  if(typeof syncSettingsToCloud==='function') syncSettingsToCloud();
+  updateGreeting();
+}
+function saveDisplayName(){
+  const inp=document.getElementById('display-name-input');
+  if(!inp) return;
+  setDisplayName(inp.value);
+  showToast('Nombre actualizado ✓');
+}
 function updateGreeting(){
   const el=document.getElementById('dash-greeting');
   if(!el) return;
   const u=window._fb&&window._fb.user;
-  let nombre='';
-  if(u){ nombre=(u.displayName||'').trim() || (u.email||'').split('@')[0]; }
+  let nombre=getDisplayName();
+  if(!nombre && u){ nombre=(u.displayName||'').trim() || (u.email||'').split('@')[0]; }
   el.textContent = nombre ? ('👋 Hola, '+nombre) : '👋 Hola';
 }
 
@@ -2625,11 +2648,11 @@ function updateSplitPreview(){
 }
 
 function openSplitModal(split){
-  // Por defecto pre-seleccionamos a Tamarindo (con quien se divide habitualmente).
-  // Si no estuviera en la lista, caemos a la primera persona como antes.
+  // Preseleccionamos la primera persona del usuario (si tiene). Si no tiene
+  // personas cargadas, el modal abre sin nadie seleccionado (el usuario elige
+  // o agrega una persona).
   const personas=getPersonas();
-  const porDefecto=personas.find(p=>/tamarindo/i.test(p))||personas[0]||'Mi pareja';
-  _splitSelectedPersons=[porDefecto];
+  _splitSelectedPersons = personas.length ? [personas[0]] : [];
   // Resetear el modo "presté mi tarjeta" cada vez que se abre
   _splitLent=false;
   const lentChk=document.getElementById('split-lent'); if(lentChk) lentChk.checked=false;
@@ -2653,8 +2676,10 @@ function openSplitModal(split){
 }
 
 function splitApplyAll(){
+  // Requiere al menos una persona seleccionada (si no, confirmSplit avisa y aborta).
+  if(!_splitSelectedPersons.length){ showToast('Selecciona al menos una persona','var(--yellow)'); return; }
   confirmSplit();
-  const personas=_splitSelectedPersons.length?_splitSelectedPersons:[getPersonas()[0]||'Mi pareja'];
+  const personas=_splitSelectedPersons.slice();
   // Misma matematica y aplicacion que confirmSplit (en importacion no hay "prestada")
   while(_splitQueue.length>0){
     aplicarSplit(_splitQueue.shift(), personas, false);
@@ -2674,9 +2699,8 @@ function splitApplyNone(){
 }
 
 function renderPersonChips(){
-  // Tamarindo siempre de primera en la fila (es con quien se divide habitualmente),
-  // aunque no sea la primera en la lista de personas.
-  const personas=getPersonas().slice().sort((a,b)=>(/tamarindo/i.test(b)?1:0)-(/tamarindo/i.test(a)?1:0));
+  // Orden tal como el usuario las tiene cargadas (sin preferencias personales).
+  const personas=getPersonas().slice();
   document.getElementById('person-chips').innerHTML=personas.map(p=>
     `<button class="person-chip ${_splitSelectedPersons.includes(p)?'active':''}" onclick="selectPerson('${escJsAttr(p)}')">👤 ${esc(p)}</button>`
   ).join('');

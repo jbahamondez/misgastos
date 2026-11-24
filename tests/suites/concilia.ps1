@@ -6,7 +6,13 @@ param([int]$Port = 8000)
 Connect-CDP $Port
 Invoke-CDP 'Page.enable' @{} | Out-Null
 Invoke-CDP 'Runtime.enable' @{} | Out-Null
-Reset-App
+# Marcador de "usuario existente" para que getCards()/getDebits() siembren las
+# tarjetas por defecto al cargar (estas pruebas ejercitan a un usuario con datos,
+# no el arranque limpio de un usuario nuevo).
+Reset-App @'
+localStorage.setItem('gastos_credito_v2','[]');
+localStorage.setItem('gastos_debito_v2','[]');
+'@
 
 Check 'MONTO-LINEA-CENCOSUD-CUOTAS' @'
 (function(){
@@ -279,18 +285,18 @@ Check 'SPLIT-CICLO-UI-SOLO-DEBITO' @'
 })()
 '@
 
-Check 'SPLIT-DEFAULT-TAMARINDO' @'
+Check 'SPLIT-DEFAULT-SIN-PERSONAS-NO-PRESELECCIONA' @'
 (function(){
   const prev=localStorage.getItem('deudas_personas_v1');
-  // Tamarindo NO va primera, para probar que igual queda pre-seleccionada
-  localStorage.setItem('deudas_personas_v1', JSON.stringify(['Juan','Ana','🤍 Tamarindo']));
+  // Usuario nuevo sin personas: el modal NO debe preseleccionar a nadie (ni "Mi pareja").
+  localStorage.setItem('deudas_personas_v1', JSON.stringify([]));
   _splitImportMode=false; _splitQueue=[];
   _pendingSplit={txId:'z',amount:10000,desc:'X',cuotas:1,currency:'CLP',cardId:'bci',type:'credito',txDate:new Date().toISOString()};
   openSplitModal(_pendingSplit);
   const sel=_splitSelectedPersons.slice();
   document.getElementById('split-modal-overlay').classList.remove('open'); _pendingSplit=null;
   if(prev===null) localStorage.removeItem('deudas_personas_v1'); else localStorage.setItem('deudas_personas_v1',prev);
-  return JSON.stringify({pass: sel.length===1 && /tamarindo/i.test(sel[0]), sel});
+  return JSON.stringify({pass: sel.length===0, sel});
 })()
 '@
 
@@ -338,7 +344,7 @@ Check 'CONCILIA-CUOTA-MATCH-POR-PRECIO-TOTAL' @'
 })()
 '@
 
-Check 'PERSON-CHIP-TAMARINDO-PRIMERO' @'
+Check 'PERSON-CHIP-RESPETA-ORDEN' @'
 (function(){
   const prev=localStorage.getItem('deudas_personas_v1');
   localStorage.setItem('deudas_personas_v1', JSON.stringify(['Juan','Ana','🤍 Tamarindo']));
@@ -347,7 +353,7 @@ Check 'PERSON-CHIP-TAMARINDO-PRIMERO' @'
   const first=document.querySelector('#person-chips .person-chip');
   const txt=first?first.textContent:'';
   if(prev===null) localStorage.removeItem('deudas_personas_v1'); else localStorage.setItem('deudas_personas_v1',prev);
-  return JSON.stringify({pass: /tamarindo/i.test(txt), txt});
+  return JSON.stringify({pass: /juan/i.test(txt), txt});
 })()
 '@
 
