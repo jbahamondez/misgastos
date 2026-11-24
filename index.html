@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
   <script>try{var _a=localStorage.getItem('misgastos_accent');if(_a)document.documentElement.setAttribute('data-accent',_a);}catch(e){}</script>
-  <link rel="stylesheet" href="./styles.css?v=47" />
+  <link rel="stylesheet" href="./styles.css?v=48" />
 </head>
 <body>
 
@@ -404,9 +404,7 @@
     </div>
     <div id="fields-debito" style="display:none">
       <label>Banco cuenta corriente</label>
-      <select id="m-debit-bank">
-        <option value="bci">BCI</option><option value="bchile">Banco Chile</option><option value="scotia">ScotiabankCencosud</option>
-      </select>
+      <select id="m-debit-bank"></select>
     </div>
     <label>Monto</label>
     <input type="number" id="m-amount" placeholder="Ej: 52900" inputmode="decimal" />
@@ -555,7 +553,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=47"></script>
+<script src="./app.js?v=48"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>

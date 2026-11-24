@@ -159,6 +159,7 @@ Check 'SANTANDER-EN-TODAS-LAS-LISTAS' @'
   var cupos=document.getElementById("settings-cards-list").innerHTML.indexOf("Santander")>=0;
   activeDateFilter="todo"; activeFilter="all"; renderHistorial();
   var filtro=document.getElementById("filter-row").innerHTML.toLowerCase().indexOf("santander")>=0;
+  selectImportType("credito"); // los chips de importar dependen del tipo; santander es crédito
   var chip=!!document.getElementById("chip-santander");
   var mcard=document.getElementById("m-card").innerHTML.indexOf("santander")>=0;
   var enCards=!!CARDS.santander;
@@ -234,6 +235,24 @@ Check 'ACENTO-SELECTOR' @'
   setAccent("");
   var cleared=!document.documentElement.getAttribute("data-accent");
   return JSON.stringify({pass: hasSw&&applied&&saved&&cleared, hasSw:hasSw,applied:applied,saved:saved,cleared:cleared});
+})()
+'@
+
+Check 'PERSONAS-DEFAULT-E-IMPORT-POR-TIPO' @'
+(function(){
+  localStorage.setItem("deudas_personas_v1", JSON.stringify(["Ana","Beto"]));
+  localStorage.removeItem("misgastos_default_split_persons");
+  toggleDefaultSplitPerson("Beto"); // marca Beto como favorito
+  var marcado=getDefaultSplitPersons().indexOf("Beto")>=0;
+  _splitImportMode=false; _splitQueue=[];
+  _pendingSplit={txId:"z",amount:10000,desc:"X",cuotas:1,currency:"CLP",cardId:"bci",type:"credito",txDate:new Date().toISOString()};
+  openSplitModal(_pendingSplit);
+  var sel=_splitSelectedPersons.slice();
+  document.getElementById("split-modal-overlay").classList.remove("open"); _pendingSplit=null;
+  var preselOK = sel.length===1 && sel[0]==="Beto";
+  selectImportType("debito");  var cd = !!document.getElementById("chip-bci") && !document.getElementById("chip-santander");
+  selectImportType("credito"); var cc = !!document.getElementById("chip-santander");
+  return JSON.stringify({pass: marcado&&preselOK&&cd&&cc, marcado:marcado,preselOK:preselOK,cd:cd,cc:cc,sel:sel});
 })()
 '@
 

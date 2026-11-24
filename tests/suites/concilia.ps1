@@ -300,17 +300,25 @@ Check 'SPLIT-DEFAULT-SIN-PERSONAS-NO-PRESELECCIONA' @'
 })()
 '@
 
-Check 'SPLIT-DEFAULT-SIN-TAMARINDO-CAE-A-PRIMERA' @'
+Check 'SPLIT-DEFAULT-USA-PERSONA-MARCADA' @'
 (function(){
   const prev=localStorage.getItem('deudas_personas_v1');
+  const prevD=localStorage.getItem('misgastos_default_split_persons');
   localStorage.setItem('deudas_personas_v1', JSON.stringify(['Juan','Ana']));
+  localStorage.removeItem('misgastos_default_split_persons');
   _splitImportMode=false; _splitQueue=[];
   _pendingSplit={txId:'z2',amount:10000,desc:'X',cuotas:1,currency:'CLP',cardId:'bci',type:'credito',txDate:new Date().toISOString()};
+  // sin favorito marcado: no preselecciona a nadie
   openSplitModal(_pendingSplit);
-  const sel=_splitSelectedPersons.slice();
+  const selVacio=_splitSelectedPersons.slice();
+  // marca Ana como favorita: ahora viene preseleccionada
+  toggleDefaultSplitPerson('Ana');
+  openSplitModal(_pendingSplit);
+  const selAna=_splitSelectedPersons.slice();
   document.getElementById('split-modal-overlay').classList.remove('open'); _pendingSplit=null;
   if(prev===null) localStorage.removeItem('deudas_personas_v1'); else localStorage.setItem('deudas_personas_v1',prev);
-  return JSON.stringify({pass: sel.length===1 && sel[0]==='Juan', sel});
+  if(prevD===null) localStorage.removeItem('misgastos_default_split_persons'); else localStorage.setItem('misgastos_default_split_persons',prevD);
+  return JSON.stringify({pass: selVacio.length===0 && selAna.length===1 && selAna[0]==='Ana', selVacio, selAna});
 })()
 '@
 

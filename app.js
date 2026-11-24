@@ -121,6 +121,18 @@ function getDeudas(){try{return JSON.parse(localStorage.getItem(LS_DEUDAS)||'[]'
 function saveDeudas(a,opts){localStorage.setItem(LS_DEUDAS,JSON.stringify(a));syncCollectionToCloud('debts',a,opts)}
 function getPersonas(){try{return JSON.parse(localStorage.getItem(LS_PERSONAS)||'[]')}catch{return[]}}
 function savePersonas(a){localStorage.setItem(LS_PERSONAS,JSON.stringify(a));syncCollectionToCloud('people',a)}
+// Persona(s) marcada(s) como "por defecto": vienen pre-seleccionadas al abrir el
+// modal de dividir (como antes era Tamarindo). Se guarda por usuario y se sincroniza.
+function getDefaultSplitPersons(){try{const a=JSON.parse(localStorage.getItem('misgastos_default_split_persons')||'[]');return Array.isArray(a)?a:[];}catch{return[]}}
+function setDefaultSplitPersonsLocal(a){try{localStorage.setItem('misgastos_default_split_persons',JSON.stringify(a||[]));}catch(e){}}
+function toggleDefaultSplitPerson(name){
+  const cur=getDefaultSplitPersons();
+  const i=cur.indexOf(name);
+  if(i>=0) cur.splice(i,1); else cur.push(name);
+  setDefaultSplitPersonsLocal(cur);
+  if(typeof syncSettingsToCloud==='function') syncSettingsToCloud();
+  renderPersonasAjustes();
+}
 const DEFAULT_CATS=[
   {id:'super',name:'Supermercado',emoji:'🛒',color:'#4CAF50'},
   {id:'comida',name:'Comida',emoji:'🍔',color:'#FF9800'},
@@ -214,7 +226,7 @@ function syncCollectionToCloud(collName,localArray,opts){
 
 function syncSettingsToCloud(){
   if(!window._fb||!window._fb.syncEnabled) return;
-  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),displayName:getDisplayName(),accent:getAccent(),cards:getCards(),debits:getDebits(),ingestToken:getIngestToken(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
+  cloudSet('settings','main',{sueldo:getSueldo(),valorDolar:getValorDolar(),displayName:getDisplayName(),accent:getAccent(),defaultSplitPersons:getDefaultSplitPersons(),cards:getCards(),debits:getDebits(),ingestToken:getIngestToken(),billingDates:getBillingDates(),paymentDates:getPaymentDates(),paidFlags:getPaidFlags(),serviciosPaidFlags:getServiciosPaidFlags()});
 }
 
 const LOCAL_GETTERS = {
@@ -256,6 +268,7 @@ window.applyCloudSettings=function(data){
   if(data.valorDolar!==undefined) localStorage.setItem('misgastos_valor_dolar',String(data.valorDolar));
   if(typeof data.displayName==='string') { try{ localStorage.setItem('misgastos_display_name',data.displayName); }catch(e){} }
   if(typeof data.accent==='string') { setAccentLocal(data.accent); applyAccent(data.accent); }
+  if(Array.isArray(data.defaultSplitPersons)) setDefaultSplitPersonsLocal(data.defaultSplitPersons);
   if(Array.isArray(data.cards)) applyCardsFromCloud(data.cards);
   if(Array.isArray(data.debits)) applyDebitsFromCloud(data.debits);
   if(typeof data.ingestToken==='string') setIngestTokenLocal(data.ingestToken);
@@ -716,13 +729,15 @@ function selectImportType(type){
   if(hint) hint.textContent = type==='credito'
     ? 'Cartola de tarjeta de crédito (.xls / .xlsx / .csv)'
     : 'Cartola de cuenta corriente (.xls / .xlsx / .csv)';
+  renderImportBankChips(); // los bancos dependen del tipo (débito = cuentas, crédito = tarjetas)
 }
 
 function selectImportBank(bank){
   importBank=bank;
-  Object.keys(CARDS).forEach(b=>{
-    const el=document.getElementById('chip-'+b);
-    if(el) el.classList.toggle('active', b===bank);
+  const list = importType==='debito' ? Object.values(DEBITS) : creditCards();
+  list.forEach(c=>{
+    const el=document.getElementById('chip-'+c.id);
+    if(el) el.classList.toggle('active', c.id===bank);
   });
 }
 function handleFileUpload(evt){
@@ -1499,7 +1514,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v47';
+  if(ver) ver.textContent='MisGastos · v48';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
@@ -1516,11 +1531,17 @@ function renderPersonasAjustes(){
   const personas=getPersonas();
   const el=document.getElementById('personas-list');
   if(!el) return;
-  el.innerHTML=personas.map((p,i)=>`
-    <div class="settings-row" style="gap:10px">
+  const defs=getDefaultSplitPersons();
+  el.innerHTML=(personas.length?personas.map((p,i)=>{
+    const esDef=defs.includes(p);
+    return `<div class="settings-row" style="gap:8px">
+      <button onclick="toggleDefaultSplitPerson('${escJsAttr(p)}')" title="${esDef?'Quitar de favoritos':'Marcar por defecto'}" style="background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;filter:${esDef?'none':'grayscale(1) opacity(.4)'}">⭐</button>
       <span class="row-label" style="flex:1">👤 ${esc(p)}</span>
       <button onclick="deletePersona(${i})" style="padding:5px 12px;border-radius:8px;border:1px solid var(--red);background:transparent;color:var(--red);font-size:12px;font-weight:600;cursor:pointer">Eliminar</button>
-    </div>`).join('');
+    </div>`;
+  }).join('')
+    :'<div style="padding:4px 0;color:var(--text2);font-size:13px;line-height:1.5">Aún no agregas personas. Agrega con quién divides gastos (pareja, roommate…). Marca la ⭐ para que venga <strong style="color:var(--text)">pre-seleccionada</strong> al dividir.</div>')
+    + (personas.length?'<div style="padding:8px 0 0;color:var(--text2);font-size:11px;line-height:1.5">⭐ = pre-seleccionada al abrir "Dividir gasto".</div>':'');
 }
 function deletePersona(idx){
   const ps=getPersonas();
@@ -1738,11 +1759,18 @@ function populateCardSelectors(){
     md.innerHTML=dd.map(c=>`<option value="${esc(c.id)}">${esc(c.bank)}</option>`).join('');
     if(prevD && dd.some(c=>c.id===prevD)) md.value=prevD;
   }
+  renderImportBankChips();
+}
+// Chips de "banco" al importar: muestran SOLO las cuentas del usuario del tipo
+// elegido (débito → cuentas; crédito → tarjetas), en vivo. Las eliminadas no salen.
+function renderImportBankChips(){
   const chips=document.getElementById('import-bank-chips');
-  if(chips){
-    if(!cc.some(c=>c.id===importBank)) importBank=cc.length?cc[0].id:'';
-    chips.innerHTML=cc.map(c=>`<button class="bank-chip${c.id===importBank?' active':''}" id="chip-${esc(c.id)}" onclick="selectImportBank('${esc(c.id)}')">${esc(c.bank)}</button>`).join('');
-  }
+  if(!chips) return;
+  const list = importType==='debito' ? Object.values(DEBITS) : creditCards();
+  if(!list.some(c=>c.id===importBank)) importBank = list.length?list[0].id:'';
+  chips.innerHTML = list.length
+    ? list.map(c=>`<button class="bank-chip${c.id===importBank?' active':''}" id="chip-${esc(c.id)}" onclick="selectImportBank('${esc(c.id)}')">${esc(c.bank)}</button>`).join('')
+    : `<span style="font-size:12px;color:var(--text2)">Agrega una ${importType==='debito'?'cuenta de débito':'tarjeta de crédito'} en Ajustes → Mis tarjetas y cuentas para importar.</span>`;
 }
 
 function renderCardColorPicker(selected){
@@ -1818,7 +1846,10 @@ function deleteCard(id,tipo){
     : `¿Eliminar la ${tipoTxt} "${c.bank}"?`;
   if(!confirm(msg)) return;
   esDebito?saveDebits(getDebits().filter(x=>x.id!==id)):saveCards(getCards().filter(x=>x.id!==id));
+  if(activeFilter===id) activeFilter='all'; // si el filtro de Historial apuntaba a esta cuenta, vuelve a "Todos"
+  if(importBank===id) importBank=''; // el banco de importar ya no existe
   renderAjustes();
+  renderDashboard(); renderDebito(); renderHistorial();
   showToast((esDebito?'Cuenta':'Tarjeta')+' eliminada');
 }
 
@@ -3029,11 +3060,10 @@ function updateSplitPreview(){
 }
 
 function openSplitModal(split){
-  // Preseleccionamos la primera persona del usuario (si tiene). Si no tiene
-  // personas cargadas, el modal abre sin nadie seleccionado (el usuario elige
-  // o agrega una persona).
+  // Preseleccionamos la(s) persona(s) marcada(s) por defecto (⭐ en Ajustes). Si no
+  // hay ninguna marcada, el modal abre sin nadie seleccionado.
   const personas=getPersonas();
-  _splitSelectedPersons = personas.length ? [personas[0]] : [];
+  _splitSelectedPersons = getDefaultSplitPersons().filter(n=>personas.includes(n));
   // Resetear el modo "presté mi tarjeta" cada vez que se abre
   _splitLent=false;
   const lentChk=document.getElementById('split-lent'); if(lentChk) lentChk.checked=false;
