@@ -286,6 +286,34 @@ Check 'TOUR-PASEO-GUIADO' @'
 })()
 '@
 
+Check 'SPLIT-NOTIF-OFRECE-DIVIDIR' @'
+(function(){
+  localStorage.removeItem("misgastos_split_prompted");
+  localStorage.setItem("gastos_credito_v2","[]");
+  localStorage.setItem("deudas_personas_v1", JSON.stringify(["Ana"]));
+  _pendingSplit=null; _splitQueue=[]; _splitImportMode=false;
+  document.getElementById("split-modal-overlay").classList.remove("open");
+  var prevFb=window._fb; window._fb=Object.assign({},window._fb,{user:{uid:"u1"},syncEnabled:true,firstSyncDone:true});
+  var viejo={id:"push_old",cardId:"santander",amount:5000,desc:"VIEJO",cuotas:1,currency:"CLP",date:new Date().toISOString(),source:"push"};
+  // 1) hidratación: cobro push ya existente -> NO ofrece dividir, lo marca como visto
+  applyCloudCollection("transactions_credit",[viejo],true);
+  var abrioEnHidratacion=document.getElementById("split-modal-overlay").classList.contains("open");
+  var marcadoViejo=getSplitPromptedSet().has("push_old");
+  // 2) en vivo: llega un cobro push NUEVO -> SÍ lo encola para ofrecer dividir
+  var nuevo={id:"push_new",cardId:"santander",amount:7000,desc:"JUMBO",cuotas:1,currency:"CLP",date:new Date().toISOString(),source:"push"};
+  applyCloudCollection("transactions_credit",[viejo,nuevo],false);
+  var encolado=_splitQueue.length===1 && _splitQueue[0].txId==="push_new";
+  // 3) un gasto manual (sin source push) NO debe ofrecer dividir
+  var manual={id:"man1",cardId:"santander",amount:1000,desc:"MANUAL",cuotas:1,currency:"CLP",date:new Date().toISOString()};
+  applyCloudCollection("transactions_credit",[viejo,nuevo,manual],false);
+  var noTocaManual=!getSplitPromptedSet().has("man1");
+  window._fb=prevFb;
+  _pendingSplit=null; _splitQueue=[]; _splitImportMode=false;
+  document.getElementById("split-modal-overlay").classList.remove("open");
+  return JSON.stringify({pass: !abrioEnHidratacion && marcadoViejo && encolado && noTocaManual, abrioEnHidratacion:abrioEnHidratacion, marcadoViejo:marcadoViejo, encolado:encolado, noTocaManual:noTocaManual});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

@@ -255,12 +255,52 @@ window.reconcileFirstSync=function(collName){
 
 // Llamado desde Firebase (onSnapshot) cuando cambia una colección en la nube:
 // refleja el cambio en localStorage y refresca la pantalla activa.
-window.applyCloudCollection=function(collName,cloudArray){
+window.applyCloudCollection=function(collName,cloudArray,isFirst){
   const map=CLOUD_MAP[collName];
   if(!map) return;
   localStorage.setItem(map.ls,JSON.stringify(map.toLocal(cloudArray)));
   refreshCurrentPage();
+  // Cobros capturados por NOTIFICACIÓN (source:'push') llegan por aquí (no por
+  // syncFromSheets). Ofrecemos dividir 50/50 igual que con el correo: solo los que
+  // llegan en vivo, nunca el historial que ya estaba al abrir la app.
+  if(collName==='transactions_credit'||collName==='transactions_debit'){
+    try{ maybePromptCloudSplits(collName,cloudArray,isFirst); }catch(e){ console.warn('maybePromptCloudSplits',e); }
+  }
 };
+
+// Registro local de cobros push a los que ya se les ofreció dividir (para no
+// repreguntar en cada snapshot). Se poda contra los gastos aún existentes.
+function getSplitPromptedSet(){ try{ const a=JSON.parse(localStorage.getItem('misgastos_split_prompted')||'[]'); return new Set(Array.isArray(a)?a:[]); }catch(e){ return new Set(); } }
+function saveSplitPromptedSet(set){ try{ localStorage.setItem('misgastos_split_prompted',JSON.stringify([...set])); }catch(e){} }
+
+function maybePromptCloudSplits(collName,cloudArray,isFirst){
+  const fb=window._fb;
+  if(!fb||!fb.user||!fb.syncEnabled) return;
+  const type=collName==='transactions_debit'?'debito':'credito';
+  const pushRows=(cloudArray||[]).filter(t=>t&&t.source==='push');
+  const set=getSplitPromptedSet();
+  if(isFirst){
+    // Hidratación: marcamos como "ya ofrecido" todo lo que ya existía, para no abrir
+    // el modal por el historial. De aquí en más solo se ofrece lo que llegue en vivo.
+    pushRows.forEach(t=>set.add(String(t.id)));
+    const vivos=new Set([...getC(),...getD()].filter(t=>t&&t.id!=null).map(t=>String(t.id)));
+    saveSplitPromptedSet(new Set([...set].filter(id=>vivos.has(String(id)))));
+    return;
+  }
+  // No encimar si ya hay un modal de split abierto o una cola en curso: se reintenta
+  // en el próximo snapshot (los ids aún no se marcan como vistos).
+  if(_pendingSplit || (_splitQueue&&_splitQueue.length>0)) return;
+  const nuevos=pushRows.filter(t=>!set.has(String(t.id)));
+  if(!nuevos.length) return;
+  nuevos.forEach(t=>set.add(String(t.id)));
+  saveSplitPromptedSet(set);
+  const items=nuevos.map(t=>({txId:t.id,amount:t.amount,desc:t.desc,cuotas:t.cuotas||1,
+    currency:t.currency||'CLP',cardId:type==='debito'?t.bank:t.cardId,type}));
+  _splitQueue=[...items];
+  _splitImportMode=false;
+  setTimeout(()=>processSplitQueue(),300);
+}
+window.maybePromptCloudSplits=maybePromptCloudSplits;
 
 // Llamado desde Firebase (onSnapshot) cuando cambia el doc settings/main.
 window.applyCloudSettings=function(data){
@@ -289,7 +329,7 @@ window.clearAccountLocalData=function(){
     'misgastos_servicios_hogar_v1','misgastos_valor_dolar','misgastos_display_name',
     'misgastos_accent','misgastos_ingest_token','misgastos_default_split_persons',
     'misgastos_cards','misgastos_debits','misgastos_billing_dates','misgastos_payment_dates',
-    'misgastos_paid_flags','misgastos_servicios_paid_flags'];
+    'misgastos_paid_flags','misgastos_servicios_paid_flags','misgastos_split_prompted'];
   keys.forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
   try{ CARDS=buildCardsObject(getCards()); DEBITS=buildCardsObject(getDebits()); }catch(e){}
   try{ applyAccent(); }catch(e){}
@@ -1530,7 +1570,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v51';
+  if(ver) ver.textContent='MisGastos · v52';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
