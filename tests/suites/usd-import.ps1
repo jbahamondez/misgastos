@@ -71,7 +71,9 @@ Check 'SYNCFROMSHEETS-RESPETA-USD-Y-COMA' @'
     ]}))});
     return Promise.resolve({ok:true,text:()=>Promise.resolve('{}')}); // markDone
   };
+  const prevFb=window._fb; window._fb=Object.assign({},window._fb,{user:{uid:'ecqPwATPC4hniJcA816FfLitzGX2'}}); // cuenta principal (dueña del correo)
   await syncFromSheets();
+  window._fb=prevFb;
   window.fetch=realFetch;
   _splitQueue=[]; _splitImportMode=false;
   const usd=getC().find(t=>t.id==='imp_usd_1')||{};

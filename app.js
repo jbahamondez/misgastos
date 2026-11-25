@@ -1530,7 +1530,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v49';
+  if(ver) ver.textContent='MisGastos · v50';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
@@ -3318,6 +3318,11 @@ function showToast(msg,color){
 }
 // ── Sincronización desde Google Apps Script API ───────────────────────────────
 const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbwxWhRJehKodrfiPFu5iG6gwaMq2JtX6sRwm5ngKTjduB2v6W2d14p-WD9mF4swUoFj/exec';
+// La cola de correo (Apps Script) lee UN Gmail (el de la cuenta principal) y es
+// COMPARTIDA. Solo esta cuenta debe consumirla; si no, el primer usuario que abra
+// la app se lleva los cobros por correo de otro. El resto usa el ingreso por
+// notificación (token por usuario). uid de la cuenta dueña del Gmail/Apps Script:
+const EMAIL_SYNC_UID='ecqPwATPC4hniJcA816FfLitzGX2';
 const LS_SYNC='misgastos_sync_last';
 
 // Parsea el monto que llega en una fila de la cola. Normalmente es un numero, pero
@@ -3345,6 +3350,12 @@ function txTipo(t){ return t && t.cardId!==undefined ? 'credito' : 'debito'; }
 // endpoint no vuelva a ser silencioso, como el 403 de "Necesitas acceso").
 async function syncFromSheets(opts){
   const manual=!!(opts&&opts.manual);
+  // Solo la cuenta principal (dueña del Gmail) consume la cola compartida.
+  const u=window._fb&&window._fb.user;
+  if(!u || u.uid!==EMAIL_SYNC_UID){
+    if(manual) showToast('La sincronización de correo es solo para la cuenta principal','var(--yellow)');
+    return {skipped:true};
+  }
   const last=parseInt(localStorage.getItem(LS_SYNC)||'0');
   if(!manual && Date.now()-last < 15000) return {skipped:true};
   localStorage.setItem(LS_SYNC, Date.now().toString());

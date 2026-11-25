@@ -66,6 +66,15 @@ Check 'TOAST-VISIBILITYCHANGE-OCULTA' @'
 })()
 '@
 
+Check 'SYNC-SETUP-CUENTA-PRINCIPAL' @'
+(function(){
+  // La sincronización de correo solo corre en la cuenta principal (dueña del Gmail).
+  // Simulamos esa sesión para los tests de sync que siguen.
+  window._fb=Object.assign({},window._fb,{user:{uid:"ecqPwATPC4hniJcA816FfLitzGX2"}});
+  return JSON.stringify({pass: window._fb.user.uid==="ecqPwATPC4hniJcA816FfLitzGX2"});
+})()
+'@
+
 Check 'SYNC-MANUAL-403-AVISA' @'
 (async function(){
   const of=window.fetch, os=window.showToast; let msg="";
