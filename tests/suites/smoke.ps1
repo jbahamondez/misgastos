@@ -288,29 +288,50 @@ Check 'TOUR-PASEO-GUIADO' @'
 
 Check 'SPLIT-NOTIF-OFRECE-DIVIDIR' @'
 (function(){
-  localStorage.removeItem("misgastos_split_prompted");
+  localStorage.removeItem("misgastos_splitask_migrated");
   localStorage.setItem("gastos_credito_v2","[]");
+  localStorage.setItem("gastos_debito_v2","[]");
   localStorage.setItem("deudas_personas_v1", JSON.stringify(["Ana"]));
   _pendingSplit=null; _splitQueue=[]; _splitImportMode=false;
   document.getElementById("split-modal-overlay").classList.remove("open");
   var prevFb=window._fb; window._fb=Object.assign({},window._fb,{user:{uid:"u1"},syncEnabled:true,firstSyncDone:true});
+  var qIds=function(){return _splitQueue.map(function(s){return String(s.txId);});};
   var viejo={id:"push_old",cardId:"santander",amount:5000,desc:"VIEJO",cuotas:1,currency:"CLP",date:new Date().toISOString(),source:"push"};
-  // 1) hidratación: cobro push ya existente -> NO ofrece dividir, lo marca como visto
-  applyCloudCollection("transactions_credit",[viejo],true);
-  var abrioEnHidratacion=document.getElementById("split-modal-overlay").classList.contains("open");
-  var marcadoViejo=getSplitPromptedSet().has("push_old");
-  // 2) en vivo: llega un cobro push NUEVO -> SÍ lo encola para ofrecer dividir
+
+  // 1) Sin migrar aún: un snapshot NO ofrece dividir (ni historial ni nuevos)
+  applyCloudCollection("transactions_credit",[viejo]);
+  var sinMigrarNoOfrece = _splitQueue.length===0 && !document.getElementById("split-modal-overlay").classList.contains("open");
+
+  // 2) Migración: marca el historial push como splitAsked y no encola nada
+  runSplitAskMigration();
+  var migrado = localStorage.getItem("misgastos_splitask_migrated")==="1";
+  var viejoMarcado = (getC().find(function(t){return t.id==="push_old";})||{}).splitAsked===true;
+  var migracionNoEncola = _splitQueue.length===0;
+
+  // 3) En vivo llega un cobro push NUEVO (sin splitAsked) -> se ofrece dividir
+  _splitQueue=[];
   var nuevo={id:"push_new",cardId:"santander",amount:7000,desc:"JUMBO",cuotas:1,currency:"CLP",date:new Date().toISOString(),source:"push"};
-  applyCloudCollection("transactions_credit",[viejo,nuevo],false);
-  var encolado=_splitQueue.length===1 && _splitQueue[0].txId==="push_new";
-  // 3) un gasto manual (sin source push) NO debe ofrecer dividir
+  applyCloudCollection("transactions_credit", getC().concat([nuevo]));
+  var nuevoEncolado = qIds().indexOf("push_new")>=0 && qIds().indexOf("push_old")<0;
+  markSplitAsked("push_new"); // el usuario decide
+
+  // 4) Un cobro push YA decidido (splitAsked:true) no se vuelve a ofrecer
+  _splitQueue=[];
+  var decidido={id:"push_done",cardId:"santander",amount:3000,desc:"DECIDIDO",cuotas:1,currency:"CLP",date:new Date().toISOString(),source:"push",splitAsked:true};
+  applyCloudCollection("transactions_credit", getC().concat([decidido]));
+  var decididoNoReofrece = qIds().indexOf("push_done")<0 && qIds().indexOf("push_new")<0;
+
+  // 5) Gasto manual (sin source push) nunca se ofrece
+  _splitQueue=[];
   var manual={id:"man1",cardId:"santander",amount:1000,desc:"MANUAL",cuotas:1,currency:"CLP",date:new Date().toISOString()};
-  applyCloudCollection("transactions_credit",[viejo,nuevo,manual],false);
-  var noTocaManual=!getSplitPromptedSet().has("man1");
+  applyCloudCollection("transactions_credit", getC().concat([manual]));
+  var manualIgnorado = qIds().indexOf("man1")<0;
+
   window._fb=prevFb;
   _pendingSplit=null; _splitQueue=[]; _splitImportMode=false;
   document.getElementById("split-modal-overlay").classList.remove("open");
-  return JSON.stringify({pass: !abrioEnHidratacion && marcadoViejo && encolado && noTocaManual, abrioEnHidratacion:abrioEnHidratacion, marcadoViejo:marcadoViejo, encolado:encolado, noTocaManual:noTocaManual});
+  return JSON.stringify({pass: sinMigrarNoOfrece&&migrado&&viejoMarcado&&migracionNoEncola&&nuevoEncolado&&decididoNoReofrece&&manualIgnorado,
+    sinMigrarNoOfrece:sinMigrarNoOfrece, migrado:migrado, viejoMarcado:viejoMarcado, migracionNoEncola:migracionNoEncola, nuevoEncolado:nuevoEncolado, decididoNoReofrece:decididoNoReofrece, manualIgnorado:manualIgnorado});
 })()
 '@
 

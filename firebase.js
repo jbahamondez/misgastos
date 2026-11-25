@@ -78,10 +78,6 @@ function startCloudSync(uid){
       const map=new Map();
       snap.forEach(d=>map.set(d.id,d.data()));
       window._fb.cache[name]=map;
-      // firstForColl = este es el PRIMER snapshot (hidratación) de esta colección.
-      // Lo usa applyCloudCollection para no ofrecer dividir por el historial existente
-      // y sí hacerlo solo con los cobros que llegan en vivo después.
-      const firstForColl=!hydrated;
       if(!hydrated){
         hydrated=true;
         window.reconcileFirstSync&&window.reconcileFirstSync(name);
@@ -91,7 +87,7 @@ function startCloudSync(uid){
           window.onFirstSyncComplete&&window.onFirstSyncComplete();
         }
       }
-      window.applyCloudCollection&&window.applyCloudCollection(name, Array.from(window._fb.cache[name].values()), firstForColl);
+      window.applyCloudCollection&&window.applyCloudCollection(name, Array.from(window._fb.cache[name].values()));
     });
     window._fb.unsubscribers.push(unsub);
   });

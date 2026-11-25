@@ -255,50 +255,72 @@ window.reconcileFirstSync=function(collName){
 
 // Llamado desde Firebase (onSnapshot) cuando cambia una colección en la nube:
 // refleja el cambio en localStorage y refresca la pantalla activa.
-window.applyCloudCollection=function(collName,cloudArray,isFirst){
+window.applyCloudCollection=function(collName,cloudArray){
   const map=CLOUD_MAP[collName];
   if(!map) return;
   localStorage.setItem(map.ls,JSON.stringify(map.toLocal(cloudArray)));
   refreshCurrentPage();
   // Cobros capturados por NOTIFICACIÓN (source:'push') llegan por aquí (no por
-  // syncFromSheets). Ofrecemos dividir 50/50 igual que con el correo: solo los que
-  // llegan en vivo, nunca el historial que ya estaba al abrir la app.
+  // syncFromSheets). Ofrecemos dividir 50/50 igual que con el correo.
   if(collName==='transactions_credit'||collName==='transactions_debit'){
-    try{ maybePromptCloudSplits(collName,cloudArray,isFirst); }catch(e){ console.warn('maybePromptCloudSplits',e); }
+    try{ maybePromptCloudSplits(collName,cloudArray); }catch(e){ console.warn('maybePromptCloudSplits',e); }
   }
 };
 
-// Registro local de cobros push a los que ya se les ofreció dividir (para no
-// repreguntar en cada snapshot). Se poda contra los gastos aún existentes.
-function getSplitPromptedSet(){ try{ const a=JSON.parse(localStorage.getItem('misgastos_split_prompted')||'[]'); return new Set(Array.isArray(a)?a:[]); }catch(e){ return new Set(); } }
-function saveSplitPromptedSet(set){ try{ localStorage.setItem('misgastos_split_prompted',JSON.stringify([...set])); }catch(e){} }
+// Un cobro por notificación pide ofrecer dividir mientras no tenga el flag durable
+// splitAsked (que se graba al decidir y viaja a la nube, así no se repregunta en
+// ningún dispositivo). Es el equivalente a la cola del correo: "pendiente de decidir".
+function pushNeedsSplit(t){ return !!(t && t.source==='push' && !t.splitAsked); }
+function splitAskMigrated(){ try{ return !!localStorage.getItem('misgastos_splitask_migrated'); }catch(e){ return true; } }
 
-function maybePromptCloudSplits(collName,cloudArray,isFirst){
+// Marca un cobro (por id) como "ya se ofreció dividir" y lo persiste. Solo toca
+// cobros push; saveC/saveD sincronizan el flag a la nube (mapeo identidad).
+function markSplitAsked(txId){
+  if(txId==null) return;
+  const id=String(txId);
+  const c=getC(); let ch=false;
+  c.forEach(t=>{ if(t&&String(t.id)===id&&t.source==='push'&&!t.splitAsked){ t.splitAsked=true; ch=true; } });
+  if(ch) saveC(c);
+  const d=getD(); let chd=false;
+  d.forEach(t=>{ if(t&&String(t.id)===id&&t.source==='push'&&!t.splitAsked){ t.splitAsked=true; chd=true; } });
+  if(chd) saveD(d);
+}
+
+// Migración única: al abrir por primera vez esta versión, el historial de cobros
+// push existente se marca como "ya ofrecido" para no inundar con el pasado. De ahí
+// en más solo se ofrece lo que llegue nuevo (en vivo o con la app cerrada).
+function runSplitAskMigration(){
+  if(splitAskMigrated()) return;
+  const fb=window._fb;
+  if(!fb||!fb.user||!fb.syncEnabled) return; // sin nube no hay cobros push
+  const c=getC(); let ch=false;
+  c.forEach(t=>{ if(pushNeedsSplit(t)){ t.splitAsked=true; ch=true; } });
+  if(ch) saveC(c);
+  const d=getD(); let chd=false;
+  d.forEach(t=>{ if(pushNeedsSplit(t)){ t.splitAsked=true; chd=true; } });
+  if(chd) saveD(d);
+  try{ localStorage.setItem('misgastos_splitask_migrated','1'); }catch(e){}
+}
+window.runSplitAskMigration=runSplitAskMigration;
+
+function maybePromptCloudSplits(collName,cloudArray){
   const fb=window._fb;
   if(!fb||!fb.user||!fb.syncEnabled) return;
+  if(!splitAskMigrated()) return; // esperar a la migración (onFirstSyncComplete)
   const type=collName==='transactions_debit'?'debito':'credito';
-  const pushRows=(cloudArray||[]).filter(t=>t&&t.source==='push');
-  const set=getSplitPromptedSet();
-  if(isFirst){
-    // Hidratación: marcamos como "ya ofrecido" todo lo que ya existía, para no abrir
-    // el modal por el historial. De aquí en más solo se ofrece lo que llegue en vivo.
-    pushRows.forEach(t=>set.add(String(t.id)));
-    const vivos=new Set([...getC(),...getD()].filter(t=>t&&t.id!=null).map(t=>String(t.id)));
-    saveSplitPromptedSet(new Set([...set].filter(id=>vivos.has(String(id)))));
-    return;
-  }
-  // No encimar si ya hay un modal de split abierto o una cola en curso: se reintenta
-  // en el próximo snapshot (los ids aún no se marcan como vistos).
-  if(_pendingSplit || (_splitQueue&&_splitQueue.length>0)) return;
-  const nuevos=pushRows.filter(t=>!set.has(String(t.id)));
-  if(!nuevos.length) return;
-  nuevos.forEach(t=>set.add(String(t.id)));
-  saveSplitPromptedSet(set);
-  const items=nuevos.map(t=>({txId:t.id,amount:t.amount,desc:t.desc,cuotas:t.cuotas||1,
-    currency:t.currency||'CLP',cardId:type==='debito'?t.bank:t.cardId,type}));
-  _splitQueue=[...items];
-  _splitImportMode=false;
-  setTimeout(()=>processSplitQueue(),300);
+  const pend=(cloudArray||[]).filter(pushNeedsSplit);
+  if(!pend.length) return;
+  // Evitar duplicar lo que ya está en cola o en el modal abierto.
+  const enCola=new Set((_splitQueue||[]).map(s=>String(s.txId)));
+  if(_pendingSplit) enCola.add(String(_pendingSplit.txId));
+  const items=pend.filter(t=>!enCola.has(String(t.id))).map(t=>({txId:t.id,amount:t.amount,
+    desc:t.desc,cuotas:t.cuotas||1,currency:t.currency||'CLP',
+    cardId:type==='debito'?t.bank:t.cardId,type}));
+  if(!items.length) return;
+  _splitQueue=[...(_splitQueue||[]),...items];
+  // Solo arrancamos la cola si no hay un modal en curso (si lo hay, al cerrarse
+  // confirmSplit/closeSplitModal encadenan con processSplitQueue).
+  if(!_pendingSplit){ _splitImportMode=false; setTimeout(()=>processSplitQueue(),300); }
 }
 window.maybePromptCloudSplits=maybePromptCloudSplits;
 
@@ -329,7 +351,7 @@ window.clearAccountLocalData=function(){
     'misgastos_servicios_hogar_v1','misgastos_valor_dolar','misgastos_display_name',
     'misgastos_accent','misgastos_ingest_token','misgastos_default_split_persons',
     'misgastos_cards','misgastos_debits','misgastos_billing_dates','misgastos_payment_dates',
-    'misgastos_paid_flags','misgastos_servicios_paid_flags','misgastos_split_prompted'];
+    'misgastos_paid_flags','misgastos_servicios_paid_flags','misgastos_splitask_migrated'];
   keys.forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
   try{ CARDS=buildCardsObject(getCards()); DEBITS=buildCardsObject(getDebits()); }catch(e){}
   try{ applyAccent(); }catch(e){}
@@ -1570,7 +1592,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v52';
+  if(ver) ver.textContent='MisGastos · v53';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
@@ -3196,6 +3218,7 @@ function addPersonToSplit(){
 
 function closeSplitModal(){
   document.getElementById('split-modal-overlay').classList.remove('open');
+  if(_pendingSplit) markSplitAsked(_pendingSplit.txId); // decidido: no dividir -> no repreguntar
   _pendingSplit=null;
   showToast('Gasto guardado (sin dividir)');
   // Procesar siguiente en cola si hay más
@@ -3227,6 +3250,7 @@ function confirmSplit(){
   const s=aplicarSplit(_pendingSplit, _splitSelectedPersons, esPrestado, debtOffset);
 
   document.getElementById('split-modal-overlay').classList.remove('open');
+  markSplitAsked(_pendingSplit.txId); // decidido: dividido -> no repreguntar
   _pendingSplit=null;
   renderDashboard();
   const n=_splitSelectedPersons.length;
@@ -4522,7 +4546,7 @@ function maybeRunReminders(){
   checkSinClasificarReminder();
 }
 // Lo dispara firebase.js al terminar la PRIMERA descarga de la nube.
-window.onFirstSyncComplete=function(){ maybeRunReminders(); maybeStartTour(); };
+window.onFirstSyncComplete=function(){ runSplitAskMigration(); maybeRunReminders(); maybeStartTour(); };
 
 /* ===== Tour / paseo guiado para usuarios nuevos ===== */
 const TOUR_STEPS=[
