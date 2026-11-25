@@ -265,6 +265,27 @@ Check 'PERSONAS-DEFAULT-E-IMPORT-POR-TIPO' @'
 })()
 '@
 
+Check 'TOUR-PASEO-GUIADO' @'
+(function(){
+  // arranca, navega, y todos los pasos anclados resuelven a un elemento real
+  localStorage.removeItem("misgastos_tour_seen");
+  startTour();
+  var abierto=document.getElementById("tour").classList.contains("open");
+  var paso1=document.getElementById("tour-title").textContent.length>0;
+  var anclasOK=true, faltante="";
+  for(var i=0;i<TOUR_STEPS.length;i++){
+    var s=TOUR_STEPS[i];
+    if(s.sel && !document.querySelector(s.sel)){ anclasOK=false; faltante=s.sel; break; }
+  }
+  nextTourStep();
+  var avanzo=document.getElementById("tour-count").textContent.indexOf("2 /")===0;
+  endTour();
+  var cerrado=!document.getElementById("tour").classList.contains("open");
+  var marcado=localStorage.getItem("misgastos_tour_seen")==="1";
+  return JSON.stringify({pass: abierto&&paso1&&anclasOK&&avanzo&&cerrado&&marcado, abierto:abierto,anclasOK:anclasOK,faltante:faltante,avanzo:avanzo,cerrado:cerrado,marcado:marcado});
+})()
+'@
+
 Check 'CERO-ERRORES-JS' 'JSON.stringify({pass:(window.__errs||[]).length===0, errs:window.__errs})'
 Close-CDP
 exit $global:CDP_FAILS

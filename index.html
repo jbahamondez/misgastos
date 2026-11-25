@@ -12,7 +12,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192-v3.png" />
   <title>MisGastos</title>
   <script>try{var _a=localStorage.getItem('misgastos_accent');if(_a)document.documentElement.setAttribute('data-accent',_a);}catch(e){}</script>
-  <link rel="stylesheet" href="./styles.css?v=50" />
+  <link rel="stylesheet" href="./styles.css?v=51" />
 </head>
 <body>
 
@@ -140,6 +140,7 @@
         <button onclick="saveDisplayName()" class="btn-accent" style="padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">Guardar</button>
       </div>
       <p style="font-size:11px;color:var(--text2);margin-top:8px">Aparece arriba en el inicio: "👋 Hola, …"</p>
+      <button onclick="startTour()" style="margin-top:12px;width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:14px;font-weight:600;cursor:pointer">🧭 Ver tutorial de la app</button>
     </div>
   </details>
   <details class="settings-group">
@@ -379,6 +380,21 @@
   <div id="rec-overlay-text">Escuchando… suelta para analizar</div>
 </div>
 
+<!-- TOUR / paseo guiado para usuarios nuevos -->
+<div id="tour" aria-live="polite">
+  <div id="tour-spot"></div>
+  <div id="tour-card">
+    <h3 id="tour-title"></h3>
+    <p id="tour-body"></p>
+    <div id="tour-foot">
+      <span id="tour-count"></span>
+      <button class="t-btn t-skip" id="tour-skip" onclick="endTour()">Saltar</button>
+      <button class="t-btn t-prev" id="tour-prev" onclick="prevTourStep()">Atrás</button>
+      <button class="t-btn" id="tour-next" onclick="nextTourStep()">Siguiente</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL -->
 <div class="modal-overlay" id="modal-overlay" onclick="closeModalOutside(event)">
   <div class="modal">
@@ -553,7 +569,7 @@
 <div class="sync-badge" id="sync-badge"></div>
 
 <!-- xlsx (SheetJS, ~880KB) se carga bajo demanda desde app.js (loadXLSX) solo al importar/conciliar cartolas -->
-<script src="./app.js?v=50"></script>
+<script src="./app.js?v=51"></script>
 
 <!-- ── Firebase: Auth + Firestore (offline-first) ─────────────────────────── -->
 <script type="module" src="./firebase.js"></script>

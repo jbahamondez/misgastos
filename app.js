@@ -1530,7 +1530,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v50';
+  if(ver) ver.textContent='MisGastos · v51';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
@@ -4467,6 +4467,7 @@ document.addEventListener('DOMContentLoaded',function(){
     const fb=window._fb;
     if(fb && fb.user && fb.syncEnabled && !fb.firstSyncDone) return;
     maybeRunReminders();
+    maybeStartTour();
   },1200);
 });
 // Cadena de recordatorios (pago → cobro → servicios → sin clasificar), en orden
@@ -4481,7 +4482,78 @@ function maybeRunReminders(){
   checkSinClasificarReminder();
 }
 // Lo dispara firebase.js al terminar la PRIMERA descarga de la nube.
-window.onFirstSyncComplete=function(){ maybeRunReminders(); };
+window.onFirstSyncComplete=function(){ maybeRunReminders(); maybeStartTour(); };
+
+/* ===== Tour / paseo guiado para usuarios nuevos ===== */
+const TOUR_STEPS=[
+  {sel:null, title:'👋 ¡Bienvenido a MisGastos!', body:'Te muestro en unos segundos lo esencial para empezar a controlar tus gastos. Puedes saltarlo cuando quieras.'},
+  {sel:'#dash-greeting', title:'Tu inicio', body:'Esta es tu pantalla principal: ves tus gastos del mes de un vistazo. El nombre del saludo lo puedes cambiar en Ajustes.'},
+  {sel:'.fab:not(.fab-mic)', title:'Agregar un gasto', body:'Toca el botón + para registrar un gasto a mano: monto, tarjeta y categoría.'},
+  {sel:'#fab-mic', title:'Registrar por voz', body:'¿Apurado? Mantén apretado y dicta, por ej.: «gasté 3 mil en el jumbo con la santander». Puedes arrastrar el botón a donde te acomode.'},
+  {sel:'#nav-tarjetas', title:'Tarjetas de crédito', body:'Agrega tus tarjetas y lleva el control de cuotas, cupos y la fecha de facturación.'},
+  {sel:'#nav-debito', title:'Débito', body:'Tus cuentas de débito y los movimientos que haces con ellas.'},
+  {sel:'#nav-historial', title:'Historial', body:'Busca y filtra todos tus gastos por tarjeta, fecha o categoría.'},
+  {sel:'#nav-deudas', title:'Dividir gastos', body:'Divide un gasto con otras personas y lleva la cuenta de quién te debe y cuánto.'},
+  {sel:'#nav-ajustes', title:'Ajustes', body:'Personaliza el color y tu nombre, administra tus tarjetas y activa la captura automática de compras por notificación.'},
+  {sel:null, title:'¡Todo listo! 🎉', body:'Empieza agregando tu primera tarjeta o gasto. Si quieres repetir este tour, lo encuentras en Ajustes › Mi perfil.'}
+];
+let _tourIdx=0;
+function startTour(){ _tourIdx=0; const t=document.getElementById('tour'); if(!t) return; t.classList.add('open'); renderTourStep(); }
+function endTour(){ const t=document.getElementById('tour'); if(t) t.classList.remove('open'); try{localStorage.setItem('misgastos_tour_seen','1');}catch(e){} }
+function nextTourStep(){ if(_tourIdx>=TOUR_STEPS.length-1){ endTour(); return; } _tourIdx++; renderTourStep(); }
+function prevTourStep(){ if(_tourIdx>0){ _tourIdx--; renderTourStep(); } }
+function renderTourStep(){
+  const step=TOUR_STEPS[_tourIdx]; if(!step) return;
+  const spot=document.getElementById('tour-spot');
+  const card=document.getElementById('tour-card');
+  document.getElementById('tour-title').textContent=step.title;
+  document.getElementById('tour-body').textContent=step.body;
+  document.getElementById('tour-count').textContent=(_tourIdx+1)+' / '+TOUR_STEPS.length;
+  document.getElementById('tour-next').textContent=(_tourIdx===TOUR_STEPS.length-1)?'Finalizar':'Siguiente';
+  document.getElementById('tour-prev').style.display=_tourIdx===0?'none':'inline-block';
+  const el=step.sel?document.querySelector(step.sel):null;
+  const rect=el?el.getBoundingClientRect():null;
+  const vw=window.innerWidth, vh=window.innerHeight;
+  // Sin foco (pasos centrados) oscurecemos el fondo con el propio #tour;
+  // con foco el oscurecido lo hace el box-shadow del #tour-spot.
+  document.getElementById('tour').style.background=(rect&&rect.width)?'transparent':'rgba(0,0,0,.74)';
+  if(rect && rect.width){
+    const pad=8;
+    spot.style.display='block';
+    spot.style.left=(rect.left-pad)+'px';
+    spot.style.top=(rect.top-pad)+'px';
+    spot.style.width=(rect.width+pad*2)+'px';
+    spot.style.height=(rect.height+pad*2)+'px';
+    requestAnimationFrame(function(){
+      const cw=card.offsetWidth, ch=card.offsetHeight;
+      let top = (rect.top > vh/2) ? (rect.top-pad-ch-12) : (rect.bottom+pad+12);
+      top=Math.max(16, Math.min(top, vh-ch-16));
+      let left=rect.left+rect.width/2-cw/2;
+      left=Math.max(16, Math.min(left, vw-cw-16));
+      card.style.left=left+'px'; card.style.top=top+'px';
+    });
+  } else {
+    spot.style.display='none';
+    requestAnimationFrame(function(){
+      const cw=card.offsetWidth, ch=card.offsetHeight;
+      card.style.left=Math.max(16,(vw-cw)/2)+'px';
+      card.style.top=Math.max(16,(vh-ch)/2)+'px';
+    });
+  }
+}
+// Se muestra una sola vez, solo a usuarios realmente nuevos (sin datos). Si hay
+// sesión con sync activo esperamos a que baje la nube (onFirstSyncComplete), para
+// no mostrarlo a un usuario existente que aún no se hidrata.
+function maybeStartTour(){
+  try{ if(localStorage.getItem('misgastos_tour_seen')) return; }catch(e){ return; }
+  const fb=window._fb;
+  if(fb && fb.user && fb.syncEnabled && !fb.firstSyncDone) return;
+  const hayDatos=!!(localStorage.getItem('gastos_credito_v2')||localStorage.getItem('gastos_debito_v2'));
+  if(hayDatos){ try{localStorage.setItem('misgastos_tour_seen','1');}catch(e){} return; }
+  showPage('dashboard');
+  setTimeout(startTour,500);
+}
+window.startTour=startTour; window.endTour=endTour; window.nextTourStep=nextTourStep; window.prevTourStep=prevTourStep; window.maybeStartTour=maybeStartTour;
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
     navigator.serviceWorker.register('./sw.js');
