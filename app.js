@@ -279,6 +279,22 @@ window.applyCloudSettings=function(data){
   refreshCurrentPage();
 };
 
+// Limpia TODOS los datos locales ligados a una cuenta. Lo llama firebase.js al
+// detectar un cambio de cuenta en el mismo dispositivo, para que los datos de la
+// cuenta anterior (sobre todo el TOKEN de ingreso automático, pero también ajustes
+// y gastos) no se "peguen" a la nueva sesión. La nube rehidrata lo correcto.
+window.clearAccountLocalData=function(){
+  const keys=['gastos_credito_v2','gastos_debito_v2','sueldo_mensual','gastos_deudas_v1',
+    'deudas_personas_v1','misgastos_categorias_v1','misgastos_cat_rules_v1',
+    'misgastos_servicios_hogar_v1','misgastos_valor_dolar','misgastos_display_name',
+    'misgastos_accent','misgastos_ingest_token','misgastos_default_split_persons',
+    'misgastos_cards','misgastos_debits','misgastos_billing_dates','misgastos_payment_dates',
+    'misgastos_paid_flags','misgastos_servicios_paid_flags'];
+  keys.forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
+  try{ CARDS=buildCardsObject(getCards()); DEBITS=buildCardsObject(getDebits()); }catch(e){}
+  try{ applyAccent(); }catch(e){}
+};
+
 // Indicador visual (esquina inferior izquierda) del estado de sincronización con la nube.
 window.updateSyncBadge=function(){
   const el=document.getElementById('sync-badge');
@@ -1514,7 +1530,7 @@ function renderAjustes(){
       <div style="font-size:11px;color:var(--text2);margin-top:6px;line-height:1.5">Trae las compras que el banco ya envió por correo y aún no aparecen. Si falla, te avisará el motivo.</div>`;
   }
   const ver=document.getElementById('app-version');
-  if(ver) ver.textContent='MisGastos · v48';
+  if(ver) ver.textContent='MisGastos · v49';
 }
 function updateValorDolar(v){
   const n=Math.max(0,parseFloat(v)||0);
@@ -1977,8 +1993,10 @@ function renderIngestSection(){
         <button onclick="copiarIngest('${esc(val)}','${msg}')" style="padding:8px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer">Copiar</button>
       </div>
     </div>`;
+  const cuenta=(window._fb&&window._fb.user&&(window._fb.user.email||window._fb.user.displayName))||'';
   el.innerHTML=`
-    <p style="font-size:12px;color:var(--green);margin:0 0 4px">✓ Activado</p>
+    <p style="font-size:12px;color:var(--green);margin:0 0 2px">✓ Activado</p>
+    ${cuenta?`<p style="font-size:11px;color:var(--text2);margin:0 0 6px">Este token registra los gastos en la cuenta <strong style="color:var(--text)">${esc(cuenta)}</strong>. Úsalo solo en el atajo de este dueño.</p>`:''}
     ${field('URL para el atajo', INGEST_URL, 'URL copiada')}
     ${field('Tu token', t, 'Token copiado')}
     <p style="font-size:11px;color:var(--text2);line-height:1.5;margin:10px 0 0">En tu atajo de iOS → acción <strong>“Obtener contenido de URL”</strong>: pega la URL (Método <strong>POST</strong>, Cuerpo <strong>Formulario</strong>), con un campo <strong>token</strong> = tu token, y un campo <strong>texto</strong> = la variable <strong>🔔 Notificación</strong>. Deja <strong>Esperar 3 s</strong> al final.</p>

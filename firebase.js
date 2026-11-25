@@ -119,6 +119,14 @@ onAuthStateChanged(fbAuth, async function(user){
   window._fb.user = user;
   stopCloudSync();
   if(user){
+    // Cambio de cuenta en este dispositivo: limpia los datos locales de la cuenta
+    // anterior (token de ingreso incluido) para que no se mezclen. Si es el primer
+    // login en el equipo (sin last_uid), NO se limpia: así el usuario original migra.
+    try{
+      const lastUid=localStorage.getItem('misgastos_last_uid')||'';
+      if(lastUid && lastUid!==user.uid){ window.clearAccountLocalData&&window.clearAccountLocalData(); }
+      localStorage.setItem('misgastos_last_uid', user.uid);
+    }catch(e){}
     try{
       const migSnap=await getDoc(doc(fbDb,'users',user.uid,'settings','migration'));
       if(migSnap.exists() && migSnap.data().localStorageMigrated){
